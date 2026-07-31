@@ -1,0 +1,5401 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tandem - 个人 AI 驾驶舱原型</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f3f5f4;
+        --surface: #ffffff;
+        --surface-strong: #181b1a;
+        --ink: #161918;
+        --muted: #69716e;
+        --muted-2: #8d9592;
+        --line: #dce1df;
+        --line-strong: #c8cfcc;
+        --green: #166b4b;
+        --green-bright: #30a46c;
+        --green-soft: #e8f5ee;
+        --coral: #d95f45;
+        --coral-soft: #faece8;
+        --blue: #2463d4;
+        --blue-soft: #eaf0fd;
+        --yellow: #a76f09;
+        --yellow-soft: #fff5d9;
+        --shadow: 0 8px 28px rgba(18, 29, 24, 0.08);
+        --radius: 8px;
+      }
+
+      * {
+        box-sizing: border-box;
+        letter-spacing: 0;
+      }
+
+      html {
+        background: var(--bg);
+      }
+
+      body {
+        margin: 0;
+        min-width: 320px;
+        min-height: 100vh;
+        overflow-x: hidden;
+        background: var(--bg);
+        color: var(--ink);
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+          "Microsoft YaHei", sans-serif;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+
+      button,
+      input {
+        font: inherit;
+      }
+
+      button {
+        color: inherit;
+      }
+
+      button:focus-visible,
+      input:focus-visible {
+        outline: 3px solid rgba(36, 99, 212, 0.22);
+        outline-offset: 2px;
+      }
+
+      .icon {
+        width: 18px;
+        height: 18px;
+        flex: 0 0 auto;
+        stroke: currentColor;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        fill: none;
+      }
+
+      .app-shell {
+        display: grid;
+        grid-template-columns: 224px minmax(0, 1fr);
+        min-height: 100vh;
+      }
+
+      .sidebar {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        display: flex;
+        height: 100vh;
+        flex-direction: column;
+        padding: 22px 16px 18px;
+        background: var(--surface-strong);
+        color: #f4f6f5;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-height: 42px;
+        padding: 0 8px;
+      }
+
+      .brand img {
+        width: 30px;
+        height: 30px;
+        image-rendering: auto;
+      }
+
+      .brand-name {
+        display: block;
+        font-size: 16px;
+        font-weight: 720;
+        line-height: 1.2;
+      }
+
+      .brand-meta {
+        display: block;
+        margin-top: 2px;
+        color: #969f9b;
+        font-size: 11px;
+      }
+
+      .nav-list {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        margin-top: 34px;
+      }
+
+      .nav-button {
+        display: flex;
+        width: 100%;
+        min-height: 42px;
+        align-items: center;
+        gap: 11px;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        color: #aeb5b2;
+        cursor: pointer;
+        padding: 0 12px;
+        text-align: left;
+      }
+
+      .nav-button:hover {
+        background: #242827;
+        color: #ffffff;
+      }
+
+      .nav-button.active {
+        background: #2b302e;
+        color: #ffffff;
+      }
+
+      .nav-button.active::before {
+        position: absolute;
+        left: 0;
+        width: 3px;
+        height: 20px;
+        border-radius: 0 3px 3px 0;
+        background: #63c596;
+        content: "";
+      }
+
+      .sidebar-spacer {
+        flex: 1;
+      }
+
+      .trust-status {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        margin: 0 7px 17px;
+        color: #aeb5b2;
+        font-size: 12px;
+      }
+
+      .trust-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #54be88;
+        box-shadow: 0 0 0 4px rgba(84, 190, 136, 0.12);
+      }
+
+      .profile-mini {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        border-top: 1px solid #303533;
+        padding: 16px 8px 0;
+      }
+
+      .profile-avatar,
+      .companion-avatar {
+        display: grid;
+        place-items: center;
+        border-radius: 50%;
+        background: #f3efe9;
+        color: var(--ink);
+        font-weight: 750;
+      }
+
+      .profile-avatar {
+        width: 32px;
+        height: 32px;
+        font-size: 12px;
+      }
+
+      .profile-copy strong,
+      .profile-copy span {
+        display: block;
+      }
+
+      .profile-copy strong {
+        font-size: 13px;
+      }
+
+      .profile-copy span {
+        color: #8f9794;
+        font-size: 11px;
+      }
+
+      .main-shell {
+        min-width: 0;
+      }
+
+      .topbar {
+        position: sticky;
+        top: 0;
+        z-index: 15;
+        display: flex;
+        min-height: 64px;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1px solid var(--line);
+        background: rgba(243, 245, 244, 0.94);
+        padding: 0 28px;
+        backdrop-filter: blur(16px);
+      }
+
+      .topbar-title {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+      }
+
+      .topbar-title h1 {
+        margin: 0;
+        font-size: 15px;
+        font-weight: 700;
+      }
+
+      .project-context {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 7px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .project-context span {
+        overflow: hidden;
+        max-width: 300px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .topbar-actions {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+
+      .icon-button {
+        display: inline-grid;
+        width: 36px;
+        height: 36px;
+        place-items: center;
+        border: 1px solid transparent;
+        border-radius: 6px;
+        background: transparent;
+        cursor: pointer;
+      }
+
+      .icon-button:hover {
+        border-color: var(--line);
+        background: var(--surface);
+      }
+
+      .kbd-button {
+        display: flex;
+        height: 34px;
+        align-items: center;
+        gap: 8px;
+        border: 1px solid var(--line-strong);
+        border-radius: 6px;
+        background: var(--surface);
+        color: var(--muted);
+        cursor: pointer;
+        padding: 0 10px;
+        font-size: 12px;
+      }
+
+      kbd {
+        border: 1px solid var(--line);
+        border-bottom-color: var(--line-strong);
+        border-radius: 4px;
+        background: #f6f7f7;
+        color: #49504d;
+        padding: 1px 6px;
+        font-family: inherit;
+        font-size: 11px;
+      }
+
+      .view {
+        display: none;
+        padding: 30px 32px 50px;
+      }
+
+      .view.active {
+        display: block;
+        animation: view-in 180ms ease-out;
+      }
+
+      @keyframes view-in {
+        from {
+          opacity: 0;
+          transform: translateY(3px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .view-inner {
+        width: 100%;
+        max-width: 1240px;
+        margin: 0 auto;
+      }
+
+      .page-heading {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 20px;
+        margin-bottom: 22px;
+      }
+
+      .eyebrow {
+        margin: 0 0 4px;
+        color: var(--green);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .page-heading h2,
+      .companion-hero h2 {
+        margin: 0;
+        font-size: 25px;
+        font-weight: 730;
+        line-height: 1.25;
+      }
+
+      .page-heading p,
+      .companion-hero p {
+        margin: 6px 0 0;
+        color: var(--muted);
+      }
+
+      .status-badge,
+      .tag,
+      .tool-state,
+      .source-pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        white-space: nowrap;
+      }
+
+      .status-badge {
+        min-height: 28px;
+        gap: 7px;
+        background: var(--green-soft);
+        color: var(--green);
+        padding: 0 10px;
+        font-size: 12px;
+        font-weight: 650;
+      }
+
+      .status-badge::before {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--green-bright);
+        content: "";
+      }
+
+      .dashboard-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 304px;
+        gap: 30px;
+        align-items: start;
+      }
+
+      .content-column {
+        min-width: 0;
+      }
+
+      .launcher {
+        border: 1px solid var(--line-strong);
+        border-radius: var(--radius);
+        background: var(--surface);
+        box-shadow: var(--shadow);
+        padding: 20px;
+      }
+
+      .launcher-context {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 13px;
+      }
+
+      .mode-switch {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 4px;
+        margin-bottom: 15px;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: #f1f3f2;
+        padding: 4px;
+      }
+
+      .mode-button {
+        display: flex;
+        min-height: 34px;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        border: 0;
+        border-radius: 5px;
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 650;
+      }
+
+      .mode-button.active {
+        background: var(--surface);
+        color: var(--ink);
+        box-shadow: 0 1px 4px rgba(18, 29, 24, 0.1);
+      }
+
+      .mode-count {
+        display: inline-grid;
+        min-width: 18px;
+        height: 18px;
+        place-items: center;
+        border-radius: 9px;
+        background: #e3e7e5;
+        color: #59615e;
+        font-size: 10px;
+      }
+
+      .mode-button.active .mode-count {
+        background: var(--green-soft);
+        color: var(--green);
+      }
+
+      .home-mode-panel,
+      .dialog-flow {
+        display: none;
+      }
+
+      .home-mode-panel.active,
+      .dialog-flow.active {
+        display: block;
+      }
+
+      .context-name {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 8px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .context-name strong {
+        overflow: hidden;
+        color: var(--ink);
+        font-weight: 650;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .text-button {
+        border: 0;
+        background: transparent;
+        color: var(--blue);
+        cursor: pointer;
+        padding: 4px;
+        font-size: 12px;
+      }
+
+      .command-line {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 10px;
+      }
+
+      .command-input-wrap {
+        position: relative;
+        min-width: 0;
+      }
+
+      .command-input-wrap .icon {
+        position: absolute;
+        top: 50%;
+        left: 15px;
+        color: var(--muted);
+        transform: translateY(-50%);
+        pointer-events: none;
+      }
+
+      .command-input {
+        width: 100%;
+        height: 48px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: #fafbfa;
+        color: var(--ink);
+        padding: 0 44px;
+      }
+
+      .command-input:hover,
+      .command-input:focus {
+        border-color: #aeb8b3;
+        background: #ffffff;
+      }
+
+      .command-shortcut {
+        position: absolute;
+        top: 50%;
+        right: 12px;
+        color: var(--muted-2);
+        transform: translateY(-50%);
+      }
+
+      .primary-button,
+      .secondary-button,
+      .quiet-button {
+        display: inline-flex;
+        min-height: 40px;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        border-radius: 6px;
+        cursor: pointer;
+        padding: 0 15px;
+        font-weight: 650;
+      }
+
+      .primary-button {
+        border: 1px solid var(--surface-strong);
+        background: var(--surface-strong);
+        color: #ffffff;
+      }
+
+      .primary-button:hover {
+        background: #303533;
+      }
+
+      .primary-button:disabled {
+        border-color: #aeb4b1;
+        background: #aeb4b1;
+        cursor: not-allowed;
+      }
+
+      .secondary-button {
+        border: 1px solid var(--line-strong);
+        background: var(--surface);
+        color: var(--ink);
+      }
+
+      .secondary-button:hover,
+      .quiet-button:hover {
+        background: #f6f8f7;
+      }
+
+      .quiet-button {
+        min-height: 34px;
+        border: 1px solid transparent;
+        background: transparent;
+        color: var(--muted);
+        padding: 0 10px;
+        font-weight: 550;
+      }
+
+      .quick-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+        margin-top: 12px;
+      }
+
+      .quick-action {
+        display: inline-flex;
+        min-height: 29px;
+        align-items: center;
+        gap: 5px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: #ffffff;
+        color: #59615e;
+        cursor: pointer;
+        padding: 0 10px;
+        font-size: 12px;
+      }
+
+      .quick-action:hover {
+        border-color: #aeb7b3;
+        color: var(--ink);
+      }
+
+      .resume-spotlight {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        gap: 13px;
+        align-items: center;
+        min-height: 76px;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: #fafbfa;
+        padding: 12px;
+      }
+
+      .resume-spotlight-copy,
+      .resume-option-copy {
+        min-width: 0;
+      }
+
+      .resume-spotlight-copy strong,
+      .resume-spotlight-copy span,
+      .resume-option-copy strong,
+      .resume-option-copy span {
+        display: block;
+      }
+
+      .resume-spotlight-copy strong,
+      .resume-option-copy strong {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .resume-spotlight-copy span,
+      .resume-option-copy span {
+        margin-top: 3px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .workspace-chip {
+        display: inline-flex;
+        max-width: 100%;
+        align-items: center;
+        gap: 5px;
+        margin-top: 6px;
+        color: var(--green);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 10px;
+      }
+
+      .workspace-chip .icon {
+        width: 13px;
+        height: 13px;
+      }
+
+      .section {
+        margin-top: 28px;
+      }
+
+      .section-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 11px;
+      }
+
+      .section-heading h3 {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      .section-heading span {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .active-run {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 18px;
+        align-items: center;
+        border: 1px solid #b9d9c8;
+        border-left: 4px solid var(--green);
+        border-radius: var(--radius);
+        background: #fbfefc;
+        padding: 17px 17px 17px 15px;
+      }
+
+      .run-main {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 13px;
+      }
+
+      .tool-logo,
+      .tool-option-logo {
+        display: grid;
+        flex: 0 0 auto;
+        place-items: center;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: #ffffff;
+      }
+
+      .tool-logo {
+        width: 42px;
+        height: 42px;
+      }
+
+      .tool-logo img,
+      .tool-option-logo img {
+        width: 22px;
+        height: 22px;
+      }
+
+      .initial-logo {
+        color: #333836;
+        font-size: 16px;
+        font-weight: 800;
+      }
+
+      .run-copy {
+        min-width: 0;
+      }
+
+      .run-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+      }
+
+      .run-title strong {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .pulse {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--green-bright);
+        animation: pulse 1.8s infinite;
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          box-shadow: 0 0 0 0 rgba(48, 164, 108, 0.28);
+        }
+        50% {
+          box-shadow: 0 0 0 6px rgba(48, 164, 108, 0);
+        }
+      }
+
+      .run-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px 13px;
+        margin-top: 4px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .run-meta span {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .run-actions {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+
+      .tool-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .tool-card {
+        display: grid;
+        min-height: 122px;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        gap: 12px;
+        align-items: start;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--surface);
+        padding: 15px;
+        transition:
+          border-color 160ms ease,
+          transform 160ms ease;
+      }
+
+      .tool-card:hover {
+        border-color: #aeb8b3;
+        transform: translateY(-1px);
+      }
+
+      .tool-card-copy {
+        min-width: 0;
+      }
+
+      .tool-card-title {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 7px;
+      }
+
+      .tool-card-title strong {
+        overflow: hidden;
+        font-size: 14px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .tool-state {
+        min-height: 20px;
+        background: var(--green-soft);
+        color: var(--green);
+        padding: 0 7px;
+        font-size: 10px;
+        font-weight: 700;
+      }
+
+      .tool-state.locked {
+        background: var(--yellow-soft);
+        color: var(--yellow);
+      }
+
+      .tool-description {
+        overflow: hidden;
+        margin-top: 5px;
+        color: var(--muted);
+        font-size: 12px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .tool-route {
+        overflow: hidden;
+        margin-top: 12px;
+        color: #414844;
+        font-size: 11px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .tool-launch {
+        display: inline-grid;
+        width: 32px;
+        height: 32px;
+        place-items: center;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: #ffffff;
+        cursor: pointer;
+      }
+
+      .tool-launch:hover {
+        border-color: var(--ink);
+        background: var(--ink);
+        color: #ffffff;
+      }
+
+      .companion-panel {
+        min-width: 0;
+        border-left: 1px solid var(--line);
+        padding-left: 28px;
+      }
+
+      .companion-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .companion-avatar {
+        position: relative;
+        width: 48px;
+        height: 48px;
+        background: #202423;
+        color: #ffffff;
+        font-size: 15px;
+      }
+
+      .companion-avatar::after {
+        position: absolute;
+        right: -1px;
+        bottom: 1px;
+        width: 10px;
+        height: 10px;
+        border: 2px solid var(--bg);
+        border-radius: 50%;
+        background: #54be88;
+        content: "";
+      }
+
+      .companion-header h3,
+      .companion-header p {
+        margin: 0;
+      }
+
+      .companion-header h3 {
+        font-size: 15px;
+      }
+
+      .companion-header p {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .companion-stats {
+        margin-top: 22px;
+        border-top: 1px solid var(--line);
+      }
+
+      .stat-row {
+        display: flex;
+        min-height: 43px;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .stat-row span {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .stat-row strong {
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .memory-label {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin: 25px 0 10px;
+      }
+
+      .memory-label strong {
+        font-size: 12px;
+      }
+
+      .memory-label span {
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .memory-proposal {
+        border: 1px solid #edc8bd;
+        border-radius: var(--radius);
+        background: var(--coral-soft);
+        padding: 14px;
+      }
+
+      .memory-proposal.resolved {
+        border-color: #b9d9c8;
+        background: var(--green-soft);
+      }
+
+      .memory-proposal p {
+        margin: 0;
+        font-size: 12px;
+        line-height: 1.65;
+      }
+
+      .proposal-actions {
+        display: flex;
+        gap: 5px;
+        margin-top: 10px;
+      }
+
+      .proposal-actions button {
+        min-height: 29px;
+        border: 1px solid rgba(92, 55, 42, 0.18);
+        border-radius: 5px;
+        background: rgba(255, 255, 255, 0.62);
+        cursor: pointer;
+        padding: 0 9px;
+        font-size: 11px;
+        font-weight: 650;
+      }
+
+      .handoff-list {
+        border-top: 1px solid var(--line);
+      }
+
+      .handoff-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1.4fr) minmax(190px, 0.8fr) auto;
+        gap: 18px;
+        align-items: center;
+        min-height: 68px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .handoff-project strong,
+      .handoff-project span {
+        display: block;
+      }
+
+      .handoff-project strong {
+        font-size: 13px;
+      }
+
+      .handoff-project span {
+        margin-top: 2px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .handoff-route {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .route-logo {
+        display: grid;
+        width: 25px;
+        height: 25px;
+        place-items: center;
+        border: 1px solid var(--line);
+        border-radius: 5px;
+        background: #ffffff;
+        font-size: 10px;
+        font-weight: 800;
+      }
+
+      .route-logo img {
+        width: 15px;
+        height: 15px;
+      }
+
+      .handoff-time {
+        color: var(--muted);
+        font-size: 11px;
+        text-align: right;
+      }
+
+      .companion-hero {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        gap: 20px;
+        align-items: center;
+        border-bottom: 1px solid var(--line);
+        padding: 12px 0 28px;
+      }
+
+      .companion-hero .companion-avatar {
+        width: 72px;
+        height: 72px;
+        font-size: 20px;
+      }
+
+      .companion-view-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.25fr) minmax(300px, 0.75fr);
+        gap: 36px;
+        margin-top: 28px;
+      }
+
+      .group-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin: 0 0 10px;
+      }
+
+      .group-title h3 {
+        margin: 0;
+        font-size: 14px;
+      }
+
+      .group-title span {
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .rule-list,
+      .capability-list,
+      .learning-list {
+        border-top: 1px solid var(--line);
+      }
+
+      .rule-row,
+      .capability-row,
+      .learning-row {
+        display: grid;
+        align-items: center;
+        border-bottom: 1px solid var(--line);
+        background: transparent;
+      }
+
+      .rule-row {
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        gap: 12px;
+        min-height: 66px;
+      }
+
+      .rule-symbol {
+        display: grid;
+        width: 32px;
+        height: 32px;
+        place-items: center;
+        border-radius: 6px;
+        background: var(--green-soft);
+        color: var(--green);
+      }
+
+      .rule-copy strong,
+      .rule-copy span {
+        display: block;
+      }
+
+      .rule-copy strong {
+        font-size: 12px;
+      }
+
+      .rule-copy span {
+        margin-top: 3px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .source-pill {
+        min-height: 22px;
+        background: #e9eceb;
+        color: #5f6764;
+        padding: 0 7px;
+        font-size: 10px;
+      }
+
+      .capability-row {
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        gap: 10px;
+        min-height: 52px;
+      }
+
+      .capability-row img {
+        width: 19px;
+        height: 19px;
+      }
+
+      .capability-row strong {
+        font-size: 12px;
+      }
+
+      .capability-row span {
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .learning-row {
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 14px;
+        min-height: 70px;
+      }
+
+      .learning-row p {
+        margin: 0;
+        font-size: 12px;
+      }
+
+      .learning-row small {
+        display: block;
+        margin-top: 3px;
+        color: var(--muted);
+      }
+
+      .history-layout {
+        display: grid;
+        grid-template-columns: 250px minmax(0, 1fr);
+        min-height: 560px;
+        border-top: 1px solid var(--line);
+      }
+
+      .project-list {
+        border-right: 1px solid var(--line);
+        padding: 18px 18px 18px 0;
+      }
+
+      .project-item {
+        display: grid;
+        width: 100%;
+        min-height: 58px;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 10px;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        cursor: pointer;
+        padding: 0 11px;
+        text-align: left;
+      }
+
+      .project-item:hover,
+      .project-item.active {
+        background: #e8ecea;
+      }
+
+      .project-item strong,
+      .project-item span {
+        display: block;
+      }
+
+      .project-item strong {
+        overflow: hidden;
+        font-size: 12px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .project-item span {
+        color: var(--muted);
+        font-size: 10px;
+      }
+
+      .project-count {
+        display: grid;
+        min-width: 22px;
+        height: 22px;
+        place-items: center;
+        border-radius: 999px;
+        background: #ffffff;
+        color: var(--muted);
+        font-size: 10px;
+      }
+
+      .timeline {
+        padding: 24px 0 30px 32px;
+      }
+
+      .timeline-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 22px;
+      }
+
+      .timeline-heading h3,
+      .timeline-heading p {
+        margin: 0;
+      }
+
+      .timeline-heading h3 {
+        font-size: 15px;
+      }
+
+      .timeline-heading p {
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .timeline-item {
+        position: relative;
+        display: grid;
+        grid-template-columns: 44px minmax(0, 1fr) auto;
+        gap: 13px;
+        min-height: 102px;
+        padding-bottom: 22px;
+      }
+
+      .timeline-item:not(:last-child)::before {
+        position: absolute;
+        top: 43px;
+        bottom: 0;
+        left: 21px;
+        width: 1px;
+        background: var(--line-strong);
+        content: "";
+      }
+
+      .timeline-logo {
+        z-index: 1;
+        display: grid;
+        width: 44px;
+        height: 44px;
+        place-items: center;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: var(--surface);
+      }
+
+      .timeline-logo img {
+        width: 22px;
+        height: 22px;
+      }
+
+      .timeline-copy {
+        padding-top: 2px;
+      }
+
+      .timeline-copy strong {
+        font-size: 13px;
+      }
+
+      .timeline-copy p {
+        margin: 3px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .timeline-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+        margin-top: 9px;
+      }
+
+      .tag {
+        min-height: 22px;
+        background: #e9eceb;
+        color: #59615e;
+        padding: 0 7px;
+        font-size: 10px;
+      }
+
+      .timeline-time {
+        color: var(--muted);
+        font-size: 11px;
+        text-align: right;
+      }
+
+      .bootstrap-strip {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        gap: 14px;
+        align-items: center;
+        margin-bottom: 18px;
+        border: 1px solid #b9d9c8;
+        border-radius: var(--radius);
+        background: #fbfefc;
+        padding: 14px 16px;
+      }
+
+      .bootstrap-icon {
+        display: grid;
+        width: 40px;
+        height: 40px;
+        place-items: center;
+        border-radius: 7px;
+        background: var(--green-soft);
+        color: var(--green);
+      }
+
+      .bootstrap-copy {
+        min-width: 0;
+      }
+
+      .bootstrap-copy strong,
+      .bootstrap-copy span {
+        display: block;
+      }
+
+      .bootstrap-copy span {
+        margin-top: 2px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .config-app-strip {
+        display: flex;
+        gap: 6px;
+        overflow-x: auto;
+        margin-bottom: 18px;
+        padding-bottom: 4px;
+        scrollbar-width: thin;
+      }
+
+      .config-app-button {
+        display: flex;
+        min-width: max-content;
+        height: 38px;
+        align-items: center;
+        gap: 7px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--surface);
+        color: var(--muted);
+        cursor: pointer;
+        padding: 0 10px;
+        font-size: 11px;
+        font-weight: 650;
+      }
+
+      .config-app-button:hover {
+        border-color: #aeb8b3;
+        color: var(--ink);
+      }
+
+      .config-app-button.active {
+        border-color: #9acbb3;
+        background: var(--green-soft);
+        color: var(--green);
+      }
+
+      .config-app-button img {
+        width: 17px;
+        height: 17px;
+      }
+
+      .config-app-mark {
+        display: grid;
+        width: 19px;
+        height: 19px;
+        place-items: center;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        background: #ffffff;
+        color: var(--ink);
+        font-size: 9px;
+        font-weight: 800;
+      }
+
+      .config-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 292px;
+        gap: 26px;
+        align-items: start;
+      }
+
+      .config-panel {
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--surface);
+      }
+
+      .config-panel-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        min-height: 54px;
+        border-bottom: 1px solid var(--line);
+        padding: 0 16px;
+      }
+
+      .config-panel-heading strong {
+        font-size: 13px;
+      }
+
+      .config-panel-heading span {
+        color: var(--muted);
+        font-size: 10px;
+      }
+
+      .provider-row {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        gap: 13px;
+        align-items: center;
+        min-height: 86px;
+        padding: 13px 16px;
+      }
+
+      .provider-row + .provider-row {
+        border-top: 1px solid var(--line);
+      }
+
+      .provider-row.active-provider {
+        border-left: 3px solid var(--green);
+        background: #fbfefc;
+        padding-left: 13px;
+      }
+
+      .provider-logo {
+        display: grid;
+        width: 42px;
+        height: 42px;
+        place-items: center;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: #ffffff;
+        font-size: 15px;
+        font-weight: 800;
+      }
+
+      .provider-copy {
+        min-width: 0;
+      }
+
+      .provider-title {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 7px;
+      }
+
+      .provider-title strong {
+        font-size: 13px;
+      }
+
+      .provider-copy > span {
+        display: block;
+        overflow: hidden;
+        margin-top: 4px;
+        color: var(--muted);
+        font-size: 11px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .provider-actions {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .capability-menu {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 7px;
+        padding: 12px;
+      }
+
+      .capability-link {
+        display: flex;
+        min-width: 0;
+        min-height: 62px;
+        align-items: center;
+        gap: 9px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: #fafbfa;
+        cursor: pointer;
+        padding: 9px;
+        text-align: left;
+      }
+
+      .capability-link:hover {
+        border-color: #aeb8b3;
+        background: #ffffff;
+      }
+
+      .capability-link .icon {
+        color: var(--green);
+      }
+
+      .capability-link span {
+        min-width: 0;
+      }
+
+      .capability-link strong,
+      .capability-link small {
+        display: block;
+      }
+
+      .capability-link strong {
+        font-size: 11px;
+      }
+
+      .capability-link small {
+        overflow: hidden;
+        margin-top: 2px;
+        color: var(--muted);
+        font-size: 9px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .config-trust-list {
+        padding: 2px 14px 12px;
+      }
+
+      .config-trust-row {
+        display: flex;
+        min-height: 37px;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        border-bottom: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 10px;
+      }
+
+      .config-trust-row:last-child {
+        border-bottom: 0;
+      }
+
+      .config-trust-row strong {
+        color: var(--ink);
+        font-size: 10px;
+      }
+
+      .native-config-surface {
+        min-width: 0;
+      }
+
+      .native-config-toolbar {
+        display: flex;
+        min-height: 48px;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        margin-bottom: 10px;
+        border-bottom: 1px solid var(--line);
+        padding: 0 2px 10px;
+      }
+
+      .native-toolbar-title strong,
+      .native-toolbar-title span {
+        display: block;
+      }
+
+      .native-toolbar-title strong {
+        font-size: 13px;
+      }
+
+      .native-toolbar-title span {
+        margin-top: 2px;
+        color: var(--muted);
+        font-size: 10px;
+      }
+
+      .native-toolbar-actions {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .native-toolbar-button,
+      .native-add-button,
+      .native-action-button,
+      .native-drag-handle {
+        display: inline-grid;
+        place-items: center;
+        border: 1px solid transparent;
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+      }
+
+      .native-toolbar-button,
+      .native-action-button {
+        width: 34px;
+        height: 34px;
+        flex: 0 0 auto;
+        border-radius: 6px;
+      }
+
+      .native-toolbar-button:hover,
+      .native-action-button:hover,
+      .native-drag-handle:hover {
+        border-color: var(--line);
+        background: var(--surface);
+        color: var(--ink);
+      }
+
+      .native-add-button {
+        width: 38px;
+        height: 38px;
+        margin-left: 5px;
+        border-color: var(--coral);
+        border-radius: 50%;
+        background: var(--coral);
+        color: #ffffff;
+        box-shadow: 0 5px 14px rgba(217, 95, 69, 0.24);
+      }
+
+      .native-provider-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .native-provider-card {
+        display: grid;
+        min-height: 104px;
+        grid-template-columns: auto auto minmax(230px, 1fr) auto auto;
+        gap: 12px;
+        align-items: center;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--surface);
+        padding: 14px 15px 14px 7px;
+        transition:
+          border-color 160ms ease,
+          background 160ms ease;
+      }
+
+      .native-provider-card:hover {
+        border-color: #aeb8b3;
+      }
+
+      .native-provider-card.current {
+        border-color: #6aa6ef;
+        background: #f5f9ff;
+        box-shadow: inset 3px 0 0 #2463d4;
+      }
+
+      .native-drag-handle {
+        width: 26px;
+        height: 34px;
+        border-radius: 5px;
+      }
+
+      .native-drag-handle .icon {
+        width: 15px;
+        height: 15px;
+        transform: rotate(90deg);
+      }
+
+      .native-provider-identity {
+        min-width: 0;
+      }
+
+      .native-provider-name {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 7px;
+      }
+
+      .native-provider-name strong {
+        font-size: 14px;
+      }
+
+      .native-provider-url {
+        display: inline-block;
+        overflow: hidden;
+        max-width: 100%;
+        margin-top: 7px;
+        color: var(--blue);
+        font-size: 11px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .native-provider-usage {
+        min-width: 150px;
+        text-align: right;
+      }
+
+      .native-provider-updated {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 5px;
+        color: var(--muted);
+        font-size: 9px;
+      }
+
+      .native-provider-balance {
+        margin-top: 6px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .native-provider-balance strong {
+        color: var(--green);
+        font-size: 13px;
+      }
+
+      .native-row-actions {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 2px;
+        opacity: 0;
+        transition: opacity 160ms ease;
+      }
+
+      .native-provider-card:hover .native-row-actions,
+      .native-provider-card.current .native-row-actions {
+        opacity: 1;
+      }
+
+      .native-action-button.danger:hover {
+        border-color: #ecc2ba;
+        background: var(--coral-soft);
+        color: #a33b2b;
+      }
+
+      .native-current-button {
+        display: inline-flex;
+        min-height: 34px;
+        flex: 0 0 auto;
+        align-items: center;
+        gap: 6px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: #eef1f0;
+        color: var(--muted);
+        padding: 0 10px;
+        font-size: 10px;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+
+      .native-provider-card:not(.current) .native-current-button {
+        border-color: var(--line-strong);
+        background: var(--surface);
+        color: var(--ink);
+        cursor: pointer;
+      }
+
+      .native-surface-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-top: 14px;
+        color: var(--muted);
+        font-size: 10px;
+      }
+
+      .native-surface-footer span {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .setup-dialog {
+        width: min(780px, 100%);
+      }
+
+      .setup-secret {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 8px;
+        align-items: center;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: #f7f9f8;
+        padding: 12px;
+      }
+
+      .setup-secret-copy {
+        min-width: 0;
+      }
+
+      .setup-secret-copy strong,
+      .setup-secret-copy span {
+        display: block;
+      }
+
+      .setup-secret-copy span {
+        margin-top: 3px;
+        color: var(--muted);
+        font-size: 10px;
+      }
+
+      .secret-ready {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        color: var(--green);
+        font-size: 10px;
+        font-weight: 700;
+      }
+
+      .secret-ready::before {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--green-bright);
+        content: "";
+      }
+
+      .platform-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 7px;
+      }
+
+      .platform-option {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        gap: 9px;
+        align-items: center;
+        min-height: 59px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--surface);
+        padding: 8px 10px;
+      }
+
+      .platform-option:has(input:checked) {
+        border-color: #b9d9c8;
+        background: #fbfefc;
+      }
+
+      .platform-option input {
+        width: 16px;
+        height: 16px;
+        accent-color: var(--green);
+      }
+
+      .platform-option-copy {
+        min-width: 0;
+      }
+
+      .platform-option-copy strong,
+      .platform-option-copy span {
+        display: block;
+      }
+
+      .platform-option-copy strong {
+        font-size: 11px;
+      }
+
+      .platform-option-copy span {
+        overflow: hidden;
+        margin-top: 2px;
+        color: var(--muted);
+        font-size: 9px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .platform-route {
+        color: var(--green);
+        font-size: 9px;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+
+      .setup-summary {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        margin-top: 12px;
+        border: 1px solid #b9d9c8;
+        background: var(--green-soft);
+        color: var(--green);
+        padding: 9px 11px;
+        font-size: 10px;
+      }
+
+      .setup-summary .icon {
+        width: 15px;
+        height: 15px;
+      }
+
+      .setup-error {
+        display: none;
+        margin-top: 8px;
+        color: #b63c2c;
+        font-size: 10px;
+      }
+
+      .setup-error.show {
+        display: block;
+      }
+
+      .dialog-backdrop,
+      .drawer-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 50;
+        display: none;
+        background: rgba(17, 21, 19, 0.46);
+      }
+
+      .dialog-backdrop.open,
+      .drawer-backdrop.open {
+        display: flex;
+      }
+
+      .dialog-backdrop {
+        align-items: flex-start;
+        justify-content: center;
+        padding: 11vh 22px 30px;
+      }
+
+      .command-dialog {
+        width: min(720px, 100%);
+        max-height: 82vh;
+        overflow: auto;
+        border: 1px solid #969f9b;
+        border-radius: 8px;
+        background: var(--surface);
+        box-shadow: 0 24px 70px rgba(9, 16, 12, 0.28);
+      }
+
+      .dialog-header,
+      .drawer-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .dialog-header {
+        min-height: 56px;
+        padding: 0 16px 0 20px;
+      }
+
+      .dialog-header strong,
+      .drawer-header strong {
+        font-size: 14px;
+      }
+
+      .dialog-body {
+        padding: 18px 20px 20px;
+      }
+
+      .dialog-mode-switch {
+        margin-bottom: 18px;
+      }
+
+      .dialog-input-wrap {
+        position: relative;
+      }
+
+      .dialog-input-wrap .icon {
+        position: absolute;
+        top: 17px;
+        left: 14px;
+        color: var(--muted);
+      }
+
+      .dialog-input {
+        width: 100%;
+        min-height: 52px;
+        border: 1px solid var(--line-strong);
+        border-radius: 6px;
+        background: #fafbfa;
+        padding: 0 15px 0 44px;
+        font-size: 15px;
+      }
+
+      .field-error {
+        display: none;
+        margin-top: 6px;
+        color: #b63c2c;
+        font-size: 11px;
+      }
+
+      .field-error.show {
+        display: block;
+      }
+
+      .dialog-context-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        min-height: 48px;
+        border-bottom: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .dialog-context-row div {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 7px;
+      }
+
+      .dialog-context-row strong {
+        overflow: hidden;
+        color: var(--ink);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .workspace-plan {
+        margin-top: 14px;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: #f7f9f8;
+      }
+
+      .workspace-plan-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        border-bottom: 1px solid var(--line);
+        padding: 10px 12px;
+      }
+
+      .workspace-plan-header strong {
+        font-size: 12px;
+      }
+
+      .workspace-plan-header span {
+        color: var(--green);
+        font-size: 10px;
+        font-weight: 700;
+      }
+
+      .workspace-outcome {
+        display: flex;
+        align-items: flex-start;
+        gap: 9px;
+        padding: 12px;
+      }
+
+      .workspace-outcome .icon {
+        color: var(--green);
+      }
+
+      .workspace-outcome strong,
+      .workspace-outcome span {
+        display: block;
+      }
+
+      .workspace-outcome strong {
+        font-size: 12px;
+      }
+
+      .workspace-outcome span {
+        margin-top: 3px;
+        color: var(--muted);
+        font-size: 10px;
+      }
+
+      .workspace-technical {
+        border-top: 1px solid var(--line);
+      }
+
+      .workspace-technical summary {
+        display: flex;
+        min-height: 36px;
+        align-items: center;
+        justify-content: space-between;
+        cursor: pointer;
+        padding: 0 12px;
+        color: var(--muted);
+        font-size: 10px;
+        font-weight: 700;
+        list-style: none;
+      }
+
+      .workspace-technical summary::-webkit-details-marker {
+        display: none;
+      }
+
+      .workspace-technical summary::after {
+        content: "+";
+        font-size: 14px;
+      }
+
+      .workspace-technical[open] summary::after {
+        content: "−";
+      }
+
+      .workspace-technical .workspace-plan-grid {
+        border-top: 1px solid var(--line);
+      }
+
+      .workspace-plan-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0;
+      }
+
+      .workspace-plan-item {
+        min-width: 0;
+        padding: 10px 12px;
+      }
+
+      .workspace-plan-item:nth-child(odd) {
+        border-right: 1px solid var(--line);
+      }
+
+      .workspace-plan-item:nth-child(n + 3) {
+        border-top: 1px solid var(--line);
+      }
+
+      .workspace-plan-item span,
+      .workspace-plan-item strong {
+        display: block;
+      }
+
+      .workspace-plan-item span {
+        color: var(--muted);
+        font-size: 10px;
+      }
+
+      .workspace-plan-item strong {
+        overflow: hidden;
+        margin-top: 3px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        font-weight: 650;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .workspace-notice {
+        display: flex;
+        align-items: flex-start;
+        gap: 7px;
+        border-top: 1px solid #efd49b;
+        background: var(--yellow-soft);
+        color: #76530d;
+        padding: 9px 12px;
+        font-size: 10px;
+      }
+
+      .workspace-notice .icon {
+        width: 15px;
+        height: 15px;
+      }
+
+      .resume-options {
+        display: grid;
+        gap: 7px;
+      }
+
+      .resume-option {
+        display: grid;
+        width: 100%;
+        min-height: 72px;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        gap: 12px;
+        align-items: center;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: var(--surface);
+        cursor: pointer;
+        padding: 10px 12px;
+        text-align: left;
+      }
+
+      .resume-option:hover {
+        border-color: #aeb8b3;
+      }
+
+      .resume-option.selected {
+        border-color: #9acbb3;
+        background: var(--green-soft);
+      }
+
+      .resume-option .radio-mark {
+        width: 17px;
+        height: 17px;
+      }
+
+      .resume-session-state {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        color: var(--green);
+        font-size: 10px;
+        font-weight: 700;
+      }
+
+      .resume-session-state::before {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--green-bright);
+        content: "";
+      }
+
+      .dialog-section-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin: 18px 0 7px;
+      }
+
+      .dialog-section-title strong {
+        font-size: 12px;
+      }
+
+      .dialog-section-title span {
+        color: var(--muted);
+        font-size: 10px;
+      }
+
+      .tool-options {
+        border-top: 1px solid var(--line);
+      }
+
+      .tool-option {
+        display: grid;
+        width: 100%;
+        min-height: 66px;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        gap: 12px;
+        align-items: center;
+        border: 0;
+        border-bottom: 1px solid var(--line);
+        background: transparent;
+        cursor: pointer;
+        padding: 9px 7px;
+        text-align: left;
+      }
+
+      .tool-option:hover {
+        background: #f7f9f8;
+      }
+
+      .tool-option.selected {
+        background: var(--green-soft);
+      }
+
+      .tool-option-logo {
+        width: 38px;
+        height: 38px;
+      }
+
+      .tool-option-copy strong,
+      .tool-option-copy span {
+        display: block;
+      }
+
+      .tool-option-copy strong {
+        font-size: 12px;
+      }
+
+      .tool-option-copy span {
+        margin-top: 2px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .recommendation {
+        color: var(--green);
+        font-size: 10px;
+        font-weight: 750;
+      }
+
+      .dialog-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        border-top: 1px solid var(--line);
+        padding: 14px 20px;
+      }
+
+      .dialog-footer-note {
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .drawer-backdrop {
+        align-items: stretch;
+        justify-content: flex-end;
+      }
+
+      .handoff-drawer {
+        width: min(520px, 100%);
+        overflow-y: auto;
+        background: var(--surface);
+        box-shadow: -18px 0 60px rgba(13, 21, 17, 0.18);
+      }
+
+      .drawer-header {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        min-height: 62px;
+        background: var(--surface);
+        padding: 0 18px 0 22px;
+      }
+
+      .drawer-body {
+        padding: 21px 22px 30px;
+      }
+
+      .handoff-source {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding-bottom: 18px;
+      }
+
+      .handoff-source-copy strong,
+      .handoff-source-copy span {
+        display: block;
+      }
+
+      .handoff-source-copy span {
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .capsule {
+        border-top: 1px solid var(--line);
+      }
+
+      .capsule-row {
+        display: grid;
+        grid-template-columns: 72px minmax(0, 1fr);
+        gap: 12px;
+        border-bottom: 1px solid var(--line);
+        padding: 12px 0;
+      }
+
+      .capsule-row dt {
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .capsule-row dd {
+        margin: 0;
+        font-size: 12px;
+      }
+
+      .destination-list {
+        margin-top: 22px;
+      }
+
+      .destination-list h4 {
+        margin: 0 0 8px;
+        font-size: 12px;
+      }
+
+      .destination-option {
+        display: grid;
+        width: 100%;
+        min-height: 55px;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        gap: 11px;
+        align-items: center;
+        border: 0;
+        border-top: 1px solid var(--line);
+        background: transparent;
+        cursor: pointer;
+        padding: 7px 2px;
+        text-align: left;
+      }
+
+      .destination-option:last-child {
+        border-bottom: 1px solid var(--line);
+      }
+
+      .destination-option.selected {
+        color: var(--green);
+      }
+
+      .destination-option strong,
+      .destination-option span {
+        display: block;
+      }
+
+      .destination-option strong {
+        font-size: 12px;
+      }
+
+      .destination-option span {
+        color: var(--muted);
+        font-size: 10px;
+      }
+
+      .radio-mark {
+        display: grid;
+        width: 18px;
+        height: 18px;
+        place-items: center;
+        border: 1px solid var(--line-strong);
+        border-radius: 50%;
+      }
+
+      .destination-option.selected .radio-mark {
+        border-color: var(--green);
+      }
+
+      .destination-option.selected .radio-mark::after {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--green);
+        content: "";
+      }
+
+      .drawer-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 22px;
+      }
+
+      .toast {
+        position: fixed;
+        right: 22px;
+        bottom: 22px;
+        z-index: 80;
+        display: flex;
+        max-width: min(390px, calc(100vw - 44px));
+        min-height: 48px;
+        align-items: center;
+        gap: 9px;
+        border: 1px solid #404744;
+        border-radius: 7px;
+        background: #1e2220;
+        color: #ffffff;
+        opacity: 0;
+        padding: 0 14px;
+        pointer-events: none;
+        transform: translateY(10px);
+        transition:
+          opacity 160ms ease,
+          transform 160ms ease;
+      }
+
+      .toast.show {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      .toast .icon {
+        color: #63c596;
+      }
+
+      @media (max-width: 1050px) {
+        .dashboard-grid {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .config-layout {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .companion-panel {
+          display: grid;
+          grid-template-columns: minmax(220px, 0.75fr) minmax(300px, 1.25fr);
+          gap: 26px;
+          border-top: 1px solid var(--line);
+          border-left: 0;
+          padding-top: 25px;
+          padding-left: 0;
+        }
+
+        .memory-label {
+          margin-top: 0;
+        }
+      }
+
+      @media (max-width: 780px) {
+        .app-shell {
+          display: block;
+        }
+
+        .sidebar {
+          position: fixed;
+          top: auto;
+          right: 0;
+          bottom: 0;
+          left: 0;
+          z-index: 40;
+          width: 100%;
+          height: 68px;
+          padding: 7px 10px calc(7px + env(safe-area-inset-bottom));
+        }
+
+        .brand,
+        .sidebar-spacer,
+        .trust-status,
+        .profile-mini {
+          display: none;
+        }
+
+        .nav-list {
+          display: grid;
+          flex: 1;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 4px;
+          margin: 0;
+        }
+
+        .nav-button {
+          min-height: 54px;
+          flex-direction: column;
+          justify-content: center;
+          gap: 2px;
+          padding: 2px 4px;
+          font-size: 10px;
+        }
+
+        .nav-button.active::before {
+          top: 0;
+          left: 50%;
+          width: 20px;
+          height: 3px;
+          border-radius: 0 0 3px 3px;
+          transform: translateX(-50%);
+        }
+
+        .main-shell {
+          padding-bottom: 68px;
+        }
+
+        .topbar {
+          min-height: 56px;
+          padding: 0 16px;
+        }
+
+        .project-context,
+        .kbd-button span,
+        .kbd-button kbd {
+          display: none;
+        }
+
+        .kbd-button {
+          display: grid;
+          width: 36px;
+          padding: 0;
+          place-items: center;
+        }
+
+        .view {
+          padding: 22px 16px 38px;
+        }
+
+        .page-heading {
+          align-items: flex-start;
+          margin-bottom: 17px;
+        }
+
+        .page-heading h2,
+        .companion-hero h2 {
+          font-size: 21px;
+        }
+
+        .page-heading p {
+          font-size: 12px;
+        }
+
+        .command-line,
+        .tool-grid,
+        .companion-panel,
+        .companion-view-grid,
+        .history-layout {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .launcher {
+          padding: 15px;
+        }
+
+        .command-line .primary-button {
+          width: 100%;
+        }
+
+        .resume-spotlight {
+          grid-template-columns: auto minmax(0, 1fr);
+        }
+
+        .resume-spotlight > .primary-button {
+          grid-column: 1 / -1;
+          width: 100%;
+        }
+
+        .active-run {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .run-actions {
+          padding-left: 55px;
+        }
+
+        .tool-card {
+          min-height: 112px;
+        }
+
+        .companion-panel {
+          display: block;
+        }
+
+        .companion-panel > div + div {
+          margin-top: 25px;
+        }
+
+        .handoff-row {
+          grid-template-columns: minmax(0, 1fr) auto;
+          gap: 8px;
+          padding: 11px 0;
+        }
+
+        .handoff-route {
+          grid-column: 1 / -1;
+          grid-row: 2;
+        }
+
+        .companion-hero {
+          grid-template-columns: auto minmax(0, 1fr);
+        }
+
+        .companion-hero > .secondary-button {
+          grid-column: 1 / -1;
+          width: 100%;
+        }
+
+        .history-layout {
+          border-top: 0;
+        }
+
+        .project-list {
+          display: flex;
+          gap: 6px;
+          overflow-x: auto;
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+          padding: 0 0 14px;
+        }
+
+        .project-item {
+          min-width: 180px;
+          border: 1px solid var(--line);
+        }
+
+        .timeline {
+          padding: 20px 0 0;
+        }
+
+        .timeline-item {
+          grid-template-columns: 40px minmax(0, 1fr);
+        }
+
+        .timeline-item:not(:last-child)::before {
+          left: 19px;
+        }
+
+        .timeline-logo {
+          width: 40px;
+          height: 40px;
+        }
+
+        .timeline-time {
+          grid-column: 2;
+          text-align: left;
+        }
+
+        .dialog-backdrop {
+          align-items: flex-end;
+          padding: 18px 0 0;
+        }
+
+        .command-dialog {
+          max-height: 92vh;
+          border-right: 0;
+          border-bottom: 0;
+          border-left: 0;
+          border-radius: 8px 8px 0 0;
+        }
+
+        .dialog-footer {
+          align-items: stretch;
+          flex-direction: column;
+        }
+
+        .dialog-footer-note {
+          text-align: center;
+        }
+
+        .workspace-plan-grid {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .workspace-plan-item:nth-child(odd) {
+          border-right: 0;
+        }
+
+        .workspace-plan-item + .workspace-plan-item {
+          border-top: 1px solid var(--line);
+        }
+
+        .resume-option {
+          grid-template-columns: auto minmax(0, 1fr);
+        }
+
+        .resume-option .radio-mark {
+          display: none;
+        }
+
+        .bootstrap-strip {
+          grid-template-columns: auto minmax(0, 1fr);
+        }
+
+        .bootstrap-strip > .secondary-button {
+          grid-column: 1 / -1;
+          width: 100%;
+        }
+
+        .provider-row {
+          grid-template-columns: auto minmax(0, 1fr);
+        }
+
+        .provider-actions {
+          grid-column: 1 / -1;
+          padding-left: 55px;
+        }
+
+        .provider-actions .secondary-button {
+          flex: 1;
+        }
+
+        .capability-menu,
+        .platform-grid {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .setup-secret {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .native-config-toolbar {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        .native-toolbar-actions {
+          width: 100%;
+          overflow-x: auto;
+          padding-bottom: 3px;
+        }
+
+        .native-provider-card {
+          grid-template-columns: auto auto minmax(0, 1fr);
+          gap: 10px;
+          padding: 12px 10px 12px 4px;
+        }
+
+        .native-provider-usage,
+        .native-row-actions {
+          grid-column: 3;
+        }
+
+        .native-provider-usage {
+          min-width: 0;
+          text-align: left;
+        }
+
+        .native-provider-updated {
+          justify-content: flex-start;
+        }
+
+        .native-row-actions {
+          justify-content: flex-start;
+          overflow-x: auto;
+          opacity: 1;
+        }
+
+        .native-surface-footer {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        .drawer-backdrop {
+          align-items: flex-end;
+        }
+
+        .handoff-drawer {
+          width: 100%;
+          max-height: 94vh;
+          border-radius: 8px 8px 0 0;
+        }
+
+        .toast {
+          right: 14px;
+          bottom: 82px;
+          left: 14px;
+          max-width: none;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          scroll-behavior: auto !important;
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0.01ms !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <svg aria-hidden="true" style="display: none">
+      <symbol id="i-grid" viewBox="0 0 24 24">
+        <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+        <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+        <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+        <rect x="14" y="14" width="7" height="7" rx="1"></rect>
+      </symbol>
+      <symbol id="i-user" viewBox="0 0 24 24">
+        <circle cx="12" cy="8" r="4"></circle>
+        <path d="M4 21a8 8 0 0 1 16 0"></path>
+      </symbol>
+      <symbol id="i-history" viewBox="0 0 24 24">
+        <path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path>
+        <path d="M3 3v5h5"></path>
+        <path d="M12 7v5l3 2"></path>
+      </symbol>
+      <symbol id="i-settings" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="3"></circle>
+        <path
+          d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"
+        ></path>
+      </symbol>
+      <symbol id="i-command" viewBox="0 0 24 24">
+        <path
+          d="M18 9a3 3 0 1 0-3-3v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3Z"
+        ></path>
+      </symbol>
+      <symbol id="i-folder" viewBox="0 0 24 24">
+        <path
+          d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"
+        ></path>
+      </symbol>
+      <symbol id="i-arrow-right" viewBox="0 0 24 24">
+        <path d="M5 12h14"></path>
+        <path d="m13 6 6 6-6 6"></path>
+      </symbol>
+      <symbol id="i-play" viewBox="0 0 24 24">
+        <path d="m7 4 13 8-13 8Z"></path>
+      </symbol>
+      <symbol id="i-route" viewBox="0 0 24 24">
+        <circle cx="6" cy="19" r="2"></circle>
+        <circle cx="18" cy="5" r="2"></circle>
+        <path d="M6 17V9a4 4 0 0 1 4-4h6"></path>
+        <path d="m14 3 2 2-2 2"></path>
+      </symbol>
+      <symbol id="i-shield" viewBox="0 0 24 24">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"></path>
+        <path d="m9 12 2 2 4-4"></path>
+      </symbol>
+      <symbol id="i-file" viewBox="0 0 24 24">
+        <path
+          d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"
+        ></path>
+        <path d="M14 2v6h6"></path>
+      </symbol>
+      <symbol id="i-check" viewBox="0 0 24 24">
+        <path d="m5 12 4 4L19 6"></path>
+      </symbol>
+      <symbol id="i-x" viewBox="0 0 24 24">
+        <path d="M18 6 6 18M6 6l12 12"></path>
+      </symbol>
+      <symbol id="i-lock" viewBox="0 0 24 24">
+        <rect x="4" y="10" width="16" height="11" rx="2"></rect>
+        <path d="M8 10V7a4 4 0 0 1 8 0v3"></path>
+      </symbol>
+      <symbol id="i-brain" viewBox="0 0 24 24">
+        <path
+          d="M9.5 4A3.5 3.5 0 0 0 6 7.5c0 .3 0 .6.1.9A3.5 3.5 0 0 0 7.5 15H9"
+        ></path>
+        <path
+          d="M14.5 4A3.5 3.5 0 0 1 18 7.5c0 .3 0 .6-.1.9A3.5 3.5 0 0 1 16.5 15H15"
+        ></path>
+        <path d="M9 4a3 3 0 0 1 3 3v12a3 3 0 0 1-6 0 4 4 0 0 1-3-3.9"></path>
+        <path d="M15 4a3 3 0 0 0-3 3v12a3 3 0 0 0 6 0 4 4 0 0 0 3-3.9"></path>
+      </symbol>
+      <symbol id="i-more" viewBox="0 0 24 24">
+        <circle cx="5" cy="12" r="1"></circle>
+        <circle cx="12" cy="12" r="1"></circle>
+        <circle cx="19" cy="12" r="1"></circle>
+      </symbol>
+      <symbol id="i-edit" viewBox="0 0 24 24">
+        <path d="M12 20h9"></path>
+        <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"></path>
+      </symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24">
+        <path d="M12 5v14M5 12h14"></path>
+      </symbol>
+      <symbol id="i-pause" viewBox="0 0 24 24">
+        <path d="M8 5v14M16 5v14"></path>
+      </symbol>
+    </svg>
+
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="主导航">
+        <div class="brand">
+          <img src="../src/assets/icons/app-icon.png" alt="" />
+          <div>
+            <span class="brand-name">Tandem</span>
+            <span class="brand-meta">PERSONAL AI</span>
+          </div>
+        </div>
+
+        <nav class="nav-list">
+          <button
+            class="nav-button active"
+            data-view-target="tools"
+            type="button"
+          >
+            <svg class="icon"><use href="#i-grid"></use></svg>
+            <span>任务</span>
+          </button>
+          <button class="nav-button" data-view-target="config" type="button">
+            <svg class="icon"><use href="#i-settings"></use></svg>
+            <span>配置</span>
+          </button>
+          <button class="nav-button" data-view-target="companion" type="button">
+            <svg class="icon"><use href="#i-user"></use></svg>
+            <span>我的搭子</span>
+          </button>
+          <button class="nav-button" data-view-target="handoffs" type="button">
+            <svg class="icon"><use href="#i-history"></use></svg>
+            <span>接力记录</span>
+          </button>
+        </nav>
+
+        <div class="sidebar-spacer"></div>
+        <div class="trust-status">
+          <span class="trust-dot"></span>
+          <span>本机 Core 已连接</span>
+        </div>
+        <div class="profile-mini">
+          <span class="profile-avatar">F</span>
+          <div class="profile-copy">
+            <strong>Feng</strong>
+            <span>个人空间</span>
+          </div>
+        </div>
+      </aside>
+
+      <main class="main-shell">
+        <header class="topbar">
+          <div class="topbar-title">
+            <h1 id="topbar-title">任务</h1>
+            <div class="project-context">
+              <svg class="icon"><use href="#i-folder"></use></svg>
+              <span>~/Codes/cc-switch</span>
+            </div>
+          </div>
+          <div class="topbar-actions">
+            <button
+              class="kbd-button"
+              id="global-launcher"
+              type="button"
+              title="打开 AI 启动器"
+            >
+              <svg class="icon"><use href="#i-command"></use></svg>
+              <span>开始</span>
+              <kbd>⌘ K</kbd>
+            </button>
+            <button
+              class="icon-button"
+              id="open-config"
+              type="button"
+              title="设置"
+            >
+              <svg class="icon"><use href="#i-settings"></use></svg>
+            </button>
+          </div>
+        </header>
+
+        <section class="view active" id="view-tools" data-view="tools">
+          <div class="view-inner">
+            <div class="page-heading">
+              <div>
+                <p class="eyebrow">个人 AI 驾驶舱</p>
+                <h2>从一个干净的工作现场开始</h2>
+                <p>Tandem · 已开启版本保护 · 本机执行</p>
+              </div>
+              <span class="status-badge">本机 Core 已连接</span>
+            </div>
+
+            <div class="dashboard-grid">
+              <div class="content-column">
+                <div class="launcher">
+                  <div class="launcher-context">
+                    <div class="context-name">
+                      <svg class="icon"><use href="#i-folder"></use></svg>
+                      <strong>~/Codes/cc-switch</strong>
+                    </div>
+                    <button
+                      class="text-button"
+                      type="button"
+                      data-toast="已打开项目选择器"
+                    >
+                      更换项目
+                    </button>
+                  </div>
+                  <div class="mode-switch" role="tablist" aria-label="任务方式">
+                    <button
+                      class="mode-button active"
+                      type="button"
+                      role="tab"
+                      aria-selected="true"
+                      data-home-mode="new"
+                    >
+                      <svg class="icon"><use href="#i-plus"></use></svg>
+                      新任务
+                    </button>
+                    <button
+                      class="mode-button"
+                      type="button"
+                      role="tab"
+                      aria-selected="false"
+                      data-home-mode="resume"
+                    >
+                      <svg class="icon"><use href="#i-history"></use></svg>
+                      继续任务
+                      <span class="mode-count">2</span>
+                    </button>
+                  </div>
+                  <div
+                    class="home-mode-panel active"
+                    id="home-new-panel"
+                    data-home-panel="new"
+                  >
+                    <div class="command-line">
+                      <div class="command-input-wrap">
+                        <svg class="icon"><use href="#i-command"></use></svg>
+                        <input
+                          class="command-input"
+                          id="home-command"
+                          value="优化 cc-switch 的跨工具接力体验"
+                          aria-label="输入要完成的事"
+                        />
+                        <span class="command-shortcut">⌘↵</span>
+                      </div>
+                      <button
+                        class="primary-button"
+                        id="home-arrange"
+                        type="button"
+                      >
+                        选择工具
+                        <svg class="icon">
+                          <use href="#i-arrow-right"></use>
+                        </svg>
+                      </button>
+                    </div>
+                    <div class="quick-actions">
+                      <button
+                        class="quick-action"
+                        type="button"
+                        data-quick-command="检查项目最新版本并给出风险"
+                      >
+                        检查最新版本
+                      </button>
+                      <button
+                        class="quick-action"
+                        type="button"
+                        data-quick-command="整理项目上下文并准备交接包"
+                      >
+                        准备接力
+                      </button>
+                    </div>
+                  </div>
+                  <div
+                    class="home-mode-panel"
+                    id="home-resume-panel"
+                    data-home-panel="resume"
+                  >
+                    <div class="resume-spotlight">
+                      <div class="tool-logo">
+                        <img
+                          src="../src/icons/extracted/openai.svg"
+                          alt="Codex"
+                        />
+                      </div>
+                      <div class="resume-spotlight-copy">
+                        <strong>跨工具接力体验</strong>
+                        <span>Codex 原生会话 · 18 分钟前</span>
+                        <span class="workspace-chip"
+                          ><svg class="icon"><use href="#i-folder"></use></svg
+                          >独立工作现场</span
+                        >
+                      </div>
+                      <button
+                        class="primary-button"
+                        id="home-resume"
+                        type="button"
+                      >
+                        回到现场
+                        <svg class="icon">
+                          <use href="#i-arrow-right"></use>
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <section class="section">
+                  <div class="section-heading">
+                    <h3>当前工作现场</h3>
+                    <span id="current-tool-state">Claude Code 中</span>
+                  </div>
+                  <div class="active-run" id="active-run">
+                    <div class="run-main">
+                      <div class="tool-logo">
+                        <img
+                          id="active-run-logo"
+                          src="../src/icons/extracted/claude.svg"
+                          alt="Claude Code"
+                        />
+                        <span
+                          id="active-run-initial"
+                          class="initial-logo"
+                          style="display: none"
+                        ></span>
+                      </div>
+                      <div class="run-copy">
+                        <div class="run-title">
+                          <span class="pulse"></span>
+                          <strong id="active-run-task"
+                            >梳理跨工具接力的数据边界</strong
+                          >
+                        </div>
+                        <div class="run-meta">
+                          <span id="active-run-tool">Claude Code · Opus</span>
+                          <span id="active-run-workspace">独立工作现场</span>
+                          <span>08:42 打开</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="run-actions">
+                      <button
+                        class="quiet-button"
+                        id="return-to-tool"
+                        type="button"
+                        data-toast="已切回 Claude Code 原生会话"
+                      >
+                        <svg class="icon">
+                          <use href="#i-arrow-right"></use>
+                        </svg>
+                        <span id="return-to-tool-label">回到 Claude Code</span>
+                      </button>
+                      <button
+                        class="secondary-button"
+                        type="button"
+                        data-open-handoff
+                      >
+                        <svg class="icon"><use href="#i-route"></use></svg>
+                        接力
+                      </button>
+                    </div>
+                  </div>
+                </section>
+
+                <section class="section">
+                  <div class="section-heading">
+                    <h3>可用工具</h3>
+                    <span>按当前项目能力排序</span>
+                  </div>
+                  <div class="tool-grid">
+                    <article class="tool-card">
+                      <div class="tool-logo">
+                        <img src="../src/icons/extracted/claude.svg" alt="" />
+                      </div>
+                      <div class="tool-card-copy">
+                        <div class="tool-card-title">
+                          <strong>Claude Code</strong>
+                          <span class="tool-state">就绪</span>
+                        </div>
+                        <div class="tool-description">
+                          复杂重构 · 长程执行 · 代码理解
+                        </div>
+                        <div class="tool-route">TokenKey · Claude Opus</div>
+                      </div>
+                      <button
+                        class="tool-launch"
+                        type="button"
+                        title="用 Claude Code 开始"
+                        data-launch-tool="Claude Code"
+                      >
+                        <svg class="icon"><use href="#i-play"></use></svg>
+                      </button>
+                    </article>
+
+                    <article class="tool-card">
+                      <div class="tool-logo">
+                        <img src="../src/icons/extracted/openai.svg" alt="" />
+                      </div>
+                      <div class="tool-card-copy">
+                        <div class="tool-card-title">
+                          <strong>Codex</strong>
+                          <span class="tool-state">就绪</span>
+                        </div>
+                        <div class="tool-description">
+                          精确实现 · 独立审查 · 快速验证
+                        </div>
+                        <div class="tool-route">TokenKey · GPT-5.4</div>
+                      </div>
+                      <button
+                        class="tool-launch"
+                        type="button"
+                        title="用 Codex 开始"
+                        data-launch-tool="Codex"
+                      >
+                        <svg class="icon"><use href="#i-play"></use></svg>
+                      </button>
+                    </article>
+
+                    <article class="tool-card">
+                      <div class="tool-logo">
+                        <img src="../src/icons/extracted/grok.svg" alt="" />
+                      </div>
+                      <div class="tool-card-copy">
+                        <div class="tool-card-title">
+                          <strong>Grok Build</strong>
+                          <span class="tool-state">就绪</span>
+                        </div>
+                        <div class="tool-description">
+                          快速探索 · 实时信息 · 备选实现
+                        </div>
+                        <div class="tool-route">本地账号 · Grok 4.5</div>
+                      </div>
+                      <button
+                        class="tool-launch"
+                        type="button"
+                        title="用 Grok Build 开始"
+                        data-launch-tool="Grok Build"
+                      >
+                        <svg class="icon"><use href="#i-play"></use></svg>
+                      </button>
+                    </article>
+
+                    <article class="tool-card">
+                      <div class="tool-logo initial-logo">K</div>
+                      <div class="tool-card-copy">
+                        <div class="tool-card-title">
+                          <strong>Kiro</strong>
+                          <span class="tool-state locked">模型受限</span>
+                        </div>
+                        <div class="tool-description">
+                          规格驱动 · IDE 原生 · 项目探索
+                        </div>
+                        <div class="tool-route">工具原生模型 · 不可改路由</div>
+                      </div>
+                      <button
+                        class="tool-launch"
+                        type="button"
+                        title="在 Kiro 中打开"
+                        data-launch-tool="Kiro"
+                      >
+                        <svg class="icon"><use href="#i-play"></use></svg>
+                      </button>
+                    </article>
+
+                    <article class="tool-card">
+                      <div class="tool-logo initial-logo">W</div>
+                      <div class="tool-card-copy">
+                        <div class="tool-card-title">
+                          <strong>WorkBuddy</strong>
+                          <span class="tool-state locked">模型受限</span>
+                        </div>
+                        <div class="tool-description">
+                          桌面协作 · 办公自动化 · 本地任务
+                        </div>
+                        <div class="tool-route">
+                          工具原生模型 · Launcher 模式
+                        </div>
+                      </div>
+                      <button
+                        class="tool-launch"
+                        type="button"
+                        title="在 WorkBuddy 中打开"
+                        data-launch-tool="WorkBuddy"
+                      >
+                        <svg class="icon"><use href="#i-play"></use></svg>
+                      </button>
+                    </article>
+
+                    <article class="tool-card">
+                      <div class="tool-logo">
+                        <img
+                          src="../src/icons/extracted/opencode-logo-light.svg"
+                          alt=""
+                        />
+                      </div>
+                      <div class="tool-card-copy">
+                        <div class="tool-card-title">
+                          <strong>OpenCode</strong>
+                          <span class="tool-state">就绪</span>
+                        </div>
+                        <div class="tool-description">
+                          开放执行 · 多模型 · 终端工作流
+                        </div>
+                        <div class="tool-route">本地路由 · Kimi K3</div>
+                      </div>
+                      <button
+                        class="tool-launch"
+                        type="button"
+                        title="用 OpenCode 开始"
+                        data-launch-tool="OpenCode"
+                      >
+                        <svg class="icon"><use href="#i-play"></use></svg>
+                      </button>
+                    </article>
+                  </div>
+                </section>
+
+                <section class="section">
+                  <div class="section-heading">
+                    <h3>最近接力</h3>
+                    <button
+                      class="text-button"
+                      type="button"
+                      data-view-jump="handoffs"
+                    >
+                      查看全部
+                    </button>
+                  </div>
+                  <div class="handoff-list">
+                    <div class="handoff-row">
+                      <div class="handoff-project">
+                        <strong>修复 Codex 会话历史恢复</strong>
+                        <span>cc-switch · 验证通过</span>
+                      </div>
+                      <div class="handoff-route">
+                        <span class="route-logo">K</span>
+                        <svg class="icon">
+                          <use href="#i-arrow-right"></use>
+                        </svg>
+                        <span class="route-logo"
+                          ><img src="../src/icons/extracted/openai.svg" alt=""
+                        /></span>
+                        <span>Kiro → Codex</span>
+                      </div>
+                      <span class="handoff-time">昨天 18:24</span>
+                    </div>
+                    <div class="handoff-row">
+                      <div class="handoff-project">
+                        <strong>审查代理协议转换风险</strong>
+                        <span>cc-switch · 已生成审查结论</span>
+                      </div>
+                      <div class="handoff-route">
+                        <span class="route-logo"
+                          ><img src="../src/icons/extracted/claude.svg" alt=""
+                        /></span>
+                        <svg class="icon">
+                          <use href="#i-arrow-right"></use>
+                        </svg>
+                        <span class="route-logo"
+                          ><img src="../src/icons/extracted/openai.svg" alt=""
+                        /></span>
+                        <span>Claude → Codex</span>
+                      </div>
+                      <span class="handoff-time">周三 11:06</span>
+                    </div>
+                  </div>
+                </section>
+              </div>
+
+              <aside class="companion-panel" aria-label="我的搭子摘要">
+                <div>
+                  <div class="companion-header">
+                    <span class="companion-avatar">搭</span>
+                    <div>
+                      <h3>我的搭子</h3>
+                      <p>已随当前项目装载</p>
+                    </div>
+                  </div>
+                  <div class="companion-stats">
+                    <div class="stat-row">
+                      <span>个人规则</span><strong>12 条生效</strong>
+                    </div>
+                    <div class="stat-row">
+                      <span>共享能力</span><strong>18 Skills</strong>
+                    </div>
+                    <div class="stat-row">
+                      <span>工具连接</span><strong>6 / 8</strong>
+                    </div>
+                    <div class="stat-row">
+                      <span>决策边界</span><strong>高风险先询问</strong>
+                    </div>
+                  </div>
+                  <button
+                    class="secondary-button"
+                    style="width: 100%; margin-top: 15px"
+                    type="button"
+                    data-view-jump="companion"
+                  >
+                    查看我的搭子
+                    <svg class="icon"><use href="#i-arrow-right"></use></svg>
+                  </button>
+                </div>
+                <div>
+                  <div class="memory-label">
+                    <strong>一条待确认的学习</strong>
+                    <span>来自 3 次任务</span>
+                  </div>
+                  <div class="memory-proposal" id="memory-proposal">
+                    <p id="memory-proposal-copy">
+                      你总是要求先给结论，再展开依据。以后所有审查默认采用这个顺序吗？
+                    </p>
+                    <div class="proposal-actions" id="proposal-actions">
+                      <button type="button" id="learn-keep">保留</button>
+                      <button type="button" id="learn-once">仅这次</button>
+                    </div>
+                  </div>
+                </div>
+              </aside>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" id="view-config" data-view="config">
+          <div class="view-inner">
+            <div class="page-heading">
+              <div>
+                <p class="eyebrow">CC Switch 原生能力</p>
+                <h2>连接与配置</h2>
+                <p>供应商、路由、Skills 与会话仍由本机统一管理。</p>
+              </div>
+              <span class="status-badge">8 个平台已托管</span>
+            </div>
+
+            <div class="bootstrap-strip">
+              <span class="bootstrap-icon">
+                <svg class="icon"><use href="#i-shield"></use></svg>
+              </span>
+              <div class="bootstrap-copy">
+                <strong id="bootstrap-title">TokenKey 统一路由已就绪</strong>
+                <span id="bootstrap-meta"
+                  >API Key · 本机 Keychain · 末四位 9R4K</span
+                >
+              </div>
+              <button
+                class="secondary-button"
+                id="open-device-setup"
+                type="button"
+              >
+                <svg class="icon"><use href="#i-settings"></use></svg>
+                设置新设备
+              </button>
+            </div>
+
+            <div class="config-app-strip" role="tablist" aria-label="托管平台">
+              <button
+                class="config-app-button active"
+                type="button"
+                role="tab"
+                aria-selected="true"
+                data-config-app="Claude Code"
+                data-config-route="TokenKey · Anthropic"
+                data-config-fallback-name="Claude Official"
+                data-config-fallback-url="https://www.anthropic.com/claude-code"
+              >
+                <img src="../src/icons/extracted/claude.svg" alt="" />
+                Claude Code
+              </button>
+              <button
+                class="config-app-button"
+                type="button"
+                role="tab"
+                aria-selected="false"
+                data-config-app="Claude Desktop"
+                data-config-route="TokenKey · Anthropic"
+                data-config-fallback-name="Claude Desktop Official"
+                data-config-fallback-url="https://claude.ai/download"
+              >
+                <img src="../src/icons/extracted/claude.svg" alt="" />
+                Claude Desktop
+              </button>
+              <button
+                class="config-app-button"
+                type="button"
+                role="tab"
+                aria-selected="false"
+                data-config-app="Codex"
+                data-config-route="TokenKey · OpenAI"
+                data-config-fallback-name="OpenAI Official"
+                data-config-fallback-url="https://chatgpt.com/codex"
+              >
+                <img src="../src/icons/extracted/openai.svg" alt="" />
+                Codex
+              </button>
+              <button
+                class="config-app-button"
+                type="button"
+                role="tab"
+                aria-selected="false"
+                data-config-app="Gemini CLI"
+                data-config-route="TokenKey · Gemini"
+                data-config-fallback-name="Google Official"
+                data-config-fallback-url="https://ai.google.dev/"
+              >
+                <img src="../src/icons/extracted/gemini.svg" alt="" />
+                Gemini CLI
+              </button>
+              <button
+                class="config-app-button"
+                type="button"
+                role="tab"
+                aria-selected="false"
+                data-config-app="Grok Build"
+                data-config-route="TokenKey · OpenAI 兼容"
+                data-config-fallback-name="Grok Official"
+                data-config-fallback-url="https://x.ai/grok"
+              >
+                <img src="../src/icons/extracted/grok.svg" alt="" />
+                Grok Build
+              </button>
+              <button
+                class="config-app-button"
+                type="button"
+                role="tab"
+                aria-selected="false"
+                data-config-app="OpenCode"
+                data-config-route="TokenKey · OpenAI 兼容"
+                data-config-fallback-name="OpenCode 原配置"
+                data-config-fallback-url="保留当前 Providers"
+              >
+                <img
+                  src="../src/icons/extracted/opencode-logo-light.svg"
+                  alt=""
+                />
+                OpenCode
+              </button>
+              <button
+                class="config-app-button"
+                type="button"
+                role="tab"
+                aria-selected="false"
+                data-config-app="OpenClaw"
+                data-config-route="TokenKey · Provider Profile"
+                data-config-fallback-name="OpenClaw 原配置"
+                data-config-fallback-url="保留当前 models.providers"
+              >
+                <span class="config-app-mark">OC</span>
+                OpenClaw
+              </button>
+              <button
+                class="config-app-button"
+                type="button"
+                role="tab"
+                aria-selected="false"
+                data-config-app="Hermes"
+                data-config-route="TokenKey · Provider Profile"
+                data-config-fallback-name="Nous Research"
+                data-config-fallback-url="https://nousresearch.com"
+              >
+                <img src="../src/icons/extracted/hermes.png" alt="" />
+                Hermes
+              </button>
+            </div>
+
+            <section
+              class="native-config-surface"
+              aria-labelledby="config-provider-title"
+              data-upstream-surface="NativeConfigSurface"
+            >
+              <div class="native-config-toolbar">
+                <div class="native-toolbar-title">
+                  <strong id="config-provider-title">Claude Code 供应商</strong>
+                  <span id="native-provider-count"
+                    >拖动排序 · 当前 4 个配置</span
+                  >
+                </div>
+                <div class="native-toolbar-actions" aria-label="原生配置工具">
+                  <button
+                    class="native-toolbar-button"
+                    type="button"
+                    title="搜索供应商"
+                    data-native-capability="搜索供应商"
+                  >
+                    <svg class="icon"><use href="#i-command"></use></svg>
+                  </button>
+                  <button
+                    class="native-toolbar-button"
+                    type="button"
+                    title="代理与故障转移"
+                    data-native-capability="本地代理与故障转移"
+                  >
+                    <svg class="icon"><use href="#i-route"></use></svg>
+                  </button>
+                  <button
+                    class="native-toolbar-button"
+                    type="button"
+                    title="Skills"
+                    data-native-capability="Skills"
+                  >
+                    <svg class="icon"><use href="#i-brain"></use></svg>
+                  </button>
+                  <button
+                    class="native-toolbar-button"
+                    type="button"
+                    title="Prompts"
+                    data-native-capability="Prompts"
+                  >
+                    <svg class="icon"><use href="#i-file"></use></svg>
+                  </button>
+                  <button
+                    class="native-toolbar-button"
+                    type="button"
+                    title="原生会话"
+                    data-native-capability="原生会话"
+                  >
+                    <svg class="icon"><use href="#i-history"></use></svg>
+                  </button>
+                  <button
+                    class="native-toolbar-button"
+                    type="button"
+                    title="MCP"
+                    data-native-capability="MCP"
+                  >
+                    <svg class="icon"><use href="#i-grid"></use></svg>
+                  </button>
+                  <button
+                    class="native-toolbar-button"
+                    type="button"
+                    title="用量与成本"
+                    data-native-capability="用量与成本"
+                  >
+                    <svg class="icon"><use href="#i-pause"></use></svg>
+                  </button>
+                  <button
+                    class="native-toolbar-button"
+                    type="button"
+                    title="同步、备份与导入导出"
+                    data-native-capability="同步与备份"
+                  >
+                    <svg class="icon"><use href="#i-shield"></use></svg>
+                  </button>
+                  <button
+                    class="native-add-button"
+                    type="button"
+                    title="添加供应商"
+                    data-toast="已打开原生供应商添加器"
+                  >
+                    <svg class="icon"><use href="#i-plus"></use></svg>
+                  </button>
+                </div>
+              </div>
+
+              <div class="native-provider-list">
+                <article
+                  class="native-provider-card"
+                  data-provider-row="Claude Official"
+                >
+                  <button
+                    class="native-drag-handle"
+                    type="button"
+                    title="拖动排序"
+                  >
+                    <svg class="icon"><use href="#i-more"></use></svg>
+                  </button>
+                  <span class="provider-logo">AI</span>
+                  <div class="native-provider-identity">
+                    <div class="native-provider-name">
+                      <strong id="fallback-provider-name"
+                        >Claude Official</strong
+                      >
+                      <span class="tag">不支持路由</span>
+                    </div>
+                    <span class="native-provider-url" id="fallback-provider-url"
+                      >https://www.anthropic.com/claude-code</span
+                    >
+                  </div>
+                  <div class="native-provider-usage"></div>
+                  <div class="native-row-actions">
+                    <button
+                      class="native-current-button"
+                      id="switch-fallback-provider"
+                      type="button"
+                      data-provider-action="switch"
+                    >
+                      切换
+                    </button>
+                    <button
+                      class="native-action-button"
+                      type="button"
+                      title="编辑"
+                      data-provider-action="edit"
+                      data-toast="已打开 Claude Official 编辑器"
+                    >
+                      <svg class="icon"><use href="#i-edit"></use></svg>
+                    </button>
+                    <button
+                      class="native-action-button"
+                      type="button"
+                      title="复制"
+                      data-provider-action="duplicate"
+                      data-toast="已复制 Claude Official"
+                    >
+                      <svg class="icon"><use href="#i-file"></use></svg>
+                    </button>
+                  </div>
+                </article>
+
+                <article
+                  class="native-provider-card"
+                  data-provider-row="OpenRouter"
+                >
+                  <button
+                    class="native-drag-handle"
+                    type="button"
+                    title="拖动排序"
+                  >
+                    <svg class="icon"><use href="#i-more"></use></svg>
+                  </button>
+                  <span class="provider-logo">OR</span>
+                  <div class="native-provider-identity">
+                    <div class="native-provider-name">
+                      <strong>OpenRouter</strong>
+                    </div>
+                    <span class="native-provider-url"
+                      >https://openrouter.ai</span
+                    >
+                  </div>
+                  <div class="native-provider-usage"></div>
+                  <div class="native-row-actions">
+                    <button
+                      class="native-current-button"
+                      type="button"
+                      data-provider-action="switch"
+                      data-toast="已打开切换到 OpenRouter 的确认"
+                    >
+                      切换
+                    </button>
+                    <button
+                      class="native-action-button"
+                      type="button"
+                      title="连通性检查"
+                      data-provider-action="health"
+                      data-toast="OpenRouter 连通性正常"
+                    >
+                      <svg class="icon"><use href="#i-route"></use></svg>
+                    </button>
+                    <button
+                      class="native-action-button"
+                      type="button"
+                      title="编辑"
+                      data-provider-action="edit"
+                      data-toast="已打开 OpenRouter 编辑器"
+                    >
+                      <svg class="icon"><use href="#i-edit"></use></svg>
+                    </button>
+                    <button
+                      class="native-action-button"
+                      type="button"
+                      title="复制"
+                      data-provider-action="duplicate"
+                      data-toast="已复制 OpenRouter"
+                    >
+                      <svg class="icon"><use href="#i-file"></use></svg>
+                    </button>
+                  </div>
+                </article>
+
+                <article
+                  class="native-provider-card"
+                  data-provider-row="TokenKey-kimi"
+                >
+                  <button
+                    class="native-drag-handle"
+                    type="button"
+                    title="拖动排序"
+                  >
+                    <svg class="icon"><use href="#i-more"></use></svg>
+                  </button>
+                  <span class="provider-logo">T</span>
+                  <div class="native-provider-identity">
+                    <div class="native-provider-name">
+                      <strong>TokenKey-kimi</strong>
+                    </div>
+                    <span class="native-provider-url"
+                      >https://api.tokenkey.dev</span
+                    >
+                  </div>
+                  <div class="native-provider-usage">
+                    <div class="native-provider-updated">
+                      <svg class="icon" style="width: 13px; height: 13px">
+                        <use href="#i-history"></use>
+                      </svg>
+                      刚刚
+                      <button
+                        class="native-action-button"
+                        style="width: 24px; height: 24px"
+                        type="button"
+                        title="刷新余额"
+                        data-toast="TokenKey-kimi 余额已刷新"
+                      >
+                        <svg class="icon" style="width: 14px; height: 14px">
+                          <use href="#i-route"></use>
+                        </svg>
+                      </button>
+                    </div>
+                    <div class="native-provider-balance">
+                      余额：<strong>983145.32</strong> USD
+                    </div>
+                  </div>
+                  <div class="native-row-actions">
+                    <button
+                      class="native-current-button"
+                      type="button"
+                      data-provider-action="switch"
+                      data-toast="已打开切换到 TokenKey-kimi 的确认"
+                    >
+                      切换
+                    </button>
+                    <button
+                      class="native-action-button"
+                      type="button"
+                      title="编辑"
+                      data-provider-action="edit"
+                      data-toast="已打开 TokenKey-kimi 编辑器"
+                    >
+                      <svg class="icon"><use href="#i-edit"></use></svg>
+                    </button>
+                    <button
+                      class="native-action-button"
+                      type="button"
+                      title="复制"
+                      data-provider-action="duplicate"
+                      data-toast="已复制 TokenKey-kimi"
+                    >
+                      <svg class="icon"><use href="#i-file"></use></svg>
+                    </button>
+                    <button
+                      class="native-action-button"
+                      type="button"
+                      title="连通性检查"
+                      data-provider-action="health"
+                      data-toast="TokenKey-kimi 连通性正常"
+                    >
+                      <svg class="icon"><use href="#i-route"></use></svg>
+                    </button>
+                    <button
+                      class="native-action-button"
+                      type="button"
+                      title="用量"
+                      data-provider-action="usage"
+                      data-toast="已打开 TokenKey-kimi 用量"
+                    >
+                      <svg class="icon"><use href="#i-history"></use></svg>
+                    </button>
+                  </div>
+                </article>
+
+                <article
+                  class="native-provider-card current"
+                  data-provider-row="TokenKey-kiro"
+                >
+                  <button
+                    class="native-drag-handle"
+                    type="button"
+                    title="拖动排序"
+                  >
+                    <svg class="icon"><use href="#i-more"></use></svg>
+                  </button>
+                  <span class="provider-logo">T</span>
+                  <div class="native-provider-identity">
+                    <div class="native-provider-name">
+                      <strong id="active-provider-name">TokenKey-kiro</strong>
+                      <span class="tool-state" id="active-provider-route"
+                        >TokenKey · Anthropic</span
+                      >
+                    </div>
+                    <span class="native-provider-url"
+                      >https://api.tokenkey.dev</span
+                    >
+                  </div>
+                  <div class="native-provider-usage">
+                    <div class="native-provider-updated">
+                      <svg class="icon" style="width: 13px; height: 13px">
+                        <use href="#i-history"></use>
+                      </svg>
+                      7 分钟前
+                      <button
+                        class="native-action-button"
+                        style="width: 24px; height: 24px"
+                        type="button"
+                        title="刷新余额"
+                        data-toast="TokenKey-kiro 余额已刷新"
+                      >
+                        <svg class="icon" style="width: 14px; height: 14px">
+                          <use href="#i-route"></use>
+                        </svg>
+                      </button>
+                    </div>
+                    <div class="native-provider-balance">
+                      余额：<strong>983145.41</strong> USD
+                    </div>
+                  </div>
+                  <div class="native-row-actions">
+                    <span class="native-current-button"
+                      ><svg class="icon" style="width: 13px; height: 13px">
+                        <use href="#i-check"></use></svg
+                      >使用中</span
+                    >
+                    <button
+                      class="native-action-button"
+                      type="button"
+                      title="编辑"
+                      data-provider-action="edit"
+                      data-toast="已打开 TokenKey-kiro 编辑器"
+                    >
+                      <svg class="icon"><use href="#i-edit"></use></svg>
+                    </button>
+                    <button
+                      class="native-action-button"
+                      type="button"
+                      title="复制"
+                      data-provider-action="duplicate"
+                      data-toast="已复制 TokenKey-kiro"
+                    >
+                      <svg class="icon"><use href="#i-file"></use></svg>
+                    </button>
+                    <button
+                      class="native-action-button"
+                      type="button"
+                      title="连通性检查"
+                      data-provider-action="health"
+                      data-toast="TokenKey-kiro 连通性正常"
+                    >
+                      <svg class="icon"><use href="#i-route"></use></svg>
+                    </button>
+                    <button
+                      class="native-action-button"
+                      type="button"
+                      title="用量"
+                      data-provider-action="usage"
+                      data-toast="已打开 TokenKey-kiro 用量"
+                    >
+                      <svg class="icon"><use href="#i-history"></use></svg>
+                    </button>
+                    <button
+                      class="native-action-button"
+                      type="button"
+                      title="终端"
+                      data-provider-action="terminal"
+                      data-toast="将在当前供应商环境打开终端"
+                    >
+                      <svg class="icon"><use href="#i-command"></use></svg>
+                    </button>
+                    <button
+                      class="native-action-button danger"
+                      type="button"
+                      title="删除"
+                      data-provider-action="delete"
+                      data-toast="当前供应商不能直接删除"
+                    >
+                      <svg class="icon"><use href="#i-x"></use></svg>
+                    </button>
+                  </div>
+                </article>
+              </div>
+
+              <div class="native-surface-footer">
+                <span
+                  ><svg class="icon"><use href="#i-shield"></use></svg
+                  >上次自动备份：2 分钟前 · 配置完整</span
+                >
+                <button
+                  class="text-button"
+                  type="button"
+                  data-native-capability="导入当前配置"
+                >
+                  导入当前 live 配置
+                </button>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="view-companion" data-view="companion">
+          <div class="view-inner">
+            <div class="companion-hero">
+              <span class="companion-avatar">搭</span>
+              <div>
+                <p class="eyebrow">Feng 的个人 AI 层</p>
+                <h2>我的搭子</h2>
+                <p>今天装载于 cc-switch · 6 个工具共享同一套工作方式</p>
+              </div>
+              <button
+                class="secondary-button"
+                type="button"
+                data-toast="已打开搭子编辑器"
+              >
+                <svg class="icon"><use href="#i-edit"></use></svg>
+                编辑
+              </button>
+            </div>
+
+            <div class="companion-view-grid">
+              <div>
+                <div class="group-title">
+                  <h3>一直遵守</h3>
+                  <button
+                    class="text-button"
+                    type="button"
+                    data-toast="已打开规则编辑器"
+                  >
+                    管理规则
+                  </button>
+                </div>
+                <div class="rule-list">
+                  <div class="rule-row">
+                    <span class="rule-symbol"
+                      ><svg class="icon"><use href="#i-shield"></use></svg
+                    ></span>
+                    <div class="rule-copy">
+                      <strong>高风险操作必须先确认</strong>
+                      <span>删除、发布、授权与外部写入不会自动执行</span>
+                    </div>
+                    <span class="source-pill">用户设定</span>
+                  </div>
+                  <div class="rule-row">
+                    <span class="rule-symbol"
+                      ><svg class="icon"><use href="#i-file"></use></svg
+                    ></span>
+                    <div class="rule-copy">
+                      <strong>先交付结论，再展开依据</strong>
+                      <span>适用于审查、方案比较与状态汇报</span>
+                    </div>
+                    <span class="source-pill">已确认学习</span>
+                  </div>
+                  <div class="rule-row">
+                    <span class="rule-symbol"
+                      ><svg class="icon"><use href="#i-check"></use></svg
+                    ></span>
+                    <div class="rule-copy">
+                      <strong>完成必须有运行证据</strong>
+                      <span>测试、界面或真实产物至少命中一项</span>
+                    </div>
+                    <span class="source-pill">项目规则</span>
+                  </div>
+                </div>
+
+                <div class="group-title" style="margin-top: 28px">
+                  <h3>最近学会</h3>
+                  <span>可随时撤回</span>
+                </div>
+                <div class="learning-list">
+                  <div class="learning-row">
+                    <div>
+                      <p>写产品判断时，明确列出“不做什么”。</p>
+                      <small>来自 4 次产品设计任务 · 上周确认</small>
+                    </div>
+                    <button
+                      class="icon-button"
+                      type="button"
+                      title="更多"
+                      data-toast="已打开学习记录"
+                    >
+                      <svg class="icon"><use href="#i-more"></use></svg>
+                    </button>
+                  </div>
+                  <div class="learning-row">
+                    <div>
+                      <p>代码修改后优先展示真实 UI 证据。</p>
+                      <small>来自 3 次前端任务 · 7 月 22 日确认</small>
+                    </div>
+                    <button
+                      class="icon-button"
+                      type="button"
+                      title="更多"
+                      data-toast="已打开学习记录"
+                    >
+                      <svg class="icon"><use href="#i-more"></use></svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div class="group-title">
+                  <h3>随身能力</h3>
+                  <span>18 Skills · 9 MCP</span>
+                </div>
+                <div class="capability-list">
+                  <div class="capability-row">
+                    <img src="../src/icons/extracted/claude.svg" alt="" />
+                    <strong>产品设计与原型</strong>
+                    <span>6 个工具</span>
+                  </div>
+                  <div class="capability-row">
+                    <img src="../src/icons/extracted/openai.svg" alt="" />
+                    <strong>代码实现与审查</strong>
+                    <span>5 个工具</span>
+                  </div>
+                  <div class="capability-row">
+                    <img src="../src/icons/extracted/gemini.svg" alt="" />
+                    <strong>研究与资料整理</strong>
+                    <span>4 个工具</span>
+                  </div>
+                  <div class="capability-row">
+                    <span class="rule-symbol" style="width: 20px; height: 20px"
+                      ><svg class="icon" style="width: 14px; height: 14px">
+                        <use href="#i-route"></use></svg
+                    ></span>
+                    <strong>跨工具接力</strong>
+                    <span>全部工具</span>
+                  </div>
+                </div>
+
+                <div class="group-title" style="margin-top: 28px">
+                  <h3>当前项目装载</h3>
+                  <span>cc-switch</span>
+                </div>
+                <div class="capability-list">
+                  <div class="capability-row">
+                    <svg class="icon"><use href="#i-file"></use></svg>
+                    <strong>AGENTS.md</strong>
+                    <span>已同步</span>
+                  </div>
+                  <div class="capability-row">
+                    <svg class="icon"><use href="#i-brain"></use></svg>
+                    <strong>项目上下文</strong>
+                    <span>23 条</span>
+                  </div>
+                  <div class="capability-row">
+                    <svg class="icon"><use href="#i-shield"></use></svg>
+                    <strong>权限边界</strong>
+                    <span>已装载</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" id="view-handoffs" data-view="handoffs">
+          <div class="view-inner">
+            <div class="page-heading">
+              <div>
+                <p class="eyebrow">连续性</p>
+                <h2>接力记录</h2>
+                <p>项目状态属于你，不属于某一个工具。</p>
+              </div>
+              <button class="secondary-button" type="button" data-open-handoff>
+                <svg class="icon"><use href="#i-route"></use></svg>
+                发起接力
+              </button>
+            </div>
+
+            <div class="history-layout">
+              <div class="project-list">
+                <button
+                  class="project-item active"
+                  type="button"
+                  data-toast="已选择 cc-switch"
+                >
+                  <span><strong>cc-switch</strong><span>今天更新</span></span>
+                  <span class="project-count">8</span>
+                </button>
+                <button
+                  class="project-item"
+                  type="button"
+                  data-toast="已选择 TokenKey"
+                >
+                  <span><strong>TokenKey</strong><span>昨天更新</span></span>
+                  <span class="project-count">4</span>
+                </button>
+                <button
+                  class="project-item"
+                  type="button"
+                  data-toast="已选择 一闪"
+                >
+                  <span><strong>一闪</strong><span>7 月 24 日</span></span>
+                  <span class="project-count">3</span>
+                </button>
+              </div>
+
+              <div class="timeline">
+                <div class="timeline-heading">
+                  <div>
+                    <h3>cc-switch</h3>
+                    <p>~/Codes/cc-switch · main</p>
+                  </div>
+                  <button
+                    class="icon-button"
+                    type="button"
+                    title="更多"
+                    data-toast="已打开项目接力菜单"
+                  >
+                    <svg class="icon"><use href="#i-more"></use></svg>
+                  </button>
+                </div>
+
+                <div class="timeline-item">
+                  <div class="timeline-logo">
+                    <img src="../src/icons/extracted/claude.svg" alt="" />
+                  </div>
+                  <div class="timeline-copy">
+                    <strong>Claude Code 工作现场已打开</strong>
+                    <p>从 Kiro 接手，已载入目标、相关变更和已确认决策。</p>
+                    <div class="timeline-tags">
+                      <span class="tag">当前现场</span
+                      ><span class="tag">TokenKey · Opus</span>
+                    </div>
+                  </div>
+                  <span class="timeline-time">现在</span>
+                </div>
+
+                <div class="timeline-item">
+                  <div class="timeline-logo initial-logo">K</div>
+                  <div class="timeline-copy">
+                    <strong>Kiro 完成产品入口探索</strong>
+                    <p>保留工具原生体验，Tandem 只拥有启动、上下文与接力。</p>
+                    <div class="timeline-tags">
+                      <span class="tag">3 条决策</span
+                      ><span class="tag">5 个相关文件</span>
+                    </div>
+                  </div>
+                  <span class="timeline-time">今天 09:18</span>
+                </div>
+
+                <div class="timeline-item">
+                  <div class="timeline-logo">
+                    <img src="../src/icons/extracted/openai.svg" alt="" />
+                  </div>
+                  <div class="timeline-copy">
+                    <strong>Codex 完成会话管理器审查</strong>
+                    <p>
+                      确认原生会话仅用于恢复；跨工具连续性应由统一交接包承载。
+                    </p>
+                    <div class="timeline-tags">
+                      <span class="tag">验证通过</span
+                      ><span class="tag">审查结论</span>
+                    </div>
+                  </div>
+                  <span class="timeline-time">昨天 18:24</span>
+                </div>
+
+                <div class="timeline-item">
+                  <div class="timeline-logo">
+                    <img src="../src/icons/extracted/grok.svg" alt="" />
+                  </div>
+                  <div class="timeline-copy">
+                    <strong>Grok Build 探索 Kiro 与 WorkBuddy 能力限制</strong>
+                    <p>
+                      两者先以 Launcher/Handoff Adapter
+                      接入，不承诺完整托管执行。
+                    </p>
+                    <div class="timeline-tags">
+                      <span class="tag">研究</span
+                      ><span class="tag">2 个外部工具</span>
+                    </div>
+                  </div>
+                  <span class="timeline-time">周三 10:42</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div class="dialog-backdrop" id="command-backdrop" aria-hidden="true">
+      <section
+        class="command-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="command-title"
+      >
+        <div class="dialog-header">
+          <strong id="command-title">准备新任务</strong>
+          <button
+            class="icon-button"
+            id="close-command"
+            type="button"
+            title="关闭"
+          >
+            <svg class="icon"><use href="#i-x"></use></svg>
+          </button>
+        </div>
+        <div class="dialog-body">
+          <div
+            class="mode-switch dialog-mode-switch"
+            role="tablist"
+            aria-label="任务方式"
+          >
+            <button
+              class="mode-button active"
+              type="button"
+              role="tab"
+              aria-selected="true"
+              data-command-mode="new"
+            >
+              <svg class="icon"><use href="#i-plus"></use></svg>
+              新任务
+            </button>
+            <button
+              class="mode-button"
+              type="button"
+              role="tab"
+              aria-selected="false"
+              data-command-mode="resume"
+            >
+              <svg class="icon"><use href="#i-history"></use></svg>
+              继续任务
+              <span class="mode-count">2</span>
+            </button>
+          </div>
+
+          <div
+            class="dialog-flow active"
+            id="new-task-flow"
+            data-command-flow="new"
+          >
+            <div class="dialog-input-wrap">
+              <svg class="icon"><use href="#i-command"></use></svg>
+              <input
+                class="dialog-input"
+                id="dialog-command"
+                aria-label="要完成的事"
+              />
+            </div>
+            <div class="field-error" id="command-error">先写下要完成的事。</div>
+            <div class="dialog-context-row">
+              <div>
+                <svg class="icon"><use href="#i-folder"></use></svg>
+                <span>项目</span>
+                <strong>~/Codes/cc-switch</strong>
+              </div>
+              <button
+                class="text-button"
+                type="button"
+                data-toast="已打开项目选择器"
+              >
+                更换
+              </button>
+            </div>
+
+            <div class="workspace-plan" aria-label="独立工作现场计划">
+              <div class="workspace-plan-header">
+                <strong>独立工作现场</strong>
+                <span>等待确认</span>
+              </div>
+              <div class="workspace-outcome">
+                <svg class="icon"><use href="#i-shield"></use></svg>
+                <div>
+                  <strong>从项目最新安全版本开始</strong>
+                  <span>原项目保持不变，这项任务可以单独恢复</span>
+                </div>
+              </div>
+              <details class="workspace-technical">
+                <summary>技术详情</summary>
+                <div class="workspace-plan-grid">
+                  <div class="workspace-plan-item">
+                    <span>远端基线</span>
+                    <strong>origin/main @ 2f8c1a7</strong>
+                  </div>
+                  <div class="workspace-plan-item">
+                    <span>终端</span>
+                    <strong>Ghostty</strong>
+                  </div>
+                  <div class="workspace-plan-item">
+                    <span>Worktree</span>
+                    <strong id="planned-worktree"
+                      >../cc-switch-wt-handoff-ux</strong
+                    >
+                  </div>
+                  <div class="workspace-plan-item">
+                    <span>分支</span>
+                    <strong id="planned-branch">cc-switch-wt-handoff-ux</strong>
+                  </div>
+                </div>
+              </details>
+              <div class="workspace-notice">
+                <svg class="icon"><use href="#i-shield"></use></svg>
+                <span
+                  >原项目中 12
+                  个尚未纳入版本保护的改动不会带入；确认前不会创建文件。</span
+                >
+              </div>
+            </div>
+
+            <div class="dialog-section-title">
+              <strong>选择执行工具</strong>
+              <span>模型与凭据由本机路由决定</span>
+            </div>
+            <div class="tool-options">
+              <button
+                class="tool-option selected"
+                type="button"
+                data-tool-option="Claude Code"
+                data-logo="../src/icons/extracted/claude.svg"
+              >
+                <span class="tool-option-logo"
+                  ><img src="../src/icons/extracted/claude.svg" alt=""
+                /></span>
+                <span class="tool-option-copy"
+                  ><strong>Claude Code</strong
+                  ><span>复杂重构 · 搭子已装载 · TokenKey Opus</span></span
+                >
+                <span class="recommendation">推荐</span>
+              </button>
+              <button
+                class="tool-option"
+                type="button"
+                data-tool-option="Codex"
+                data-logo="../src/icons/extracted/openai.svg"
+              >
+                <span class="tool-option-logo"
+                  ><img src="../src/icons/extracted/openai.svg" alt=""
+                /></span>
+                <span class="tool-option-copy"
+                  ><strong>Codex</strong
+                  ><span>精确实现与验证 · TokenKey GPT-5.4</span></span
+                >
+                <svg class="icon"><use href="#i-arrow-right"></use></svg>
+              </button>
+              <button
+                class="tool-option"
+                type="button"
+                data-tool-option="Grok Build"
+                data-logo="../src/icons/extracted/grok.svg"
+              >
+                <span class="tool-option-logo"
+                  ><img src="../src/icons/extracted/grok.svg" alt=""
+                /></span>
+                <span class="tool-option-copy"
+                  ><strong>Grok Build</strong
+                  ><span>快速探索 · 本地 Grok 账号</span></span
+                >
+                <svg class="icon"><use href="#i-arrow-right"></use></svg>
+              </button>
+              <button
+                class="tool-option"
+                type="button"
+                data-tool-option="Kiro"
+                data-logo=""
+              >
+                <span class="tool-option-logo initial-logo">K</span>
+                <span class="tool-option-copy"
+                  ><strong>Kiro</strong
+                  ><span>Launcher 模式 · 使用工具原生模型</span></span
+                >
+                <svg class="icon"><use href="#i-lock"></use></svg>
+              </button>
+            </div>
+          </div>
+
+          <div
+            class="dialog-flow"
+            id="resume-task-flow"
+            data-command-flow="resume"
+          >
+            <div class="dialog-section-title" style="margin-top: 0">
+              <strong>选择工作现场</strong>
+              <span>按最近活动排序</span>
+            </div>
+            <div class="resume-options">
+              <button
+                class="resume-option selected"
+                type="button"
+                data-resume-option="handoff-ux"
+                data-task="跨工具接力体验"
+                data-tool="Codex"
+                data-workspace="../cc-switch-wt-handoff-ux"
+                data-logo="../src/icons/extracted/openai.svg"
+              >
+                <span class="tool-option-logo"
+                  ><img src="../src/icons/extracted/openai.svg" alt=""
+                /></span>
+                <span class="resume-option-copy">
+                  <strong>跨工具接力体验</strong>
+                  <span>独立工作现场 · 18 分钟前</span>
+                  <span class="resume-session-state">Codex 原生会话可恢复</span>
+                </span>
+                <span class="radio-mark"></span>
+              </button>
+              <button
+                class="resume-option"
+                type="button"
+                data-resume-option="routing-recovery"
+                data-task="模型路由故障恢复"
+                data-tool="Claude Code"
+                data-workspace="../cc-switch-wt-routing-recovery"
+                data-logo="../src/icons/extracted/claude.svg"
+              >
+                <span class="tool-option-logo"
+                  ><img src="../src/icons/extracted/claude.svg" alt=""
+                /></span>
+                <span class="resume-option-copy">
+                  <strong>模型路由故障恢复</strong>
+                  <span>独立工作现场 · 昨天</span>
+                  <span class="resume-session-state"
+                    >Claude Code 原生会话可恢复</span
+                  >
+                </span>
+                <span class="radio-mark"></span>
+              </button>
+            </div>
+            <div
+              class="workspace-notice"
+              style="
+                margin-top: 12px;
+                border: 1px solid #b9d9c8;
+                background: var(--green-soft);
+                color: var(--green);
+              "
+            >
+              <svg class="icon"><use href="#i-check"></use></svg>
+              <span>将回到已有工作现场和原生会话，不创建新的工作现场。</span>
+            </div>
+          </div>
+        </div>
+        <div class="dialog-footer">
+          <span class="dialog-footer-note" id="dialog-footer-note"
+            >原项目保持不变 · 已开启版本保护</span
+          >
+          <button class="primary-button" id="start-selected-tool" type="button">
+            <svg class="icon"><use href="#i-play"></use></svg>
+            <span id="start-button-label"
+              >创建独立工作现场并在 Claude Code 开始</span
+            >
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <div class="dialog-backdrop" id="setup-backdrop" aria-hidden="true">
+      <section
+        class="command-dialog setup-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="setup-title"
+      >
+        <div class="dialog-header">
+          <strong id="setup-title">设置新设备</strong>
+          <button
+            class="icon-button"
+            id="close-device-setup"
+            type="button"
+            title="关闭"
+          >
+            <svg class="icon"><use href="#i-x"></use></svg>
+          </button>
+        </div>
+        <div class="dialog-body">
+          <div class="setup-secret">
+            <div class="setup-secret-copy">
+              <strong>TokenKey API Key</strong>
+              <span>已通过本机安全导入 · 末四位 9R4K</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px">
+              <span class="secret-ready">Keychain 已就绪</span>
+              <button
+                class="text-button"
+                type="button"
+                data-toast="已打开 TokenKey 凭据选择器"
+              >
+                更换
+              </button>
+            </div>
+          </div>
+
+          <div class="dialog-section-title">
+            <strong>应用到已安装的平台</strong>
+            <span id="selected-platform-count">已选择 8 个平台</span>
+          </div>
+          <div class="platform-grid">
+            <label class="platform-option">
+              <input
+                type="checkbox"
+                checked
+                data-bootstrap-platform="Claude Code"
+              />
+              <span class="platform-option-copy"
+                ><strong>Claude Code</strong
+                ><span>已检测 · 保留官方登录回退</span></span
+              >
+              <span class="platform-route">Anthropic</span>
+            </label>
+            <label class="platform-option">
+              <input
+                type="checkbox"
+                checked
+                data-bootstrap-platform="Claude Desktop"
+              />
+              <span class="platform-option-copy"
+                ><strong>Claude Desktop</strong
+                ><span>已检测 · 保留 MCP 配置</span></span
+              >
+              <span class="platform-route">Anthropic</span>
+            </label>
+            <label class="platform-option">
+              <input type="checkbox" checked data-bootstrap-platform="Codex" />
+              <span class="platform-option-copy"
+                ><strong>Codex</strong
+                ><span>已检测 · 保留 OAuth 回退</span></span
+              >
+              <span class="platform-route">OpenAI</span>
+            </label>
+            <label class="platform-option">
+              <input
+                type="checkbox"
+                checked
+                data-bootstrap-platform="Gemini CLI"
+              />
+              <span class="platform-option-copy"
+                ><strong>Gemini CLI</strong
+                ><span>已检测 · 模型映射可用</span></span
+              >
+              <span class="platform-route">Gemini</span>
+            </label>
+            <label class="platform-option">
+              <input
+                type="checkbox"
+                checked
+                data-bootstrap-platform="Grok Build"
+              />
+              <span class="platform-option-copy"
+                ><strong>Grok Build</strong
+                ><span>已检测 · 适配器验证通过</span></span
+              >
+              <span class="platform-route">兼容协议</span>
+            </label>
+            <label class="platform-option">
+              <input
+                type="checkbox"
+                checked
+                data-bootstrap-platform="OpenCode"
+              />
+              <span class="platform-option-copy"
+                ><strong>OpenCode</strong
+                ><span>已检测 · 保留现有 Providers</span></span
+              >
+              <span class="platform-route">OpenAI</span>
+            </label>
+            <label class="platform-option">
+              <input
+                type="checkbox"
+                checked
+                data-bootstrap-platform="OpenClaw"
+              />
+              <span class="platform-option-copy"
+                ><strong>OpenClaw</strong
+                ><span>已检测 · 保留工作区文件</span></span
+              >
+              <span class="platform-route">Profile</span>
+            </label>
+            <label class="platform-option">
+              <input type="checkbox" checked data-bootstrap-platform="Hermes" />
+              <span class="platform-option-copy"
+                ><strong>Hermes</strong><span>已检测 · 保留原生会话</span></span
+              >
+              <span class="platform-route">Profile</span>
+            </label>
+          </div>
+          <div class="setup-summary">
+            <svg class="icon"><use href="#i-shield"></use></svg>
+            <span
+              >应用前自动备份现有配置；实际路由以 TokenKey
+              能力清单为准，不兼容的平台保持原样。</span
+            >
+          </div>
+          <div class="setup-error" id="setup-error">至少选择一个平台。</div>
+        </div>
+        <div class="dialog-footer">
+          <span class="dialog-footer-note">凭据只保存在本机 Keychain</span>
+          <div style="display: flex; gap: 8px">
+            <button
+              class="secondary-button"
+              id="cancel-device-setup"
+              type="button"
+            >
+              取消
+            </button>
+            <button
+              class="primary-button"
+              id="apply-device-setup"
+              type="button"
+            >
+              <svg class="icon"><use href="#i-check"></use></svg>
+              <span id="apply-device-setup-label">应用到 8 个平台</span>
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="drawer-backdrop" id="handoff-backdrop" aria-hidden="true">
+      <aside
+        class="handoff-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="handoff-title"
+      >
+        <div class="drawer-header">
+          <strong id="handoff-title">把这件事交给另一个工具</strong>
+          <button
+            class="icon-button"
+            id="close-handoff"
+            type="button"
+            title="关闭"
+          >
+            <svg class="icon"><use href="#i-x"></use></svg>
+          </button>
+        </div>
+        <div class="drawer-body">
+          <div class="handoff-source">
+            <div class="tool-logo">
+              <img src="../src/icons/extracted/claude.svg" alt="" />
+            </div>
+            <div class="handoff-source-copy">
+              <strong>来自 Claude Code</strong>
+              <span>cc-switch-wt-control-layer · 当前运行 08:42</span>
+            </div>
+          </div>
+
+          <dl class="capsule">
+            <div class="capsule-row">
+              <dt>目标</dt>
+              <dd>把 cc-switch 从工具配置器升级为个人 AI 控制层。</dd>
+            </div>
+            <div class="capsule-row">
+              <dt>当前进度</dt>
+              <dd>产品边界已确认，正在验证跨工具接力的数据形状。</dd>
+            </div>
+            <div class="capsule-row">
+              <dt>已确认</dt>
+              <dd>不造聊天窗口；不搬运私有会话；工具保持原生体验。</dd>
+            </div>
+            <div class="capsule-row">
+              <dt>相关内容</dt>
+              <dd>12 个变更 · 5 个相关文件 · 2 条验证结果</dd>
+            </div>
+            <div class="capsule-row">
+              <dt>下一步</dt>
+              <dd>审查交接包是否足以让另一个工具无损接手。</dd>
+            </div>
+          </dl>
+
+          <div class="destination-list">
+            <h4>接力给</h4>
+            <button
+              class="destination-option selected"
+              type="button"
+              data-destination="Codex"
+            >
+              <span class="route-logo"
+                ><img src="../src/icons/extracted/openai.svg" alt=""
+              /></span>
+              <span
+                ><strong>Codex</strong
+                ><span>适合独立审查与数据契约验证</span></span
+              >
+              <span class="radio-mark"></span>
+            </button>
+            <button
+              class="destination-option"
+              type="button"
+              data-destination="Grok Build"
+            >
+              <span class="route-logo"
+                ><img src="../src/icons/extracted/grok.svg" alt=""
+              /></span>
+              <span
+                ><strong>Grok Build</strong
+                ><span>适合扩展外部工具能力研究</span></span
+              >
+              <span class="radio-mark"></span>
+            </button>
+            <button
+              class="destination-option"
+              type="button"
+              data-destination="Kiro"
+            >
+              <span class="route-logo">K</span>
+              <span
+                ><strong>Kiro</strong
+                ><span>只能打开 · 复用当前工作现场</span></span
+              >
+              <span class="radio-mark"></span>
+            </button>
+          </div>
+
+          <div
+            class="workspace-notice"
+            style="
+              margin-top: 14px;
+              border: 1px solid #b9d9c8;
+              background: var(--green-soft);
+              color: var(--green);
+            "
+          >
+            <svg class="icon"><use href="#i-folder"></use></svg>
+            <span>接力将在当前工作现场继续，不创建第二个工作现场。</span>
+          </div>
+
+          <div class="drawer-footer">
+            <button class="secondary-button" id="cancel-handoff" type="button">
+              取消
+            </button>
+            <button class="primary-button" id="start-handoff" type="button">
+              <svg class="icon"><use href="#i-route"></use></svg>
+              <span id="handoff-button-label">准备接力并在 Codex 打开</span>
+            </button>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite">
+      <svg class="icon"><use href="#i-check"></use></svg>
+      <span id="toast-copy"></span>
+    </div>
+
+    <script>
+      const viewTitles = {
+        tools: "任务",
+        config: "配置",
+        companion: "我的搭子",
+        handoffs: "接力记录",
+      };
+
+      const logoByTool = {
+        "Claude Code": "../src/icons/extracted/claude.svg",
+        Codex: "../src/icons/extracted/openai.svg",
+        "Grok Build": "../src/icons/extracted/grok.svg",
+        Kiro: "",
+        WorkBuddy: "",
+        OpenCode: "../src/icons/extracted/opencode-logo-light.svg",
+      };
+
+      let selectedTool = "Claude Code";
+      let selectedDestination = "Codex";
+      let selectedConfigApp = "Claude Code";
+      let commandMode = "new";
+      let selectedResume = document.querySelector(
+        "[data-resume-option].selected",
+      );
+      let toastTimer;
+
+      const commandBackdrop = document.getElementById("command-backdrop");
+      const setupBackdrop = document.getElementById("setup-backdrop");
+      const handoffBackdrop = document.getElementById("handoff-backdrop");
+      const dialogCommand = document.getElementById("dialog-command");
+      const commandError = document.getElementById("command-error");
+
+      function icon(href) {
+        return `<svg class="icon"><use href="${href}"></use></svg>`;
+      }
+
+      function showToast(message) {
+        const toast = document.getElementById("toast");
+        document.getElementById("toast-copy").textContent = message;
+        toast.classList.add("show");
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => toast.classList.remove("show"), 2600);
+      }
+
+      function setView(name) {
+        document.querySelectorAll("[data-view]").forEach((view) => {
+          view.classList.toggle("active", view.dataset.view === name);
+        });
+        document.querySelectorAll("[data-view-target]").forEach((button) => {
+          button.classList.toggle("active", button.dataset.viewTarget === name);
+        });
+        document.getElementById("topbar-title").textContent = viewTitles[name];
+        document.querySelector(".project-context").style.display =
+          name === "config" ? "none" : "";
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+
+      function selectConfigApp(button) {
+        selectedConfigApp = button.dataset.configApp;
+        document.querySelectorAll("[data-config-app]").forEach((item) => {
+          const active = item === button;
+          item.classList.toggle("active", active);
+          item.setAttribute("aria-selected", String(active));
+        });
+        document.getElementById("config-provider-title").textContent =
+          `${selectedConfigApp} 供应商`;
+        document.getElementById("active-provider-route").textContent =
+          button.dataset.configRoute;
+        document.getElementById("fallback-provider-name").textContent =
+          button.dataset.configFallbackName;
+        document.getElementById("fallback-provider-url").textContent =
+          button.dataset.configFallbackUrl;
+      }
+
+      function updateSetupSelection() {
+        const selectedCount = document.querySelectorAll(
+          "[data-bootstrap-platform]:checked",
+        ).length;
+        document.getElementById("selected-platform-count").textContent =
+          `已选择 ${selectedCount} 个平台`;
+        document.getElementById("apply-device-setup-label").textContent =
+          selectedCount ? `应用到 ${selectedCount} 个平台` : "选择平台";
+        document.getElementById("apply-device-setup").disabled =
+          selectedCount === 0;
+        document
+          .getElementById("setup-error")
+          .classList.toggle("show", selectedCount === 0);
+      }
+
+      function openDeviceSetup() {
+        updateSetupSelection();
+        setupBackdrop.classList.add("open");
+        setupBackdrop.setAttribute("aria-hidden", "false");
+        document.body.style.overflow = "hidden";
+      }
+
+      function closeDeviceSetup() {
+        setupBackdrop.classList.remove("open");
+        setupBackdrop.setAttribute("aria-hidden", "true");
+        document.body.style.overflow = "";
+      }
+
+      function selectTool(name) {
+        selectedTool = name;
+        document.querySelectorAll("[data-tool-option]").forEach((option) => {
+          option.classList.toggle(
+            "selected",
+            option.dataset.toolOption === name,
+          );
+        });
+        if (commandMode === "new") {
+          document.getElementById("start-button-label").textContent =
+            `创建独立工作现场并在 ${name} 开始`;
+        }
+      }
+
+      function setHomeMode(mode) {
+        document.querySelectorAll("[data-home-mode]").forEach((button) => {
+          const active = button.dataset.homeMode === mode;
+          button.classList.toggle("active", active);
+          button.setAttribute("aria-selected", String(active));
+        });
+        document.querySelectorAll("[data-home-panel]").forEach((panel) => {
+          panel.classList.toggle("active", panel.dataset.homePanel === mode);
+        });
+      }
+
+      function setCommandMode(mode) {
+        commandMode = mode;
+        document.querySelectorAll("[data-command-mode]").forEach((button) => {
+          const active = button.dataset.commandMode === mode;
+          button.classList.toggle("active", active);
+          button.setAttribute("aria-selected", String(active));
+        });
+        document.querySelectorAll("[data-command-flow]").forEach((flow) => {
+          flow.classList.toggle("active", flow.dataset.commandFlow === mode);
+        });
+
+        if (mode === "resume") {
+          document.getElementById("command-title").textContent = "继续已有任务";
+          updateResumeAction();
+        } else {
+          document.getElementById("command-title").textContent = "准备新任务";
+          document.getElementById("dialog-footer-note").textContent =
+            "原项目保持不变 · 已开启版本保护";
+          document.getElementById("start-button-label").textContent =
+            `创建独立工作现场并在 ${selectedTool} 开始`;
+        }
+      }
+
+      function updateResumeAction() {
+        const tool = selectedResume?.dataset.tool || "Codex";
+        const workspace = selectedResume?.dataset.workspace || "已有工作区";
+        document.getElementById("dialog-footer-note").textContent =
+          "复用已有工作现场 · 不创建新的工作现场";
+        document.getElementById("start-button-label").textContent =
+          `回到 ${tool} 继续`;
+      }
+
+      function selectResume(option) {
+        selectedResume = option;
+        document.querySelectorAll("[data-resume-option]").forEach((item) => {
+          item.classList.toggle("selected", item === option);
+        });
+        updateResumeAction();
+      }
+
+      function applyToolToActiveRun(tool, task, workspace, resumed = false) {
+        document.getElementById("active-run-task").textContent = task;
+        document.getElementById("active-run-tool").textContent = resumed
+          ? `${tool} · 原生会话已恢复`
+          : `${tool} · 已装载我的搭子`;
+        document.getElementById("active-run-workspace").textContent =
+          "独立工作现场";
+        document.getElementById("active-run-workspace").title = workspace;
+        document.getElementById("current-tool-state").textContent =
+          `${tool} 中`;
+        document.getElementById("return-to-tool-label").textContent =
+          `回到 ${tool}`;
+        document.getElementById("return-to-tool").dataset.toast =
+          `已切回 ${tool} 原生会话`;
+        const logo = document.getElementById("active-run-logo");
+        const initial = document.getElementById("active-run-initial");
+        if (logoByTool[tool]) {
+          logo.src = logoByTool[tool];
+          logo.alt = tool;
+          logo.style.display = "block";
+          initial.style.display = "none";
+        } else {
+          logo.style.display = "none";
+          initial.textContent = tool.charAt(0);
+          initial.style.display = "block";
+        }
+      }
+
+      function openCommand(command, tool, mode = "new") {
+        dialogCommand.value =
+          command ?? document.getElementById("home-command").value;
+        commandError.classList.remove("show");
+        selectTool(tool || "Claude Code");
+        setCommandMode(mode);
+        commandBackdrop.classList.add("open");
+        commandBackdrop.setAttribute("aria-hidden", "false");
+        document.body.style.overflow = "hidden";
+        if (mode === "new") setTimeout(() => dialogCommand.focus(), 40);
+      }
+
+      function closeCommand() {
+        commandBackdrop.classList.remove("open");
+        commandBackdrop.setAttribute("aria-hidden", "true");
+        document.body.style.overflow = "";
+      }
+
+      function openHandoff() {
+        handoffBackdrop.classList.add("open");
+        handoffBackdrop.setAttribute("aria-hidden", "false");
+        document.body.style.overflow = "hidden";
+      }
+
+      function closeHandoff() {
+        handoffBackdrop.classList.remove("open");
+        handoffBackdrop.setAttribute("aria-hidden", "true");
+        document.body.style.overflow = "";
+      }
+
+      document
+        .querySelectorAll("[data-view-target], [data-view-jump]")
+        .forEach((button) => {
+          button.addEventListener("click", () =>
+            setView(button.dataset.viewTarget || button.dataset.viewJump),
+          );
+        });
+
+      document.getElementById("open-config").addEventListener("click", () => {
+        setView("config");
+      });
+
+      document.querySelectorAll("[data-config-app]").forEach((button) => {
+        button.addEventListener("click", () => selectConfigApp(button));
+      });
+
+      document
+        .getElementById("switch-fallback-provider")
+        .addEventListener("click", () => {
+          showToast(`已为 ${selectedConfigApp} 打开原配置切换确认`);
+        });
+
+      document
+        .querySelectorAll("[data-native-capability]")
+        .forEach((button) => {
+          button.addEventListener("click", () => {
+            showToast(`已打开 ${button.dataset.nativeCapability}`);
+          });
+        });
+
+      document
+        .getElementById("open-device-setup")
+        .addEventListener("click", openDeviceSetup);
+      document
+        .getElementById("close-device-setup")
+        .addEventListener("click", closeDeviceSetup);
+      document
+        .getElementById("cancel-device-setup")
+        .addEventListener("click", closeDeviceSetup);
+      setupBackdrop.addEventListener("click", (event) => {
+        if (event.target === setupBackdrop) closeDeviceSetup();
+      });
+
+      document
+        .querySelectorAll("[data-bootstrap-platform]")
+        .forEach((checkbox) => {
+          checkbox.addEventListener("change", updateSetupSelection);
+        });
+
+      document
+        .getElementById("apply-device-setup")
+        .addEventListener("click", () => {
+          const selectedCount = document.querySelectorAll(
+            "[data-bootstrap-platform]:checked",
+          ).length;
+          if (!selectedCount) {
+            updateSetupSelection();
+            return;
+          }
+          document.getElementById("bootstrap-title").textContent =
+            "TokenKey 已应用到全部已选平台";
+          document.getElementById("bootstrap-meta").textContent =
+            `${selectedCount} 个平台验证通过 · 原配置已备份`;
+          closeDeviceSetup();
+          showToast(`TokenKey 已安全配置到 ${selectedCount} 个平台`);
+        });
+
+      document.querySelectorAll("[data-home-mode]").forEach((button) => {
+        button.addEventListener("click", () =>
+          setHomeMode(button.dataset.homeMode),
+        );
+      });
+
+      document.querySelectorAll("[data-command-mode]").forEach((button) => {
+        button.addEventListener("click", () =>
+          setCommandMode(button.dataset.commandMode),
+        );
+      });
+
+      document.querySelectorAll("[data-resume-option]").forEach((option) => {
+        option.addEventListener("click", () => selectResume(option));
+      });
+
+      document
+        .getElementById("global-launcher")
+        .addEventListener("click", () =>
+          openCommand(undefined, undefined, "new"),
+        );
+      document.getElementById("home-arrange").addEventListener("click", () => {
+        openCommand(
+          document.getElementById("home-command").value,
+          undefined,
+          "new",
+        );
+      });
+      document
+        .getElementById("home-resume")
+        .addEventListener("click", () =>
+          openCommand(undefined, undefined, "resume"),
+        );
+
+      document
+        .getElementById("home-command")
+        .addEventListener("keydown", (event) => {
+          if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+            openCommand(event.currentTarget.value, undefined, "new");
+          }
+        });
+
+      document.querySelectorAll("[data-quick-command]").forEach((button) => {
+        button.addEventListener("click", () => {
+          document.getElementById("home-command").value =
+            button.dataset.quickCommand;
+          openCommand(button.dataset.quickCommand, undefined, "new");
+        });
+      });
+
+      document.querySelectorAll("[data-launch-tool]").forEach((button) => {
+        button.addEventListener("click", () =>
+          openCommand(
+            document.getElementById("home-command").value,
+            button.dataset.launchTool,
+            "new",
+          ),
+        );
+      });
+
+      document.querySelectorAll("[data-tool-option]").forEach((option) => {
+        option.addEventListener("click", () =>
+          selectTool(option.dataset.toolOption),
+        );
+      });
+
+      document
+        .getElementById("start-selected-tool")
+        .addEventListener("click", () => {
+          if (commandMode === "resume") {
+            const task = selectedResume.dataset.task;
+            const tool = selectedResume.dataset.tool;
+            const workspace = selectedResume.dataset.workspace;
+            applyToolToActiveRun(tool, task, workspace, true);
+            closeCommand();
+            setHomeMode("resume");
+            setView("tools");
+            showToast(`已回到 ${tool} 的原工作现场`);
+            return;
+          }
+
+          const command = dialogCommand.value.trim();
+          if (!command) {
+            commandError.classList.add("show");
+            dialogCommand.focus();
+            return;
+          }
+          commandError.classList.remove("show");
+          applyToolToActiveRun(
+            selectedTool,
+            command,
+            "cc-switch-wt-handoff-ux",
+          );
+          closeCommand();
+          setHomeMode("new");
+          setView("tools");
+          showToast(`独立工作现场已创建，${selectedTool} 正在启动`);
+        });
+
+      document
+        .getElementById("close-command")
+        .addEventListener("click", closeCommand);
+      commandBackdrop.addEventListener("click", (event) => {
+        if (event.target === commandBackdrop) closeCommand();
+      });
+
+      document.querySelectorAll("[data-open-handoff]").forEach((button) => {
+        button.addEventListener("click", openHandoff);
+      });
+
+      document.querySelectorAll("[data-destination]").forEach((option) => {
+        option.addEventListener("click", () => {
+          selectedDestination = option.dataset.destination;
+          document.querySelectorAll("[data-destination]").forEach((item) => {
+            item.classList.toggle("selected", item === option);
+          });
+          document.getElementById("handoff-button-label").textContent =
+            `准备接力并在 ${selectedDestination} 打开`;
+        });
+      });
+
+      document.getElementById("start-handoff").addEventListener("click", () => {
+        closeHandoff();
+        showToast(`${selectedDestination} 已收到当前工作现场的接力包`);
+      });
+      document
+        .getElementById("close-handoff")
+        .addEventListener("click", closeHandoff);
+      document
+        .getElementById("cancel-handoff")
+        .addEventListener("click", closeHandoff);
+      handoffBackdrop.addEventListener("click", (event) => {
+        if (event.target === handoffBackdrop) closeHandoff();
+      });
+
+      document.querySelectorAll("[data-toast]").forEach((button) => {
+        button.addEventListener("click", () => showToast(button.dataset.toast));
+      });
+
+      document.getElementById("learn-keep").addEventListener("click", () => {
+        const proposal = document.getElementById("memory-proposal");
+        proposal.classList.add("resolved");
+        document.getElementById("memory-proposal-copy").textContent =
+          "已加入：审查默认先给结论，再展开依据。";
+        document.getElementById("proposal-actions").remove();
+        showToast("这条工作偏好已加入我的搭子");
+      });
+
+      document.getElementById("learn-once").addEventListener("click", () => {
+        const proposal = document.getElementById("memory-proposal");
+        proposal.classList.add("resolved");
+        document.getElementById("memory-proposal-copy").textContent =
+          "这次采用，不会写入长期偏好。";
+        document.getElementById("proposal-actions").remove();
+        showToast("本次有效，未写入长期偏好");
+      });
+
+      document.addEventListener("keydown", (event) => {
+        if (
+          (event.metaKey || event.ctrlKey) &&
+          event.key.toLowerCase() === "k"
+        ) {
+          event.preventDefault();
+          openCommand(undefined, undefined, "new");
+        }
+        if (event.key === "Escape") {
+          if (commandBackdrop.classList.contains("open")) closeCommand();
+          if (setupBackdrop.classList.contains("open")) closeDeviceSetup();
+          if (handoffBackdrop.classList.contains("open")) closeHandoff();
+        }
+      });
+
+      if (new URLSearchParams(window.location.search).get("firstRun") === "1") {
+        setView("config");
+        openDeviceSetup();
+      }
+    </script>
+  </body>
+</html>
