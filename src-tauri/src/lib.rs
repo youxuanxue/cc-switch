@@ -1,3 +1,5 @@
+pub mod tandem;
+
 mod app_config;
 mod app_store;
 mod auto_launch;
@@ -7,7 +9,7 @@ mod claude_plugin;
 mod codex_config;
 mod codex_history_migration;
 mod codex_state_db;
-mod commands;
+pub mod commands;
 mod config;
 mod database;
 mod deeplink;
@@ -614,6 +616,15 @@ pub fn run() {
 
             let app_state = AppState::new(db);
 
+            let config_dir = crate::config::get_app_config_dir();
+            let tandem_state = crate::tandem::TandemState::initialize(&config_dir);
+            if let Some(error) = tandem_state.init_error.as_deref() {
+                log::error!("Failed to initialize Tandem database: {error}");
+            } else {
+                log::info!("Tandem database initialized");
+            }
+            app.manage(tandem_state);
+
             // 设置 AppHandle 用于代理故障转移时的 UI 更新
             app_state.proxy_service.set_app_handle(app.handle().clone());
 
@@ -1034,7 +1045,7 @@ pub fn run() {
 
             // 构建托盘
             let mut tray_builder = TrayIconBuilder::with_id(tray::TRAY_ID)
-                .tooltip("CC Switch") // 鼠标悬停提示
+                .tooltip("Tandem") // 鼠标悬停提示
                 .on_tray_icon_event(|tray, event| match event {
                     // 鼠标悬停/点击到托盘图标时，后台异步刷新用量缓存，
                     // 让用户下一次（或快速打开菜单的那一刻）看到较新的数字。
@@ -1641,6 +1652,10 @@ pub fn run() {
             commands::delete_daily_memory_file,
             commands::search_daily_memory_files,
             commands::open_workspace_directory,
+            // Tandem task ledger
+            commands::create_tandem_task,
+            commands::list_tandem_ledger,
+            commands::confirm_tandem_task_completed,
             // lightweight mode (for testing or low-resource environments)
             commands::enter_lightweight_mode,
             commands::exit_lightweight_mode,

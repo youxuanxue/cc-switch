@@ -155,6 +155,43 @@ pub struct TrayAppSection {
 /// Auto 菜单项后缀
 pub const AUTO_SUFFIX: &str = "auto";
 pub const TRAY_ID: &str = "cc-switch";
+pub const TANDEM_TASK_SUMMARY_ID: &str = "tandem_task_summary";
+
+fn read_tandem_ledger(
+    app: &tauri::AppHandle,
+) -> Result<crate::tandem::repository::TaskLedger, AppError> {
+    app.try_state::<crate::tandem::TandemState>()
+        .ok_or_else(|| AppError::Message("Tandem state unavailable".to_string()))
+        .and_then(|state| state.database().map_err(AppError::Message))
+        .and_then(|db| db.list_ledger())
+}
+
+fn resolve_tandem_summary_label<F>(
+    precomputed: Option<String>,
+    language: &str,
+    read_ledger: F,
+) -> String
+where
+    F: FnOnce() -> Result<crate::tandem::repository::TaskLedger, AppError>,
+{
+    precomputed.unwrap_or_else(|| tandem_task_summary_label(read_ledger(), language))
+}
+
+fn tandem_task_summary_label(
+    ledger: Result<crate::tandem::repository::TaskLedger, AppError>,
+    language: &str,
+) -> String {
+    match ledger {
+        Ok(ledger) => crate::tandem::tray_summary::summary_label(
+            &crate::tandem::tray_summary::summarize(&ledger),
+            language,
+        ),
+        Err(error) => {
+            log::error!("Failed to read Tandem task ledger for tray: {error}");
+            "Tasks unavailable".to_string()
+        }
+    }
+}
 
 pub const TRAY_SECTIONS: [TrayAppSection; 4] = [
     TrayAppSection {
@@ -641,6 +678,14 @@ pub fn create_tray_menu(
     app: &tauri::AppHandle,
     app_state: &AppState,
 ) -> Result<Menu<tauri::Wry>, AppError> {
+    create_tray_menu_with_tandem_label(app, app_state, None)
+}
+
+fn create_tray_menu_with_tandem_label(
+    app: &tauri::AppHandle,
+    app_state: &AppState,
+    tandem_summary_label: Option<String>,
+) -> Result<Menu<tauri::Wry>, AppError> {
     let app_settings = crate::settings::get_settings();
     // 用户未显式设置语言（首次安装）时，按系统区域回退而非硬编码简体，
     // 否则繁中系统的托盘会固定显示简体直到用户手动切换一次。
@@ -669,8 +714,20 @@ pub fn create_tray_menu(
         None::<&str>,
     )
     .map_err(|e| AppError::Message(format!("创建打开官方网站菜单失败: {e}")))?;
+    let tandem_summary_label =
+        resolve_tandem_summary_label(tandem_summary_label, language, || read_tandem_ledger(app));
+    let tandem_summary_item = MenuItem::with_id(
+        app,
+        TANDEM_TASK_SUMMARY_ID,
+        &tandem_summary_label,
+        false,
+        None::<&str>,
+    )
+    .map_err(|e| AppError::Message(format!("创建 Tandem 任务摘要菜单失败: {e}")))?;
+
     menu_builder = menu_builder
         .item(&show_main_item)
+        .item(&tandem_summary_item)
         .item(&open_website_item)
         .separator();
 
@@ -908,11 +965,57 @@ fn update_tray_usage_labels(app: &tauri::AppHandle) {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum TandemMenuRefreshDecision {
+    PreservePrevious,
+    ReplaceWith(String),
+}
+
+fn tandem_menu_refresh_decision(
+    ledger: Result<crate::tandem::repository::TaskLedger, AppError>,
+    language: &str,
+) -> TandemMenuRefreshDecision {
+    match ledger {
+        Ok(ledger) => {
+            TandemMenuRefreshDecision::ReplaceWith(crate::tandem::tray_summary::summary_label(
+                &crate::tandem::tray_summary::summarize(&ledger),
+                language,
+            ))
+        }
+        Err(error) => {
+            log::error!("Failed to refresh tray from Tandem task ledger: {error}");
+            TandemMenuRefreshDecision::PreservePrevious
+        }
+    }
+}
+
 pub fn refresh_tray_menu(app: &tauri::AppHandle) {
     use crate::store::AppState;
 
     if let Some(state) = app.try_state::<AppState>() {
         if let Ok(new_menu) = create_tray_menu(app, state.inner()) {
+            if let Some(tray) = app.tray_by_id(TRAY_ID) {
+                if let Err(e) = tray.set_menu(Some(new_menu)) {
+                    log::error!("刷新托盘菜单失败: {e}");
+                }
+            }
+        }
+    }
+}
+
+fn refresh_tandem_tray_menu(app: &tauri::AppHandle) {
+    let app_settings = crate::settings::get_settings();
+    let language = match app_settings.language.as_deref() {
+        Some(language) => language,
+        None => detect_system_tray_language(),
+    };
+    let decision = tandem_menu_refresh_decision(read_tandem_ledger(app), language);
+
+    let TandemMenuRefreshDecision::ReplaceWith(label) = decision else {
+        return;
+    };
+    if let Some(state) = app.try_state::<AppState>() {
+        if let Ok(new_menu) = create_tray_menu_with_tandem_label(app, state.inner(), Some(label)) {
             if let Some(tray) = app.tray_by_id(TRAY_ID) {
                 if let Err(e) = tray.set_menu(Some(new_menu)) {
                     log::error!("刷新托盘菜单失败: {e}");
@@ -1008,6 +1111,29 @@ const MIN_TRAY_USAGE_REFRESH_INTERVAL: std::time::Duration = std::time::Duration
 /// `refresh_tray_menu` 整建，避免用户打开中的菜单被 macOS 系统关闭。
 static TRAY_REBUILD_SCHEDULED: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
+static TANDEM_TRAY_REFRESH_SCHEDULED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TrayRefreshAction {
+    RefreshFullMenu,
+    UpdateUsageLabels,
+}
+
+fn tandem_refresh_action() -> TrayRefreshAction {
+    TrayRefreshAction::RefreshFullMenu
+}
+
+fn usage_refresh_action() -> TrayRefreshAction {
+    TrayRefreshAction::UpdateUsageLabels
+}
+
+fn run_refresh_action(app: &tauri::AppHandle, action: TrayRefreshAction) {
+    match action {
+        TrayRefreshAction::RefreshFullMenu => refresh_tandem_tray_menu(app),
+        TrayRefreshAction::UpdateUsageLabels => update_tray_usage_labels(app),
+    }
+}
 
 pub fn schedule_tray_refresh(app: &tauri::AppHandle) {
     use std::sync::atomic::Ordering;
@@ -1020,7 +1146,20 @@ pub fn schedule_tray_refresh(app: &tauri::AppHandle) {
         // 共享一次标题更新。
         std::thread::sleep(std::time::Duration::from_millis(50));
         TRAY_REBUILD_SCHEDULED.store(false, Ordering::Release);
-        update_tray_usage_labels(&app);
+        run_refresh_action(&app, usage_refresh_action());
+    });
+}
+
+pub fn schedule_tandem_tray_refresh(app: &tauri::AppHandle) {
+    use std::sync::atomic::Ordering;
+    if TANDEM_TRAY_REFRESH_SCHEDULED.swap(true, Ordering::AcqRel) {
+        return;
+    }
+    let app = app.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        TANDEM_TRAY_REFRESH_SCHEDULED.store(false, Ordering::Release);
+        run_refresh_action(&app, tandem_refresh_action());
     });
 }
 
@@ -1133,6 +1272,88 @@ mod tests {
         TIER_GEMINI_FLASH_LITE, TIER_GEMINI_PRO, TIER_MONTHLY, TIER_SEVEN_DAY, TIER_SEVEN_DAY_OPUS,
         TIER_SEVEN_DAY_SONNET, TIER_THIRTY_DAY, TIER_WEEKLY_LIMIT,
     };
+    use crate::AppError;
+
+    #[test]
+    fn tandem_summary_boundary_formats_counts_and_unavailable_fallback() {
+        let database = crate::tandem::database::TandemDatabase::memory().unwrap();
+        database
+            .create_task(
+                crate::tandem::domain::NewTask {
+                    project_name: "Project".into(),
+                    project_root_path: "/project".into(),
+                    title: "Task".into(),
+                    original_instruction: "Safe instruction".into(),
+                },
+                1,
+            )
+            .unwrap();
+
+        assert_eq!(super::TANDEM_TASK_SUMMARY_ID, "tandem_task_summary");
+        assert_eq!(
+            super::tandem_task_summary_label(database.list_ledger(), "en"),
+            "Tasks · 0 attention · 0 review · 1 active"
+        );
+        assert_eq!(
+            super::tandem_task_summary_label(
+                Err(AppError::Message("database unavailable".into())),
+                "en"
+            ),
+            "Tasks unavailable"
+        );
+    }
+
+    #[test]
+    fn tandem_refresh_decision_replaces_with_precomputed_label_after_success() {
+        let database = crate::tandem::database::TandemDatabase::memory().unwrap();
+        database
+            .create_task(
+                crate::tandem::domain::NewTask {
+                    project_name: "Project".into(),
+                    project_root_path: "/project".into(),
+                    title: "Task".into(),
+                    original_instruction: "Safe instruction".into(),
+                },
+                1,
+            )
+            .unwrap();
+
+        assert_eq!(
+            super::tandem_menu_refresh_decision(database.list_ledger(), "en"),
+            super::TandemMenuRefreshDecision::ReplaceWith(
+                "Tasks · 0 attention · 0 review · 1 active".into()
+            )
+        );
+    }
+
+    #[test]
+    fn precomputed_tandem_label_skips_the_ledger_reader() {
+        let label = super::resolve_tandem_summary_label(Some("precomputed".into()), "en", || {
+            panic!("ledger must not be read twice")
+        });
+
+        assert_eq!(label, "precomputed");
+    }
+
+    #[test]
+    fn tandem_refresh_decision_preserves_previous_menu_after_read_failure() {
+        assert_eq!(
+            super::tandem_menu_refresh_decision(Err(AppError::Message("read failed".into())), "en"),
+            super::TandemMenuRefreshDecision::PreservePrevious
+        );
+    }
+
+    #[test]
+    fn tandem_and_usage_refreshes_have_distinct_final_actions() {
+        assert_eq!(
+            super::tandem_refresh_action(),
+            super::TrayRefreshAction::RefreshFullMenu
+        );
+        assert_eq!(
+            super::usage_refresh_action(),
+            super::TrayRefreshAction::UpdateUsageLabels
+        );
+    }
 
     #[test]
     fn tray_id_is_unique_to_app() {
