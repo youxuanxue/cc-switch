@@ -29,7 +29,7 @@ related_commits: []
 
 **一把开关，开关就是库。** 没有「装着但关掉」。进库 = 放到工作台 = 所有在用 Agent 看见。出库 = 卸下。效率靠管库（装/卸），不靠静音。Catalog 可以很大；**同步 catalog ≠ 把货架未入库的条目装进来**。
 
-**进库不看来源。** 货架装、本机自建、导入（含现有 `import_from_apps`），都是进工作台，立刻投影到全部在用 Agent；一批一笔，半截不留。来源只标 provenance：`catalog-managed` 才跟总闸换版；`local-draft` / `bundled` 不跟。不给本机件另开一套开关或延迟投影。
+**进库不看来源。** 货架装、本机自建、导入（含现有 `import_from_apps`）、第一次确认的现场，都是进工作台，立刻投影到全部在用 Agent；一批一笔，半截不留。provenance 只有两种：从货架 `install` 进来的才是 `catalog-managed`（跟总闸换版）；其余一律 `local-draft`（不跟）。第一次确认不对 hash、不偷偷升成货架件。没有第三态 `bundled`。
 
 **改 `local-draft` 就是改工作台。** 存盘立刻再投影到全部在用 Agent。写不齐：整笔失败，库里那份回滚到存盘前，不留下半截改。这是改内容，不是第二把开关。`catalog-managed` 仍只读；磁盘被改脏走既有 fail closed，不走这条编辑路径。
 
@@ -62,7 +62,7 @@ related_commits: []
 | 关张后 Agent 目录里还在的链接 | **算现场**；已勾则按「已经在用」提 |
 | 外来物（foreign） | **永不**自动进库、不删 |
 
-确认工作台之前不改任何 runtime 链接。浏览 UI 不得隐式改库或在用名单。
+确认进库时：现场一律 `local-draft`（不对 hash、不升格）。空机器确认的 `recommended` 从货架来，标 `catalog-managed`。确认工作台之前不改任何 runtime 链接。浏览 UI 不得隐式改库或在用名单。
 
 **后来入伙。** 对齐当前库才能进门：库里缺的必须补上，否则入伙失败。它自己多出来、库里没有的，当外来物，不碰。
 
@@ -96,6 +96,7 @@ related_commits: []
 - 不把 `local-draft` 编辑做成「只改库、下次 sync 再投影」。
 - 不把关张后的旧库目录当成再开张的默认工作台或候选源。
 - 关张 / 出门不拆已投影链接（那是卸库的事）。
+- 不设第三态 `bundled`；第一次确认不对 hash、不把现场升成 `catalog-managed`。
 
 ## 现状与地基
 
@@ -131,9 +132,9 @@ description 从来源 `SKILL.md` 派生；catalog 不维护第二份 metadata。
 
 ### 库（工作台）
 
-每条库内 Skill 在 DB 标 provenance：`catalog-managed`（来自货架，副本只读，跟总闸换版）/ `local-draft`（本机创建或导入，可编辑，不跟货架）/ `bundled`（历史安装、尚未上货架，不跟货架）。三者进库后的投影规则相同。
+每条库内 Skill 在 DB 标 provenance，只有两种：`catalog-managed`（从货架 `install` 进来，副本只读，跟总闸换版）/ `local-draft`（第一次现场、本机创建、导入，可编辑，不跟货架）。进库后的投影规则相同。
 
-同名：货架新条目不得静默覆盖 `local-draft` / `bundled`；hash 完全一致才允许提升为 `catalog-managed`，否则 fail closed。`catalog-managed` 磁盘 drift：`sync` fail closed，提示 Git owner，不静默覆盖。
+同名：货架新条目不得静默覆盖 `local-draft`；hash 完全一致才允许提升为 `catalog-managed`，否则 fail closed。第一次确认不对 hash、不提升。`catalog-managed` 磁盘 drift：`sync` fail closed，提示 Git owner，不静默覆盖。
 
 装进库或从库卸下（货架 `install` / 本机创建 / 导入 / `uninstall`）：可勾一批、一次确认。对**全部在用 Agent** 预检（foreign collision、路径重叠、budget）通过后再改链接；任一名字或任一在用 Agent 写不上，整批失败、库成员不变。不把半截成功留下。中断后重跑必须收敛。
 
@@ -200,7 +201,7 @@ cc-switch skills doctor [--json]
 ```
 
 - `sync`：校验货架；副本被改脏则停。`follow_catalog=on` 时，把已在库中的 `catalog-managed` 对齐到当前货架（一笔，失败全回滚）。`off` 时不换版，只把**当前库**投影到在用 Agent。不把货架未入库条目装进来。`--check` 只计算。
-- `install` / `uninstall`：可一批多名。从货架进库或出库是**一笔**：勾一批、一次确认；任一名字或任一在用 Agent 失败，整批都不进/不卸。不把半截成功留在库里。
+- `install` / `uninstall`：可一批多名。从货架进库或出库是**一笔**：勾一批、一次确认；任一名字或任一在用 Agent 失败，整批都不进/不卸。不把半截成功留在库里。进库标 `catalog-managed`。
 - `import`：本机路径 / zip（及现有 `import_from_apps`）进库，标 `local-draft`。与 `install` 同一笔：进库即投影到全部在用 Agent；失败整批不动。不跟总闸换版。桌面「新建技能」同一条。
 - 改 `local-draft`（桌面存盘 / 经 core 的写入）：一笔投影；失败则库内副本回滚到存盘前。不另设 `edit` 子命令当第二开关。
 - `upgrade`：钉死模式下的显式换版；省略 `<name>` 则升级库内全部已过期的 `catalog-managed`。同样整笔。
@@ -238,7 +239,7 @@ dev-rules **保留**项目 `.cursor/skills` 编辑入口；**删除**的是 home
 
 - 下一份实现不出现第二 writer、第二本启用账、技能 × Agent 开关。
 - 库成员是工作集唯一 SSOT；symlink 与 `skills-control.json` 是生成物。
-- 装/卸/导入/自建/入伙：可一批一笔；进库不看来源，全部在用 Agent 写齐才算成功，半截不留。来源只决定是否跟货架换版。
+- 装/卸/导入/自建/入伙：可一批一笔；进库不看来源，全部在用 Agent 写齐才算成功，半截不留。provenance 只有两种：货架 `install` = `catalog-managed`，其余 = `local-draft`。无 `bundled`。
 - 改 `local-draft` 存盘即再投影；写不齐则库内那份回滚，不留半截改。
 - 第一次先勾在用 Agent（默认全不勾，看见过不预勾），再确认工作台；一个都不勾 = 未开张；去掉最后一个在用 = 关张（账清空，不拆链接，旧库目录不当候选；目录里还在的算现场）；有现场不混 `recommended`。
 - catalog 新增默认不进库。
@@ -249,8 +250,8 @@ dev-rules **保留**项目 `.cursor/skills` 编辑入口；**删除**的是 home
 
 ## 验证（Core 实现 PR 承担）
 
-- **单元**：catalog 解析、库成员、在用名单、`claude-cursor` 布局、Pi 在用后跟库、整笔失败、foreign、先勾 Agent 再出候选、默认不预勾、零勾选不算开张、去掉最后一个为关张、关张不拆链接、关张后旧库目录不当候选且不挡住 `recommended`、空目录才用 `recommended`、catalog 新增不进库、follow_catalog 默认开、关掉则 sync 不换版、自动跟上失败整笔回滚、`local-draft` 进库即投影且不跟总闸、导入失败整批不动、改 `local-draft` 失败则库内回滚。
-- **集成**：先定在用再确认工作台；有现场只确认已用项；入伙对齐；一批装/卸/导入中断后收敛且半截不留；在用 Agent 失败则库不变；改 `local-draft` 投影失败后库与 Agent 都回到存盘前；关张后再开张不把旧库名单当候选，目录里还在的链接仍按现场提。
+- **单元**：catalog 解析、库成员、在用名单、`claude-cursor` 布局、Pi 在用后跟库、整笔失败、foreign、先勾 Agent 再出候选、默认不预勾、零勾选不算开张、去掉最后一个为关张、关张不拆链接、关张后旧库目录不当候选且不挡住 `recommended`、空目录才用 `recommended`、catalog 新增不进库、follow_catalog 默认开、关掉则 sync 不换版、自动跟上失败整笔回滚、`local-draft` 进库即投影且不跟总闸、导入失败整批不动、改 `local-draft` 失败则库内回滚、第一次现场标 `local-draft` 且不对 hash 提升、空机器 `recommended` 标 `catalog-managed`、无 `bundled`。
+- **集成**：先定在用再确认工作台；有现场只确认已用项且进库为 `local-draft`；入伙对齐；一批装/卸/导入中断后收敛且半截不留；在用 Agent 失败则库不变；改 `local-draft` 投影失败后库与 Agent 都回到存盘前；关张后再开张不把旧库名单当候选，目录里还在的链接仍按现场提。
 - **主机**：`doctor --json` 对当前在用名单 exit 0；屏幕上的库与 doctor 一致。
 
 ---
