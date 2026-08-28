@@ -1,14 +1,14 @@
 ---
 title: Cursor Official 与 Cursor Agent CLI 会话接入设计
 risk_level: high
-status: pending
-approved_by: pending
+status: approved
+approved_by: user-chat-2026-08-28
 ---
 
 # Cursor Official 与 Cursor Agent CLI 会话接入设计
 
 **日期：** 2026-08-28
-**状态：** 已按第二轮乔布斯复审修订，等待书面设计最终复核
+**状态：** 已批准，进入实施计划
 **范围：** Cursor Official 认证、Cursor Agent CLI 会话索引、按 `cwd` 目录分组与恢复
 
 ## 1. 产品目标
