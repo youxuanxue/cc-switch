@@ -56,6 +56,7 @@ related_commits: []
 | 场景 | 候选从哪来 |
 | --- | --- |
 | 已勾的在用 Agent 目录里已有技能 | 只提这些目录里**已经在用的**；不把 catalog `recommended` 混进来 |
+| 已勾 `claude-cursor` | 扫 Cursor 侧 + 未耦合的 Claude 侧逐条；同名同 hash 一份，不同则停 |
 | 已勾目录里同名内容不一致 | **整笔停**；标冲突，不替人挑 |
 | 已勾的在用 Agent 都是空的（空机器） | 只用 catalog `recommended` |
 | catalog 后来新增 | **不进库**，除非人再装 |
@@ -102,6 +103,8 @@ related_commits: []
 - 未开张时不让 `install` / `import` / `sync` / `upgrade` / `follow-catalog` / `agents add` 真空成功。
 - 不开第二套开张入口（`init` / `bootstrap` 等）；只有 `open`。
 - 不把 `get_app_skills_dir(Claude)` 当作 `claude-cursor` 在用时的逐条写入目标。
+- 不把 `claude-cursor` 第一次候选拆成 Claude / Cursor 两个 Agent；不只扫其中一侧。
+- 不把 marker 写成「只有 `sync` 才重写」。
 
 ## 现状与地基
 
@@ -172,9 +175,11 @@ description 从来源 `SKILL.md` 派生；catalog 不维护第二份 metadata。
 
 第一次技能候选**只扫已勾为在用的** Agent 目录（及其中已有的中央库投影）。未勾的目录、货架、其它发现源不进候选。只生成名单，不自动进库。同名 hash 不同则标冲突，确认被拒，直到人处理。
 
+`claude-cursor` 是一个在用单位，扫这两处，不拆成两个 Agent：`~/.cursor/skills`；以及 Claude 侧 skills 根（默认 `~/.claude/skills`，若 settings override 则用那个根）里**尚未**变成「整目录 → `~/.cursor/skills`」symlink 时的逐条技能。同名同 hash 算一份；不同则冲突。
+
 ### Ownership marker
 
-`~/.cc-switch/skills-control.json` 由 SQLite **生成**（`sync` 重写，禁止手改）。权威是「库成员 + 在用名单」。
+`~/.cc-switch/skills-control.json` 由 SQLite **生成**，禁止手改。权威是「库成员 + 在用名单」。**每次成功改在用名单或库成员后重写**：`open`、`install`、`uninstall`、`import`、`upgrade`、`follow-catalog`、`agents add|remove`、`sync`（不含 `--check`）。失败笔不改 marker。关张清空 marker。只跑 `sync` 才挂牌等于开张后 legacy 不停写。
 
 ```json
 {
@@ -208,7 +213,7 @@ cc-switch skills agents add <token> | remove <token>
 cc-switch skills doctor [--json]
 ```
 
-- `open`：第一次确认工作台的唯一入口（桌面同一 core）。至少一个 `--agent`；零个 Agent 拒绝。`--skill` 只许来自本节第一次候选规则；省略则开张后工作台为空。同名冲突整笔停。现场标 `local-draft`，空机器 `recommended` 标 `catalog-managed`。已开张再跑 `open` 拒绝。不另设 `init` / `bootstrap`。
+- `open`：第一次确认工作台的唯一入口（桌面同一 core）。至少一个 `--agent`；零个 Agent 拒绝。`--skill` 只许来自本节第一次候选规则；省略则开张后工作台为空。同名冲突整笔停。现场标 `local-draft`，空机器 `recommended` 标 `catalog-managed`。成功后立刻重写 marker。已开张再跑 `open` 拒绝。不另设 `init` / `bootstrap`。
 
 - `sync`：校验货架；副本被改脏则停。`follow_catalog=on` 时，把已在库中的 `catalog-managed` 对齐到当前货架（一笔，失败全回滚）。`off` 时不换版，只把**当前库**投影到在用 Agent。不把货架未入库条目装进来。`--check` 只计算。
 - `install` / `uninstall`：可一批多名。从货架进库或出库是**一笔**：勾一批、一次确认；任一名字或任一在用 Agent 失败，整批都不进/不卸。不把半截成功留在库里。进库标 `catalog-managed`。
@@ -274,7 +279,8 @@ dev-rules **保留**项目 `.cursor/skills` 编辑入口；**删除**的是 home
 - 装/卸/导入/自建/入伙：可一批一笔；进库不看来源，全部在用 Agent 写齐才算成功，半截不留。provenance 只有两种：货架 `install` = `catalog-managed`，其余 = `local-draft`。无 `bundled`。
 - 改 `local-draft` 存盘即再投影；写不齐则库内那份回滚，不留半截改。
 - 第一次先勾在用 Agent（默认全不勾，看见过不预勾），再 `open` 确认工作台；一个都不勾 = 未开张；去掉最后一个在用 = 关张（账清空，不拆链接，旧库目录不当候选；目录里还在的算现场）；有现场不混 `recommended`；同名内容不一致则整笔停，不替人挑。未开张时除 `open` 外写库命令拒绝；`agents add` 只在已开张时入伙。
-- `claude-cursor` 在用时按本节布局投影，不把 `get_app_skills_dir(Claude)` 当写入目标。
+- `claude-cursor` 在用时按本节布局投影，不把 `get_app_skills_dir(Claude)` 当写入目标。第一次候选按本节扫 Cursor 侧 + 未耦合的 Claude 侧逐条，同名同 hash 算一份。
+- 改在用名单或库成员的成功笔立刻重写 marker；关张清空。不靠事后 `sync` 才挂牌。
 - catalog 新增默认不进库。
 - 货架换版只有总闸「自动同步」（默认开）；关掉则钉死，显式 upgrade。不按技能设闸。自动跟上失败整笔回滚。
 - foreign 不自动进库、不被删。
@@ -283,8 +289,8 @@ dev-rules **保留**项目 `.cursor/skills` 编辑入口；**删除**的是 home
 
 ## 验证（Core 实现 PR 承担）
 
-- **单元**：catalog 解析、库成员、在用名单、`claude-cursor` 布局且不写 `get_app_skills_dir(Claude)`、Pi 在用后跟库、整笔失败、foreign、先勾 Agent 再出候选、默认不预勾、零勾选不算开张、只有 `open` 能开张、未开张时 install/import/sync/upgrade/follow-catalog/agents add 拒绝、已开张再 `open` 拒绝、去掉最后一个为关张、关张不拆链接、关张后旧库目录不当候选且不挡住 `recommended`、空目录才用 `recommended`、catalog 新增不进库、follow_catalog 默认开、关掉则 sync 不换版、自动跟上失败整笔回滚、`local-draft` 进库即投影且不跟总闸、导入失败整批不动、改 `local-draft` 失败则库内回滚、第一次现场标 `local-draft` 且不对 hash 提升、空机器 `recommended` 标 `catalog-managed`、无 `bundled`、第一次同名 hash 不同则确认失败且库不动、`doctor --json` 含 `open`/`library`/`legacy_writers_stopped`。
-- **集成**：先定在用再 `open`；有现场只确认已用项且进库为 `local-draft`；同名冲突整笔停；关张后 `agents add` 拒绝、只能再 `open`；入伙对齐；一批装/卸/导入中断后收敛且半截不留；在用 Agent 失败则库不变；改 `local-draft` 投影失败后库与 Agent 都回到存盘前；关张后再开张不把旧库名单当候选，目录里还在的链接仍按现场提。
+- **单元**：catalog 解析、库成员、在用名单、`claude-cursor` 布局且不写 `get_app_skills_dir(Claude)`、`claude-cursor` 第一次扫两侧且同名同 hash 合一、Pi 在用后跟库、整笔失败、foreign、先勾 Agent 再出候选、默认不预勾、零勾选不算开张、只有 `open` 能开张、`open` 成功即写 marker、未开张时 install/import/sync/upgrade/follow-catalog/agents add 拒绝、已开张再 `open` 拒绝、去掉最后一个为关张且清空 marker、关张不拆链接、关张后旧库目录不当候选且不挡住 `recommended`、空目录才用 `recommended`、catalog 新增不进库、follow_catalog 默认开、关掉则 sync 不换版、自动跟上失败整笔回滚、`local-draft` 进库即投影且不跟总闸、导入失败整批不动、改 `local-draft` 失败则库内回滚、第一次现场标 `local-draft` 且不对 hash 提升、空机器 `recommended` 标 `catalog-managed`、无 `bundled`、第一次同名 hash 不同则确认失败且库不动、`doctor --json` 含 `open`/`library`/`legacy_writers_stopped`。
+- **集成**：先定在用再 `open` 且 marker 已挂；有现场只确认已用项且进库为 `local-draft`；`claude-cursor` 两侧同名同 hash 不拆成两个 Agent；同名冲突整笔停；关张后 `agents add` 拒绝、只能再 `open`；入伙对齐；一批装/卸/导入中断后收敛且半截不留；在用 Agent 失败则库不变、marker 不变；改 `local-draft` 投影失败后库与 Agent 都回到存盘前；关张后再开张不把旧库名单当候选，目录里还在的链接仍按现场提。
 - **主机**：`doctor --json` 对当前在用名单 exit 0，字段与本节契约一致；屏幕上的库与 doctor 一致。
 
 ---
