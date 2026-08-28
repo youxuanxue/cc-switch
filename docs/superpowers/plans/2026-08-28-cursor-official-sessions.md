@@ -89,7 +89,7 @@ Then commit:
 - Produces: `update_cursor_official_settings(auth_mode, user_api_key) -> Result<(), AppError>` and `clear_cursor_user_api_key() -> Result<(), AppError>`.
 - Preserves: generic `get_settings()` returns `cursorOfficial: null/omitted`; generic `save_settings()` always retains the backend value.
 
-- [ ] **Step 1: Write failing settings tests**
+- [x] **Step 1: Write failing settings tests**
 
 Add Rust tests proving the frontend copy is redacted, generic save preserves private Cursor settings, omitted keys preserve an existing key, explicit clear removes it, empty replacement is rejected by the service layer, and private file writes replace a pre-existing `0644` file with `0600` content.
 
@@ -121,7 +121,7 @@ fn generic_save_preserves_backend_owned_cursor_settings() {
 }
 ```
 
-- [ ] **Step 2: Run the focused Rust tests and verify RED**
+- [x] **Step 2: Run the focused Rust tests and verify RED**
 
 Run: `cargo test --manifest-path src-tauri/Cargo.toml frontend_settings_omit_cursor_official_credentials -- --nocapture`
 
@@ -129,7 +129,7 @@ Run: `cargo test --manifest-path src-tauri/Cargo.toml generic_save_preserves_bac
 
 Expected: FAIL because Cursor settings types/fields and redaction/preservation behavior do not exist.
 
-- [ ] **Step 3: Implement the minimal private settings model**
+- [x] **Step 3: Implement the minimal private settings model**
 
 Add the enums/struct, an optional `cursor_official` field on `AppSettings`, default it to `None`, normalize empty keys to `None` only when loading legacy data, extract `settings_for_frontend(mut settings: AppSettings)`, and have `get_settings_for_frontend()` call it. Replace the manual truncate/write block with:
 
@@ -145,13 +145,13 @@ incoming.cursor_official = existing.cursor_official.clone();
 
 Keep specific updates behind `mutate_settings`; reject `Some(key)` when `key.trim().is_empty()` and require callers to use explicit clear.
 
-- [ ] **Step 4: Run focused and module tests and verify GREEN**
+- [x] **Step 4: Run focused and module tests and verify GREEN**
 
 Run: `cargo test --manifest-path src-tauri/Cargo.toml settings:: -- --nocapture`
 
 Expected: PASS; on Unix both newly created and replaced fixture files report `mode & 0o777 == 0o600`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src-tauri/src/settings.rs src-tauri/src/commands/settings.rs

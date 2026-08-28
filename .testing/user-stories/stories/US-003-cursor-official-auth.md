@@ -34,7 +34,7 @@
 
 ## Linked Tests
 
-- src-tauri/src/settings.rs::tests::us003_generic_settings_redact_and_preserve_cursor_credentials
+- src-tauri/src/commands/settings.rs::tests::us003_generic_settings_redact_and_preserve_cursor_credentials
 - src-tauri/src/settings.rs::tests::us003_private_settings_write_restricts_existing_file_to_0600
 - src-tauri/src/services/cursor_official.rs::tests::us003_official_env_isolates_login_and_user_api_key_modes
 - src-tauri/src/services/cursor_official.rs::tests::us003_status_dto_redacts_credentials_and_errors
@@ -53,6 +53,9 @@ Run:
 ## Evidence
 
 - Approval evidence: design status approved by user-chat-2026-08-28.
-- Execution evidence is recorded when the Story advances to InTest and Done.
+- 2026-08-28 RED: `cargo test --manifest-path src-tauri/Cargo.toml us003_ -- --nocapture` exited 101 because the approved Cursor settings types, field, redaction helper, update helpers, and private path writer did not exist.
+- 2026-08-28 RED (security self-review): `cargo test --manifest-path src-tauri/Cargo.toml cursor_official_debug_output_never_contains_the_key -- --nocapture` failed because derived Debug exposed the fixture key.
+- 2026-08-28 GREEN (settings slice): `cargo test --manifest-path src-tauri/Cargo.toml settings:: -- --nocapture` passed 18 tests without warnings, including generic DTO/Debug redaction, preservation semantics, and new/replacement Unix mode 0600 assertions.
+- Remaining auth service, command, renderer, and e2e evidence is recorded before this Story advances to Done.
 
-- Status: Ready
+- Status: InTest

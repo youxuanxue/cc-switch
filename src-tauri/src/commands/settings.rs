@@ -48,6 +48,8 @@ fn merge_settings_for_save(
     // 开关）后、前端 query 缓存刷新前的一次全量保存会把旧 marker 重放回来，
     // 重新开启时被"复活"的标记挡住而漏迁。
     incoming.local_migrations = existing.local_migrations.clone();
+    // Cursor Official 凭据由专用后端命令维护，通用 renderer 设置保存无权修改。
+    incoming.cursor_official = existing.cursor_official.clone();
     incoming
 }
 
@@ -316,10 +318,39 @@ pub async fn set_auto_launch(enabled: bool) -> Result<bool, String> {
 mod tests {
     use super::merge_settings_for_save;
     use crate::settings::{
-        AppSettings, CodexOfficialHistoryUnifyMigration, CodexProviderTemplateMigration,
-        CodexThirdPartyHistoryProviderBucketMigration, LocalMigrations, S3SyncSettings,
+        settings_for_frontend, AppSettings, CodexOfficialHistoryUnifyMigration,
+        CodexProviderTemplateMigration, CodexThirdPartyHistoryProviderBucketMigration,
+        CursorOfficialAuthMode, CursorOfficialSettings, LocalMigrations, S3SyncSettings,
         WebDavSyncSettings,
     };
+
+    #[test]
+    fn us003_generic_settings_redact_and_preserve_cursor_credentials() {
+        let existing = AppSettings {
+            cursor_official: Some(CursorOfficialSettings {
+                auth_mode: CursorOfficialAuthMode::UserApiKey,
+                user_api_key: Some("cursor-secret".to_string()),
+            }),
+            ..AppSettings::default()
+        };
+
+        let visible = settings_for_frontend(existing.clone());
+        assert!(visible.cursor_official.is_none());
+        let visible_json = serde_json::to_string(&visible).unwrap();
+        assert!(!visible_json.contains("cursor-secret"));
+        assert!(!visible_json.contains("cursorOfficial"));
+
+        let malicious_incoming = AppSettings {
+            cursor_official: Some(CursorOfficialSettings {
+                auth_mode: CursorOfficialAuthMode::Login,
+                user_api_key: Some("renderer-value".to_string()),
+            }),
+            ..AppSettings::default()
+        };
+        let merged = merge_settings_for_save(malicious_incoming, &existing);
+
+        assert_eq!(merged.cursor_official, existing.cursor_official);
+    }
 
     #[test]
     fn save_settings_should_preserve_existing_webdav_when_payload_omits_it() {
