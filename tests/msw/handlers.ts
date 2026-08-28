@@ -134,6 +134,14 @@ export const handlers = [
 
   http.post(`${TAURI_ENDPOINT}/list_sessions`, () => success(listSessions())),
 
+  http.post(`${TAURI_ENDPOINT}/launch_session_terminal`, () =>
+    success({ action: "launched" }),
+  ),
+
+  http.post(`${TAURI_ENDPOINT}/get_session_resume_state`, () =>
+    success({ appearance: "resume" }),
+  ),
+
   http.post(`${TAURI_ENDPOINT}/get_session_messages`, async ({ request }) => {
     const { providerId, sourcePath } = await withJson<{
       providerId: string;

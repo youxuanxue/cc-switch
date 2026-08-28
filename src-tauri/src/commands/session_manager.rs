@@ -1,6 +1,12 @@
 #![allow(non_snake_case)]
 
+use crate::codex_config::get_codex_config_dir;
 use crate::session_manager;
+use crate::session_manager::resume::{
+    apply_decision, resume_decision_for_session, resume_state_for_session, LiveProcessView,
+    ResumeDecision, ResumeLaunchResult, SessionResumeState,
+};
+use std::path::Path;
 
 #[tauri::command]
 pub async fn list_sessions() -> Result<Vec<session_manager::SessionMeta>, String> {
@@ -63,10 +69,16 @@ pub async fn launch_session_terminal(
     command: String,
     cwd: Option<String>,
     custom_config: Option<String>,
-) -> Result<bool, String> {
+    sessionId: Option<String>,
+    providerId: Option<String>,
+    sourcePath: Option<String>,
+) -> Result<ResumeLaunchResult, String> {
     let command = command.clone();
     let cwd = cwd.clone();
     let custom_config = custom_config.clone();
+    let session_id = sessionId.clone();
+    let source_path = sourcePath.clone();
+    let _ = providerId;
 
     // Read preferred terminal from global settings
     let preferred = crate::settings::get_preferred_terminal();
@@ -79,17 +91,50 @@ pub async fn launch_session_terminal(
     };
 
     tauri::async_runtime::spawn_blocking(move || {
+        if let Some(session_id) = session_id.as_deref() {
+            let decision = resume_decision_for_session(
+                session_id,
+                source_path.as_deref().map(Path::new),
+                &get_codex_config_dir(),
+                &LiveProcessView,
+            );
+            if !matches!(decision, ResumeDecision::LaunchNew) {
+                return apply_decision(decision);
+            }
+        }
+
         session_manager::terminal::launch_terminal(
             &target,
             &command,
             cwd.as_deref(),
             custom_config.as_deref(),
-        )
+        )?;
+        Ok(ResumeLaunchResult::Launched)
     })
     .await
-    .map_err(|e| format!("Failed to launch terminal: {e}"))??;
+    .map_err(|e| format!("Failed to launch terminal: {e}"))?
+}
 
-    Ok(true)
+#[tauri::command]
+pub async fn get_session_resume_state(
+    providerId: String,
+    sessionId: String,
+    sourcePath: Option<String>,
+) -> Result<SessionResumeState, String> {
+    let provider_id = providerId.clone();
+    let session_id = sessionId.clone();
+    let source_path = sourcePath.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        Ok(resume_state_for_session(
+            &provider_id,
+            &session_id,
+            source_path.as_deref().map(Path::new),
+            &get_codex_config_dir(),
+            &LiveProcessView,
+        ))
+    })
+    .await
+    .map_err(|e| format!("Failed to inspect session resume state: {e}"))?
 }
 
 #[tauri::command]
