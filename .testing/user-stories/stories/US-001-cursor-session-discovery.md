@@ -53,6 +53,6 @@ Run:
 - 2026-08-28 GREEN (backend discovery): the same focused command passed 4 Cursor adapter tests; `cargo test --manifest-path src-tauri/Cargo.toml session_manager:: -- --nocapture` passed 90 session-manager tests.
 - 2026-08-28 GREEN (renderer discovery): the focused Session Manager and utility suites passed 31 tests. Two Cursor sessions sharing one metadata `cwd` render through the existing provider → `projectDir` directory → session hierarchy and the new Cursor filter, with no Project ID, entity, table, or CRUD path.
 - 2026-08-28 GREEN (real renderer): Playwright drove the actual renderer through the Tauri IPC boundary and verified Cursor filtering, one `cwd` directory containing multiple sessions, a second directory group, no project CRUD IPC, and the absence of Cursor deletion/transcript/capability-label UI.
-- Remaining final full-suite evidence is recorded before this Story advances to Done.
+- 2026-08-28 FINAL: the private metadata smoke reported 480 files, 479 unique chat IDs, 1 duplicate ID, 0 parse failures, 376 conversation-bearing records, 52 missing `cwd` values, and 0 invalid UUIDs without printing any title, path, or ID. Focused discovery tests passed 4/4; the final frontend, browser, Rust, approved-doc, diff, and preflight gates all exited 0.
 
-- Status: InTest
+- Status: Done

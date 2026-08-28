@@ -62,6 +62,6 @@ Run:
 - 2026-08-28 RED (inline resume): `pnpm exec vitest run tests/components/CursorResumeGate.test.tsx tests/components/SessionManagerPage.test.tsx` exited 1 because `CursorResumeGate` did not exist and the Cursor detail still lacked the dedicated Continue action. A second focused RED proved that a selected path had to be replaced by the canonical workspace returned from resume-context validation before launch.
 - 2026-08-28 GREEN (inline resume): the same focused command passed 31 tests. Coverage includes dedicated ready/Login/User API Key launch IPC, silent directory cancellation, canonical override retention through authentication, per-session override reset, fixed state priority, separate index diagnostics, launch-time `workspaceRequired` recovery, collapsed technical details, and the absence of Cursor message/generic-terminal calls. `pnpm typecheck`, targeted Prettier, and `git diff --check` exited 0.
 - 2026-08-28 GREEN (real renderer): Playwright verified one-click ready resume calls only `launch_cursor_session`, while a moved workspace is selected once, canonicalized through resume context, retained through Login remediation, and launched only through `launch_cursor_login_and_session`; no generic terminal IPC is recorded.
-- Remaining final full-suite evidence is recorded before this Story advances to Done.
+- 2026-08-28 FINAL: 15 focused Cursor Official service tests, 64 focused renderer tests, and 4 real-renderer Playwright journeys passed. The complete Cargo suite passed 2,890 tests with 5 ignored; the complete Vitest suite passed 1,057 tests across 140 files.
 
-- Status: InTest
+- Status: Done

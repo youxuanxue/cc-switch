@@ -66,6 +66,6 @@ Run:
 - 2026-08-28 RED (mechanical SSOT contract): `pnpm exec vitest run tests/scripts/check-cursor-session-ssot.test.ts` failed all 5 executable fixture cases because `scripts/check-cursor-session-ssot.mjs` did not exist.
 - 2026-08-28 GREEN (mechanical SSOT contract): the same command passed 5 tests after the checker gained stable auth, resume, delete, and generic-terminal finding codes. `node scripts/check-cursor-session-ssot.mjs` returned `cursor-session-ssot: PASS` for the real repository, and project preflight executed the same command from `.preflight/local-lint.conf` successfully.
 - 2026-08-28 GREEN (real renderer): Playwright confirmed Cursor exposes no delete button, batch-management action, checkbox, transcript/message shell, generic terminal launch, or `supported | conditional | unsupported` label, and keeps technical details collapsed by default.
-- Remaining final full-suite evidence is recorded before this Story advances to Done.
+- 2026-08-28 FINAL: the Cursor SSOT checker remained registered in preflight and passed, all four browser journeys passed, Vitest excluded the Playwright tree from unit collection, and the complete frontend/Rust suites plus approved-doc and diff gates exited 0.
 
-- Status: InTest
+- Status: Done

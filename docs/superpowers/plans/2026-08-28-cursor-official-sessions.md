@@ -772,26 +772,26 @@ git commit -m "test(cursor): cover official sessions in real UI"
 **Interfaces:**
 - No login, session resume, session creation, transcript read, or secret output is permitted in smoke probes.
 
-- [ ] **Step 1: Run the safe local CLI probe**
+- [x] **Step 1: Run the safe local CLI probe**
 
 Run `agent --version`. Run `agent status --format json` into a private temporary file and report only exit status, top-level field names, authentication boolean presence, and nested `userInfo` field names; delete the temporary directory afterward.
 
-- [ ] **Step 2: Run the safe local metadata probe**
+- [x] **Step 2: Run the safe local metadata probe**
 
 Scan `/Users/feng/.cursor/chats/*/*/meta.json` and report only counts: files, parse failures, unique/duplicate chat IDs, `hasConversation=true`, missing cwd, and invalid UUIDs. Do not print title, cwd, account details, transcript, or chat ID values.
 
-- [ ] **Step 3: Run focused test suites**
+- [x] **Step 3: Run focused test suites**
 
 ```bash
 cargo test --manifest-path src-tauri/Cargo.toml session_manager::providers::cursor::tests -- --nocapture
 cargo test --manifest-path src-tauri/Cargo.toml services::cursor_official::tests -- --nocapture
-pnpm test:unit -- tests/config/cursorCapabilities.test.ts tests/hooks/useCursorOfficial.test.tsx tests/components/CursorOfficialAuthControl.test.tsx tests/components/cursorResumeState.test.ts tests/components/CursorResumeGate.test.tsx tests/components/SessionManagerPage.test.tsx tests/config/localeCoverage.test.ts tests/scripts/check-cursor-session-ssot.test.ts
+pnpm exec vitest run tests/config/cursorCapabilities.test.ts tests/hooks/useCursorOfficial.test.tsx tests/components/CursorOfficialAuthControl.test.tsx tests/components/cursorResumeState.test.ts tests/components/CursorResumeGate.test.tsx tests/components/SessionManagerPage.test.tsx tests/config/localeCoverage.test.ts tests/scripts/check-cursor-session-ssot.test.ts
 pnpm test:e2e tests/e2e/cursor-official-sessions.spec.ts
 ```
 
 Expected: PASS.
 
-- [ ] **Step 4: Run full mechanical gates**
+- [x] **Step 4: Run full mechanical gates**
 
 ```bash
 pnpm typecheck

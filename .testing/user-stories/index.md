@@ -6,10 +6,10 @@
 
 | ID | Title | Status | Primary trace |
 | --- | --- | --- | --- |
-| [US-001](stories/US-001-cursor-session-discovery.md) | Discover Cursor sessions by project directory | InTest | Design sections 3, 7, 10, 12.1, 13 |
-| [US-002](stories/US-002-cursor-session-resume.md) | Resume a Cursor session safely in context | InTest | Design sections 4, 8, 10, 11, 12.1–12.4, 13 |
-| [US-003](stories/US-003-cursor-official-auth.md) | Use Cursor Official authentication without leaking credentials | InTest | Design sections 5, 6, 8.2, 10, 12.1–12.4, 13 |
-| [US-004](stories/US-004-cursor-unsupported-capabilities.md) | Keep unsupported Cursor capabilities absent and explicit | InTest | Design sections 2, 3.2–3.3, 7.4, 9, 10, 12.1–12.3, 13 |
+| [US-001](stories/US-001-cursor-session-discovery.md) | Discover Cursor sessions by project directory | Done | Design sections 3, 7, 10, 12.1, 13 |
+| [US-002](stories/US-002-cursor-session-resume.md) | Resume a Cursor session safely in context | Done | Design sections 4, 8, 10, 11, 12.1–12.4, 13 |
+| [US-003](stories/US-003-cursor-official-auth.md) | Use Cursor Official authentication without leaking credentials | Done | Design sections 5, 6, 8.2, 10, 12.1–12.4, 13 |
+| [US-004](stories/US-004-cursor-unsupported-capabilities.md) | Keep unsupported Cursor capabilities absent and explicit | Done | Design sections 2, 3.2–3.3, 7.4, 9, 10, 12.1–12.3, 13 |
 
 ## Coverage map
 

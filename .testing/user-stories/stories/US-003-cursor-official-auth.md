@@ -70,6 +70,6 @@ Run:
 - 2026-08-28 RED (locale and IPC fixtures): four locale contract cases failed with the missing Cursor key set; the Cursor IPC fixture test then failed because state setters and the `update_cursor_official_auth` MSW handler did not exist.
 - 2026-08-28 GREEN (locale and IPC fixtures): `pnpm exec vitest run tests/config/localeCoverage.test.ts tests/msw/cursorFixtures.test.ts tests/components/SessionManagerPage.test.tsx tests/components/SettingsDialog.test.tsx` passed 47 tests. Four locales now carry the complete Cursor runtime copy contract, and the stateful `cursorApi → invoke → MSW` fixture immediately redacts `userApiKey` in its recorded call while returning only `hasUserApiKey`. `pnpm typecheck`, targeted Prettier, and `git diff --check` exited 0.
 - 2026-08-28 GREEN (real renderer): Playwright opened Settings → Auth, kept Login primary and User API Key under “其他方式”, cleared the submitted input, displayed only the configured mask, and proved the browser IPC call log stores `[REDACTED]` rather than the submitted key body.
-- Remaining final full-suite evidence is recorded before this Story advances to Done.
+- 2026-08-28 FINAL: the private CLI smoke reported Agent CLI version `2026.08.25-3e8eec8`, successful parse/exit status, only top-level and `userInfo` field names, and the presence of the `isAuthenticated` boolean; it emitted no account values or credentials. Full type, format, Vitest, Playwright, Cargo, approved-doc, diff, and preflight gates exited 0.
 
-- Status: InTest
+- Status: Done
