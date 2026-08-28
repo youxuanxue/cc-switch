@@ -48,7 +48,7 @@
 Run:
 
     cargo test --manifest-path src-tauri/Cargo.toml session_manager:: -- --nocapture
-    pnpm test:unit -- tests/config/cursorCapabilities.test.ts tests/components/cursorResumeState.test.ts tests/components/SessionManagerPage.test.tsx tests/scripts/check-cursor-session-ssot.test.ts
+    pnpm exec vitest run tests/config/cursorCapabilities.test.ts tests/components/cursorResumeState.test.ts tests/components/SessionManagerPage.test.tsx tests/scripts/check-cursor-session-ssot.test.ts
     node scripts/check-cursor-session-ssot.mjs
     pnpm test:e2e -- tests/e2e/cursor-official-sessions.spec.ts --grep "US-004"
 
@@ -63,6 +63,8 @@ Run:
 - 2026-08-28 RED (delete presentation): the Session Manager tests failed because the Cursor filter and `sessionCapabilities` owner did not exist, and grouped selection rendered disabled Cursor provider/item checkboxes instead of hiding them.
 - 2026-08-28 GREEN (delete presentation): `pnpm exec vitest run tests/components/SessionManagerPage.test.tsx tests/components/sessionUtils.test.ts` passed 31 tests. `isSessionDeletable` rejects Cursor even with a defensive `sourcePath`, every single/item/group/batch delete affordance is absent for Cursor, switching to Cursor exits and clears batch selection, search-only empty results retain the explicit exit control, and existing source-backed providers remain deletable; `pnpm typecheck`, targeted Prettier, and `git diff --check` exited 0.
 - 2026-08-28 GREEN (detail boundary): the Cursor-specific detail integration test supplies defensive `sourcePath` and `resumeCommand` values yet renders only `CursorResumeGate`; it does not request messages, show transcript/empty/count/TOC shells, expose the generic command preview, or call `launch_session_terminal`.
-- Remaining unsupported-capability, renderer, contract-check, and e2e evidence is recorded before this Story advances to Done.
+- 2026-08-28 RED (mechanical SSOT contract): `pnpm exec vitest run tests/scripts/check-cursor-session-ssot.test.ts` failed all 5 executable fixture cases because `scripts/check-cursor-session-ssot.mjs` did not exist.
+- 2026-08-28 GREEN (mechanical SSOT contract): the same command passed 5 tests after the checker gained stable auth, resume, delete, and generic-terminal finding codes. `node scripts/check-cursor-session-ssot.mjs` returned `cursor-session-ssot: PASS` for the real repository, and project preflight executed the same command from `.preflight/local-lint.conf` successfully.
+- Remaining real-renderer e2e and final full-suite evidence is recorded before this Story advances to Done.
 
 - Status: InTest

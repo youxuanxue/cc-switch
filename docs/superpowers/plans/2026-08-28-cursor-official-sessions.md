@@ -677,21 +677,21 @@ git commit -m "feat(cursor): localize official session flows"
 - Required owner imports: auth consumers import `CursorOfficialAuthControl`/`useCursorOfficial`; resume composition imports `CursorResumeGate`/`deriveCursorResumeState`; delete decisions import `isSessionDeletable`.
 - Forbidden Cursor path: no Cursor component/API may call `sessionsApi.launchTerminal` or invoke `launch_session_terminal`.
 
-- [ ] **Step 1: Write failing executable contract tests**
+- [x] **Step 1: Write failing executable contract tests**
 
 Create temporary fixture trees and run the script as a process. Assert violations for duplicated resume-state derivation, direct `sourcePath` Cursor deletion eligibility, direct auth API use from page components, and generic terminal launch from Cursor code. Assert a conforming fixture exits 0.
 
-- [ ] **Step 2: Run tests and verify RED**
+- [x] **Step 2: Run tests and verify RED**
 
-Run: `pnpm test:unit -- tests/scripts/check-cursor-session-ssot.test.ts`
+Run: `pnpm exec vitest run tests/scripts/check-cursor-session-ssot.test.ts`
 
 Expected: FAIL because the checker does not exist.
 
-- [ ] **Step 3: Implement the deterministic checker**
+- [x] **Step 3: Implement the deterministic checker**
 
 Parse imports/calls with bounded source-pattern checks anchored to the named owner files and emit stable codes such as `CURSOR_AUTH_OWNER_BYPASS`, `CURSOR_RESUME_OWNER_BYPASS`, `CURSOR_DELETE_OWNER_BYPASS`, and `CURSOR_GENERIC_TERMINAL_BYPASS`. Accept `--root <path>` for fixture tests; default to repository root.
 
-- [ ] **Step 4: Register the checker in preflight**
+- [x] **Step 4: Register the checker in preflight**
 
 Write `.preflight/local-lint.conf` with one command:
 
@@ -699,18 +699,18 @@ Write `.preflight/local-lint.conf` with one command:
 node scripts/check-cursor-session-ssot.mjs
 ```
 
-- [ ] **Step 5: Run checker tests and repository checker**
+- [x] **Step 5: Run checker tests and repository checker**
 
-Run: `pnpm test:unit -- tests/scripts/check-cursor-session-ssot.test.ts`
+Run: `pnpm exec vitest run tests/scripts/check-cursor-session-ssot.test.ts`
 
 Run: `node scripts/check-cursor-session-ssot.mjs`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
-git add scripts/check-cursor-session-ssot.mjs .preflight/local-lint.conf tests/scripts/check-cursor-session-ssot.test.ts
+git add scripts/check-cursor-session-ssot.mjs .preflight/local-lint.conf tests/scripts/check-cursor-session-ssot.test.ts .testing/user-stories/stories/US-004-cursor-unsupported-capabilities.md docs/superpowers/plans/2026-08-28-cursor-official-sessions.md
 git commit -m "test(cursor): guard session state owners"
 ```
 
