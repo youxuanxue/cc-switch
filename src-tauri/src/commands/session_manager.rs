@@ -78,7 +78,7 @@ pub async fn launch_session_terminal(
     let custom_config = custom_config.clone();
     let session_id = sessionId.clone();
     let source_path = sourcePath.clone();
-    let _ = providerId;
+    let provider_id = providerId.clone();
 
     // Read preferred terminal from global settings
     let preferred = crate::settings::get_preferred_terminal();
@@ -92,10 +92,11 @@ pub async fn launch_session_terminal(
 
     tauri::async_runtime::spawn_blocking(move || {
         if let Some(session_id) = session_id.as_deref() {
+            let lock_dir = (provider_id.as_deref() == Some("codex")).then(get_codex_config_dir);
             let decision = resume_decision_for_session(
                 session_id,
                 source_path.as_deref().map(Path::new),
-                &get_codex_config_dir(),
+                lock_dir.as_deref(),
                 &LiveProcessView,
             );
             if !matches!(decision, ResumeDecision::LaunchNew) {
@@ -125,11 +126,11 @@ pub async fn get_session_resume_state(
     let session_id = sessionId.clone();
     let source_path = sourcePath.clone();
     tauri::async_runtime::spawn_blocking(move || {
+        let lock_dir = (provider_id.as_str() == "codex").then(get_codex_config_dir);
         Ok(resume_state_for_session(
-            &provider_id,
             &session_id,
             source_path.as_deref().map(Path::new),
-            &get_codex_config_dir(),
+            lock_dir.as_deref(),
             &LiveProcessView,
         ))
     })

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   extractCodexPromptPreview,
   formatSessionMessagePreview,
-  getSessionResumeButtonCopy,
+  getSessionResumeI18nKeys,
   groupSessionsByProviderAndDirectory,
   shouldHideCodexMessageFromToc,
 } from "@/components/sessions/utils";
@@ -223,19 +223,21 @@ describe("session utils", () => {
     ).toEqual(["newest", "oldest"]);
   });
 
-  it("labels the resume button by whether the session is already live", () => {
-    expect(getSessionResumeButtonCopy("resume")).toEqual({
-      label: "恢复会话",
-      tooltip: "在终端中恢复此会话",
+  it("maps resume appearance to the sessionManager i18n keys", () => {
+    expect(getSessionResumeI18nKeys("resume")).toEqual({
+      labelKey: "sessionManager.resume",
+      tooltipKey: "sessionManager.resumeTooltip",
     });
-    expect(getSessionResumeButtonCopy("return")).toEqual({
-      label: "回到会话",
-      tooltip: "切换到已打开的会话窗口",
+    expect(getSessionResumeI18nKeys("return")).toEqual({
+      labelKey: "sessionManager.returnToSession",
+      tooltipKey: "sessionManager.returnToSessionTooltip",
     });
-    expect(getSessionResumeButtonCopy("returnToCodeG")).toEqual({
-      label: "回到 CodeG",
-      tooltip: "该会话已在 CodeG 中打开",
+    expect(getSessionResumeI18nKeys("returnToCodeG")).toEqual({
+      labelKey: "sessionManager.returnToCodeG",
+      tooltipKey: "sessionManager.returnToCodeGTooltip",
     });
-    expect(getSessionResumeButtonCopy(undefined).label).toBe("恢复会话");
+    expect(getSessionResumeI18nKeys(undefined).labelKey).toBe(
+      "sessionManager.resume",
+    );
   });
 });
