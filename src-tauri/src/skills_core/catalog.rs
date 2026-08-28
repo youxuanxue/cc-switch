@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
+use crate::config::get_app_config_dir;
 use crate::error::AppError;
 
 use super::state::DEFAULT_CATALOG_REPO;
@@ -85,7 +86,7 @@ impl LoadedCatalog {
 pub fn load_catalog() -> Result<LoadedCatalog, AppError> {
     let path = match std::env::var("CC_SWITCH_CATALOG") {
         Ok(value) if !value.trim().is_empty() => PathBuf::from(value),
-        _ => return Ok(LoadedCatalog::empty()),
+        _ => get_app_config_dir().join("catalog").join("skills.yaml"),
     };
     if !path.is_file() {
         return Ok(LoadedCatalog::empty());

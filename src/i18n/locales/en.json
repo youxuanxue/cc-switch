@@ -2670,7 +2670,8 @@
       "aligned": "Projections aligned",
       "foreign": "Foreign",
       "broken": "Broken",
-      "sync": "Sync"
+      "sync": "Sync",
+      "installFromCatalogOnly": "Install from the catalog in the main panel. Discovery names are not catalog installs."
     }
   },
   "deeplink": {

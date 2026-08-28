@@ -2670,7 +2670,8 @@
       "aligned": "投影の整合",
       "foreign": "外来物",
       "broken": "壊れたリンク",
-      "sync": "同期"
+      "sync": "同期",
+      "installFromCatalogOnly": "メインパネルのカタログからインストールしてください。発見ページの名前は catalog install ではありません。"
     }
   },
   "deeplink": {

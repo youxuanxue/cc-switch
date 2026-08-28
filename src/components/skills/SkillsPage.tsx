@@ -33,14 +33,12 @@ import {
   useRemoveSkillRepo,
   useSearchSkillsSh,
 } from "@/hooks/useSkills";
-import { skillsCoreApi } from "@/lib/api/skillsCore";
 import type { AppId } from "@/lib/api/types";
 import type {
   DiscoverableSkill,
   SkillRepo,
   SkillsShDiscoverableSkill,
 } from "@/lib/api/skills";
-import { formatSkillError } from "@/lib/errors/skillErrorParser";
 
 export type SkillsPageSource = "repos" | "skillssh";
 
@@ -229,42 +227,8 @@ export const SkillsPage = forwardRef<SkillsPageHandle, SkillsPageProps>(
       readmeUrl: s.readmeUrl,
     });
 
-    const handleInstall = async (key: string) => {
-      let skill: DiscoverableSkill | undefined;
-
-      if (searchSource === "skillssh") {
-        const found = accumulatedResults.find((s) => s.key === key);
-        if (found) {
-          skill = toDiscoverableSkill(found);
-        }
-      } else {
-        skill = discoverableSkills?.find((s) => s.key === key);
-      }
-
-      if (!skill) {
-        toast.error(t("skills.notFound"));
-        return;
-      }
-
-      try {
-        await skillsCoreApi.install([skill.directory || skill.name]);
-        toast.success(t("skills.installSuccess", { name: skill.name }), {
-          closeButton: true,
-        });
-      } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : String(error);
-        const { title, description } = formatSkillError(
-          errorMessage,
-          t,
-          "skills.installFailed",
-        );
-        toast.error(title, {
-          description,
-          duration: 10000,
-        });
-        console.error("Install skill failed:", error);
-      }
+    const handleInstall = async (_key: string) => {
+      toast.info(t("skills.core.installFromCatalogOnly"));
     };
 
     const handleUninstall = async (_directory: string) => {

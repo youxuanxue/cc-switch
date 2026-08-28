@@ -16,7 +16,7 @@ import { server } from "../msw/server";
 const toastSuccessMock = vi.fn();
 const toastErrorMock = vi.fn();
 const skillsPanelMocks = vi.hoisted(() => ({
-  checkUpdates: vi.fn(),
+  syncNow: vi.fn(),
   openDiscovery: vi.fn(),
 }));
 
@@ -143,30 +143,18 @@ vi.mock("@/components/AppSwitcher", () => ({
   ),
 }));
 
-vi.mock("@/components/skills/UnifiedSkillsPanel", async () => {
+vi.mock("@/components/skills/SkillsCorePanel", async () => {
   const React = await import("react");
-  const MockUnifiedSkillsPanel = React.forwardRef(
-    ({ onCheckUpdatesStateChange }: any, ref) => {
-      React.useEffect(() => {
-        onCheckUpdatesStateChange?.({ isChecking: false, hasSkills: true });
-        return () =>
-          onCheckUpdatesStateChange?.({
-            isChecking: false,
-            hasSkills: false,
-          });
-      }, [onCheckUpdatesStateChange]);
-      React.useImperativeHandle(ref, () => ({
-        openDiscovery: skillsPanelMocks.openDiscovery,
-        openImport: vi.fn(),
-        openInstallFromZip: vi.fn(),
-        openRestoreFromBackup: vi.fn(),
-        checkUpdates: skillsPanelMocks.checkUpdates,
-      }));
-      return <div data-testid="unified-skills-panel" />;
-    },
-  );
-  MockUnifiedSkillsPanel.displayName = "MockUnifiedSkillsPanel";
-  return { default: MockUnifiedSkillsPanel };
+  const MockSkillsCorePanel = React.forwardRef((_props: any, ref) => {
+    React.useImperativeHandle(ref, () => ({
+      openDiscovery: skillsPanelMocks.openDiscovery,
+      openImport: vi.fn(),
+      syncNow: skillsPanelMocks.syncNow,
+    }));
+    return <div data-testid="skills-core-panel" />;
+  });
+  MockSkillsCorePanel.displayName = "MockSkillsCorePanel";
+  return { default: MockSkillsCorePanel };
 });
 
 vi.mock("@/components/UpdateBadge", () => ({
@@ -202,7 +190,7 @@ describe("App integration with MSW", () => {
     resetProviderState();
     toastSuccessMock.mockReset();
     toastErrorMock.mockReset();
-    skillsPanelMocks.checkUpdates.mockReset();
+    skillsPanelMocks.syncNow.mockReset();
     skillsPanelMocks.openDiscovery.mockReset();
     localStorage.removeItem("cc-switch-last-view");
     localStorage.removeItem("cc-switch-last-app");
@@ -443,21 +431,19 @@ describe("App integration with MSW", () => {
     liveIdsSpy.mockRestore();
   });
 
-  it("hosts the Skills check-update action in the App toolbar", async () => {
+  it("hosts the Skills sync action in the App toolbar", async () => {
     localStorage.setItem("cc-switch-last-view", "skills");
     const { default: App } = await import("@/App");
     renderApp(App);
 
-    expect(
-      await screen.findByTestId("unified-skills-panel"),
-    ).toBeInTheDocument();
-    const checkUpdatesButton = await screen.findByRole("button", {
-      name: "skills.checkUpdates",
+    expect(await screen.findByTestId("skills-core-panel")).toBeInTheDocument();
+    const syncButton = await screen.findByRole("button", {
+      name: "skills.core.sync",
     });
-    await waitFor(() => expect(checkUpdatesButton).toBeEnabled());
+    await waitFor(() => expect(syncButton).toBeEnabled());
 
-    fireEvent.click(checkUpdatesButton);
-    expect(skillsPanelMocks.checkUpdates).toHaveBeenCalledTimes(1);
+    fireEvent.click(syncButton);
+    expect(skillsPanelMocks.syncNow).toHaveBeenCalledTimes(1);
   });
 
   it("routes the Skills discover toolbar action through the panel guard", async () => {
@@ -465,9 +451,7 @@ describe("App integration with MSW", () => {
     const { default: App } = await import("@/App");
     renderApp(App);
 
-    expect(
-      await screen.findByTestId("unified-skills-panel"),
-    ).toBeInTheDocument();
+    expect(await screen.findByTestId("skills-core-panel")).toBeInTheDocument();
     fireEvent.click(
       await screen.findByRole("button", {
         name: "skills.discover",
@@ -475,6 +459,6 @@ describe("App integration with MSW", () => {
     );
 
     expect(skillsPanelMocks.openDiscovery).toHaveBeenCalledTimes(1);
-    expect(screen.getByTestId("unified-skills-panel")).toBeInTheDocument();
+    expect(screen.getByTestId("skills-core-panel")).toBeInTheDocument();
   });
 });

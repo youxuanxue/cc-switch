@@ -9,7 +9,8 @@ use crate::error::AppError;
 use crate::services::skill::SkillService;
 
 use super::agent::{
-    claude_skills_root, cursor_skills_dir, is_dir_symlink_to, parse_agents, AgentToken,
+    claude_skills_root, cursor_skills_dir, is_dir_symlink_to, parse_agents, sanitize_skill_name,
+    AgentToken,
 };
 use super::catalog::{load_catalog, LoadedCatalog};
 use super::state::{
@@ -127,16 +128,18 @@ pub fn install(db: &Database, names: &[String]) -> Result<(), AppError> {
     let snapshot = snapshot_library(&state)?;
     let result = (|| {
         for name in names {
-            let skill = catalog.get(name).ok_or_else(|| {
+            let name = sanitize_skill_name(name)?;
+            let skill = catalog.get(&name).ok_or_else(|| {
                 AppError::InvalidInput(format!("货架没有技能 {name}"))
             })?;
             let src = catalog.source_dir(skill)?;
-            ingest_skill(&src, name)?;
-            let hash = content_hash(&library_skill_dir(name)?)?;
+            reject_local_draft_overwrite(&state, &name, &src)?;
+            ingest_skill(&src, &name)?;
+            let hash = content_hash(&library_skill_dir(&name)?)?;
             upsert_library(
                 &mut state,
                 LibraryEntry {
-                    name: name.clone(),
+                    name: name,
                     provenance: "catalog-managed".into(),
                     content_hash: hash,
                     catalog_revision: Some(catalog.revision.clone()),
@@ -163,13 +166,14 @@ pub fn uninstall(db: &Database, names: &[String]) -> Result<(), AppError> {
     let snapshot = snapshot_library(&state)?;
     let result = (|| {
         for name in names {
-            remove_projections_for_skill(&state, name)?;
-            if let Ok(dir) = library_skill_dir(name) {
+            let name = sanitize_skill_name(name)?;
+            remove_projections_for_skill(&state, &name)?;
+            if let Ok(dir) = library_skill_dir(&name) {
                 if dir.exists() {
                     fs::remove_dir_all(&dir).map_err(|e| AppError::io(&dir, e))?;
                 }
             }
-            state.library.retain(|s| s.name != *name);
+            state.library.retain(|s| s.name != name);
         }
         project_all(&state)?;
         save_state(db, &state)?;
@@ -193,11 +197,12 @@ pub fn import_paths(db: &Database, paths: &[PathBuf]) -> Result<(), AppError> {
                     path.display()
                 )));
             }
-            let name = path
-                .file_name()
-                .and_then(|s| s.to_str())
-                .ok_or_else(|| AppError::InvalidInput("导入路径无效".into()))?
-                .to_string();
+            let name = sanitize_skill_name(
+                path
+                    .file_name()
+                    .and_then(|s| s.to_str())
+                    .ok_or_else(|| AppError::InvalidInput("导入路径无效".into()))?,
+            )?;
             ingest_skill(path, &name)?;
             let hash = content_hash(&library_skill_dir(&name)?)?;
             upsert_library(
@@ -429,8 +434,11 @@ fn build_first_open_preview(
 
     if field.is_empty() {
         for skill in catalog.recommended() {
+            let Ok(name) = sanitize_skill_name(&skill.name) else {
+                continue;
+            };
             candidates.push(SkillCandidate {
-                name: skill.name.clone(),
+                name,
                 provenance: "catalog-managed".into(),
             });
         }
@@ -472,14 +480,13 @@ fn scan_field_skills(
                 if !path.join("SKILL.md").is_file() {
                     continue;
                 }
-                let name = path
+                let raw_name = path
                     .file_name()
                     .and_then(|s| s.to_str())
-                    .unwrap_or_default()
-                    .to_string();
-                if name.is_empty() {
+                    .unwrap_or_default();
+                let Ok(name) = sanitize_skill_name(raw_name) else {
                     continue;
-                }
+                };
                 let hash = content_hash(&path)?;
                 found.entry(name).or_default().push((path, hash));
             }
@@ -522,11 +529,47 @@ fn resolve_open_source(
 }
 
 fn ingest_skill(src: &Path, name: &str) -> Result<(), AppError> {
-    let dest = library_skill_dir(name)?;
+    let name = sanitize_skill_name(name)?;
+    let dest = library_skill_dir(&name)?;
+    if let (Ok(src_real), Ok(dest_real)) = (fs::canonicalize(src), fs::canonicalize(&dest)) {
+        if src_real == dest_real {
+            return Ok(());
+        }
+    }
+    let staging = dest.with_file_name(format!(".{name}.ingesting"));
+    if staging.exists() {
+        fs::remove_dir_all(&staging).map_err(|e| AppError::io(&staging, e))?;
+    }
+    copy_dir(src, &staging)?;
     if dest.exists() {
         fs::remove_dir_all(&dest).map_err(|e| AppError::io(&dest, e))?;
     }
-    copy_dir(src, &dest)
+    fs::rename(&staging, &dest).map_err(|e| AppError::io(&dest, e))
+}
+
+fn reject_local_draft_overwrite(
+    state: &ControlState,
+    name: &str,
+    incoming: &Path,
+) -> Result<(), AppError> {
+    let Some(existing) = state.library.iter().find(|s| s.name == name) else {
+        return Ok(());
+    };
+    if existing.provenance != "local-draft" {
+        return Ok(());
+    }
+    let dest = library_skill_dir(name)?;
+    if !dest.exists() {
+        return Ok(());
+    }
+    let current = content_hash(&dest)?;
+    let incoming_hash = content_hash(incoming)?;
+    if current != incoming_hash {
+        return Err(AppError::InvalidInput(format!(
+            "货架不得静默覆盖 local-draft: {name}"
+        )));
+    }
+    Ok(())
 }
 
 fn library_root() -> Result<PathBuf, AppError> {
@@ -534,7 +577,7 @@ fn library_root() -> Result<PathBuf, AppError> {
 }
 
 fn library_skill_dir(name: &str) -> Result<PathBuf, AppError> {
-    Ok(library_root()?.join(name))
+    Ok(library_root()?.join(sanitize_skill_name(name)?))
 }
 
 fn project_all(state: &ControlState) -> Result<(), AppError> {
@@ -573,9 +616,23 @@ fn project_claude_cursor(state: &ControlState) -> Result<(), AppError> {
         if meta.file_type().is_symlink() {
             fs::remove_file(&claude).map_err(|e| AppError::io(&claude, e))?;
         } else if meta.is_dir() {
+            let owned: HashSet<_> = state.library.iter().map(|s| s.name.as_str()).collect();
+            for entry in fs::read_dir(&claude).map_err(|e| AppError::io(&claude, e))? {
+                let entry = entry.map_err(|e| AppError::io(&claude, e))?;
+                let name = entry.file_name();
+                let name = name.to_string_lossy();
+                if !owned.contains(name.as_ref()) {
+                    return Err(AppError::InvalidInput(format!(
+                        "Claude skills 根含外来物，拒绝替换为 symlink: {name}"
+                    )));
+                }
+            }
             fs::remove_dir_all(&claude).map_err(|e| AppError::io(&claude, e))?;
         } else {
-            fs::remove_file(&claude).map_err(|e| AppError::io(&claude, e))?;
+            return Err(AppError::InvalidInput(format!(
+                "Claude skills 根被占用: {}",
+                claude.display()
+            )));
         }
     } else if let Some(parent) = claude.parent() {
         fs::create_dir_all(parent).map_err(|e| AppError::io(parent, e))?;
@@ -621,6 +678,18 @@ fn apply_catalog_updates(
         }
     }
     for name in &names {
+        let Some(entry) = state.library.iter().find(|s| s.name == *name) else {
+            continue;
+        };
+        let dir = library_skill_dir(name)?;
+        if dir.exists() {
+            let disk = content_hash(&dir)?;
+            if disk != entry.content_hash {
+                return Err(AppError::InvalidInput(format!(
+                    "catalog-managed 副本被改脏，拒绝覆盖: {name}"
+                )));
+            }
+        }
         let skill = catalog
             .get(name)
             .ok_or_else(|| AppError::InvalidInput(format!("货架没有 {name}")))?;
@@ -819,10 +888,25 @@ fn collect_files(root: &Path, current: &Path, out: &mut Vec<PathBuf>) -> Result<
     for entry in fs::read_dir(current).map_err(|e| AppError::io(current, e))? {
         let entry = entry.map_err(|e| AppError::io(current, e))?;
         let path = entry.path();
+        reject_dir_symlink(&path)?;
         if path.is_dir() {
             collect_files(root, &path, out)?;
         } else {
             out.push(path.strip_prefix(root).unwrap_or(&path).to_path_buf());
+        }
+    }
+    Ok(())
+}
+
+fn reject_dir_symlink(path: &Path) -> Result<(), AppError> {
+    let meta = fs::symlink_metadata(path).map_err(|e| AppError::io(path, e))?;
+    if meta.file_type().is_symlink() {
+        let target_is_dir = fs::metadata(path).map(|m| m.is_dir()).unwrap_or(false);
+        if target_is_dir {
+            return Err(AppError::InvalidInput(format!(
+                "技能包内含目录 symlink，拒绝: {}",
+                path.display()
+            )));
         }
     }
     Ok(())
@@ -834,6 +918,7 @@ fn copy_dir(src: &Path, dest: &Path) -> Result<(), AppError> {
         let entry = entry.map_err(|e| AppError::io(src, e))?;
         let from = entry.path();
         let to = dest.join(entry.file_name());
+        reject_dir_symlink(&from)?;
         if from.is_dir() {
             copy_dir(&from, &to)?;
         } else {

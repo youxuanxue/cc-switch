@@ -2671,7 +2671,8 @@
       "aligned": "投影對齊",
       "foreign": "外來物",
       "broken": "斷鏈",
-      "sync": "同步"
+      "sync": "同步",
+      "installFromCatalogOnly": "請在主面板從貨架安裝，不要把發現頁倉庫名當成 catalog install"
     }
   },
   "deeplink": {

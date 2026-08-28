@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use crate::app_config::AppType;
 use crate::config::get_home_dir;
@@ -101,6 +101,32 @@ pub fn is_dir_symlink_to(link: &Path, target: &Path) -> bool {
     match (fs::canonicalize(link), fs::canonicalize(target)) {
         (Ok(a), Ok(b)) => a == b,
         _ => fs::read_link(link).ok().as_deref() == Some(target),
+    }
+}
+
+pub fn sanitize_skill_name(raw: &str) -> Result<String, AppError> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() || trimmed.contains('/') || trimmed.contains('\\') {
+        return Err(AppError::InvalidInput(format!(
+            "非法技能名: {raw}"
+        )));
+    }
+    let path = Path::new(trimmed);
+    let mut components = path.components();
+    match (components.next(), components.next()) {
+        (Some(Component::Normal(name)), None) => {
+            let normalized = name.to_string_lossy().trim().to_string();
+            if normalized.is_empty()
+                || normalized == "."
+                || normalized == ".."
+                || normalized.starts_with('.')
+            {
+                Err(AppError::InvalidInput(format!("非法技能名: {raw}")))
+            } else {
+                Ok(normalized)
+            }
+        }
+        _ => Err(AppError::InvalidInput(format!("非法技能名: {raw}"))),
     }
 }
 

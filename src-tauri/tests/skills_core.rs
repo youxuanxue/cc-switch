@@ -545,3 +545,87 @@ fn pi_in_use_follows_library() {
         library_dir().join("rec-one").canonicalize().unwrap()
     );
 }
+
+#[test]
+fn rejects_path_escape_skill_name() {
+    let (_guard, home, state) = setup();
+    let db = &*state.db;
+    write_catalog(&home, "a".repeat(40).as_str(), &[("rec-one", true, "rec")]);
+    skills_core::open(&db, &["codex".into()], &[]).unwrap();
+    let err = skills_core::install(&db, &["../pwned".into()]).expect_err("escape");
+    assert!(err.to_string().contains("非法"));
+}
+
+#[test]
+fn install_does_not_overwrite_divergent_local_draft() {
+    let (_guard, home, state) = setup();
+    let db = &*state.db;
+    write_catalog(&home, "b".repeat(40).as_str(), &[("shared", true, "shelf")]);
+    skills_core::open(&db, &["codex".into()], &[]).unwrap();
+    let draft = home.join("shared");
+    write_skill(&draft, "shared", "local-copy");
+    skills_core::import_paths(&db, &[draft]).unwrap();
+    let err = skills_core::install(&db, &["shared".into()]).expect_err("no overwrite");
+    assert!(err.to_string().contains("local-draft"));
+    let body = fs::read_to_string(library_dir().join("shared").join("SKILL.md")).unwrap();
+    assert!(body.contains("local-copy"));
+}
+
+#[test]
+fn dirty_catalog_managed_fails_closed_on_sync() {
+    let (_guard, home, state) = setup();
+    let db = &*state.db;
+    write_catalog(&home, "c".repeat(40).as_str(), &[("rec-one", true, "v1")]);
+    skills_core::open(&db, &["codex".into()], &["rec-one".into()]).unwrap();
+    fs::write(
+        library_dir().join("rec-one").join("SKILL.md"),
+        "---\nname: rec-one\ndescription: dirty\n---\ndirty\n",
+    )
+    .unwrap();
+    write_catalog(&home, "d".repeat(40).as_str(), &[("rec-one", true, "v2")]);
+    let err = skills_core::sync(&db, false).expect_err("dirty");
+    assert!(err.to_string().contains("改脏"));
+    let body = fs::read_to_string(library_dir().join("rec-one").join("SKILL.md")).unwrap();
+    assert!(body.contains("dirty"));
+}
+
+#[test]
+fn reopen_ingest_keeps_leftover_library_when_src_is_projection() {
+    let (_guard, home, state) = setup();
+    let db = &*state.db;
+    write_catalog(&home, "e".repeat(40).as_str(), &[("rec-one", true, "rec")]);
+    skills_core::open(&db, &["codex".into()], &["rec-one".into()]).unwrap();
+    skills_core::agents_remove(&db, "codex").unwrap();
+    skills_core::open(&db, &["codex".into()], &["rec-one".into()]).unwrap();
+    let body = fs::read_to_string(library_dir().join("rec-one").join("SKILL.md")).unwrap();
+    assert!(body.contains("rec"));
+    assert_eq!(
+        skills_core::doctor(&db).unwrap().library[0].provenance,
+        "local-draft"
+    );
+}
+
+#[test]
+fn claude_foreign_skill_is_not_deleted_on_open() {
+    let (_guard, home, state) = setup();
+    let db = &*state.db;
+    write_skill(
+        &home.join(".cursor").join("skills").join("keep"),
+        "keep",
+        "keep-body",
+    );
+    write_skill(
+        &home.join(".claude").join("skills").join("foreign"),
+        "foreign",
+        "leave-me",
+    );
+    let err = skills_core::open(&db, &["claude-cursor".into()], &["keep".into()])
+        .expect_err("foreign blocks layout replace");
+    assert!(err.to_string().contains("外来"));
+    assert!(home
+        .join(".claude")
+        .join("skills")
+        .join("foreign")
+        .join("SKILL.md")
+        .is_file());
+}
