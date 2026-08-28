@@ -50,7 +50,7 @@ related_commits: []
 
 **第一次：先定在用 Agent，再确认工作台。不自动倒库。**
 
-1. 人先勾这台机器**在用哪些 Agent**（v1 接不住的不出现）。默认**全不勾**；探测到目录里有东西的只标「看见过」，不预勾。看见过 ≠ 在用。确认前不改链接。**一个都不勾 = 控制面未开张**：不写 marker、不碰磁盘、不建空库；下次再来仍是第一次。**未开张（在用名单为空，含关张后）时，除「第一次确认工作台」这一笔外，所有写库命令拒绝。** `agents add` 不是开张，零个在用 Agent 上的 `install` 也不算「全部写齐」。
+1. 人先勾这台机器**在用哪些 Agent**（v1 接不住的不出现）。默认**全不勾**；探测到目录里有东西的只标「看见过」，不预勾。看见过 ≠ 在用。确认前不改链接。**一个都不勾 = 控制面未开张**：不写 marker、不碰磁盘、不建空库；下次再来仍是第一次。**未开张（在用名单为空，含关张后）时，只有 `open` 可以写库。** `agents add` / `init` / `bootstrap` 都不是开张，零个在用 Agent 上的 `install` 也不算「全部写齐」。
 2. 再出技能候选，两份不混：
 
 | 场景 | 候选从哪来 |
@@ -65,7 +65,7 @@ related_commits: []
 
 确认进库时：现场一律 `local-draft`（不对 hash、不升格）。空机器确认的 `recommended` 从货架来，标 `catalog-managed`。已勾目录里**同名内容不一致**（hash 不同）：整笔停，控制面不替人挑；人处理完再确认。确认工作台之前不改任何 runtime 链接。浏览 UI 不得隐式改库或在用名单。
 
-**后来入伙。** 只在已开张时。对齐当前库才能进门：库里缺的必须补上，否则入伙失败。它自己多出来、库里没有的，当外来物，不碰。未开张不能靠 `agents add` 绕过第一次。
+**后来入伙。** 只在已开张时。对齐当前库才能进门：库里缺的必须补上，否则入伙失败。它自己多出来、库里没有的，当外来物，不碰。未开张不能靠 `agents add` 绕过 `open`。
 
 **Pi。** 未在用：保持现网「文件夹在就是开」。一旦在用：磁盘只是库的投影，不再当第二本账。
 
@@ -79,7 +79,7 @@ related_commits: []
 | 这台机器在用哪些 Agent | 同上 |
 | 货架换版是否自动跟上 | 同上（总闸，默认开） |
 | 已装副本与 hash | 中央库目录 |
-| runtime 路径 | adapter 表（`SkillService::get_app_skills_dir` 为现网 SSOT；单元测试固定） |
+| runtime 路径 | adapter 表。现网默认以 `SkillService::get_app_skills_dir` 为 SSOT；`claude-cursor` 在用时以本节布局为准，不以 `get_app_skills_dir(Claude)` 为写入目标 |
 | 磁盘是否与库一致 | `cc-switch skills doctor` |
 
 ## 不做什么（v1）
@@ -100,6 +100,8 @@ related_commits: []
 - 不设第三态 `bundled`；第一次确认不对 hash、不把现场升成 `catalog-managed`。
 - 第一次同名内容不一致时不自动挑一份、不合并、不跳过该名继续装其余。
 - 未开张时不让 `install` / `import` / `sync` / `upgrade` / `follow-catalog` / `agents add` 真空成功。
+- 不开第二套开张入口（`init` / `bootstrap` 等）；只有 `open`。
+- 不把 `get_app_skills_dir(Claude)` 当作 `claude-cursor` 在用时的逐条写入目标。
 
 ## 现状与地基
 
@@ -109,7 +111,7 @@ related_commits: []
 
 现网 `enabled_*` 矩阵和「各 Agent 各开各的」UI **废止**，改为：库成员 + 在用 Agent 名单。
 
-缺口：catalog reader（只往货架读，不自动进库）、Cursor / Antigravity adapter、在用名单、ownership marker、headless CLI、把 Claude 从逐 skill 写入改为耦合布局。
+缺口：catalog reader（只往货架读，不自动进库）、Cursor / Antigravity adapter、在用名单、ownership marker、headless CLI（含 `open`）、把 Claude 从逐 skill 写入改为 `claude-cursor` 布局。
 
 ## 核心模型
 
@@ -159,9 +161,9 @@ description 从来源 `SKILL.md` 派生；catalog 不维护第二份 metadata。
 | `antigravity` | 新身份 | 可在用 |
 | — | `ClaudeDesktop` / `OpenClaw` | v1 不用 |
 
-已有路径以 `SkillService::get_app_skills_dir` 为 SSOT。新路径：`claude-cursor` 的 Cursor 侧 `~/.cursor/skills/<name>`；`antigravity` 为 `~/.gemini/antigravity-cli/skills/<name>`。
+除 `claude-cursor` 外，现网路径以 `SkillService::get_app_skills_dir` 为 SSOT（单元测试固定）。`antigravity` 为 `~/.gemini/antigravity-cli/skills/<name>`。
 
-**`claude-cursor` 布局**（在用时必须如此，废弃向 `~/.claude/skills/<name>` 逐条写入）：
+**`claude-cursor` 布局**（在用时必须如此）。现网 `get_app_skills_dir(Claude)` 仍指向 `~/.claude/skills`（或其 settings override），**那不是投影写入目标**。废弃向该目录逐条写入：
 
 ```text
 ~/.cursor/skills/<name>  → 库/<name>
@@ -193,9 +195,10 @@ legacy writer 读到 marker 且自身对应 token 在 `in_use_agents` 内时必�
 
 当前 crate 无 bin。v1 必须提供与桌面同一 Rust core 的 headless 入口；子命令、`--json`、exit code 以本节为契约，分发留给 Core PR。
 
-**未开张拒写。** 在用名单为空时，只有「第一次确认工作台」这一笔（桌面与同一 core API，不是 `agents add`）可以写库。`sync`（不含 `--check`）、`install`、`uninstall`、`import`、`upgrade`、`follow-catalog`、`agents add` 一律拒绝，exit 非 0。`doctor` 与 `sync --check` 只读，可以跑。零个在用 Agent 不得当成「全部写齐」。
+**未开张拒写。** 在用名单为空时，只有 `open` 可以写库。`sync`（不含 `--check`）、`install`、`uninstall`、`import`、`upgrade`、`follow-catalog`、`agents add` 一律拒绝，exit 非 0。`doctor` 与 `sync --check` 只读，可以跑。零个在用 Agent 不得当成「全部写齐」。
 
 ```bash
+cc-switch skills open --agent <token>... [--skill <name>...]
 cc-switch skills sync [--check]
 cc-switch skills install <name>... | uninstall <name>...
 cc-switch skills import <path>...
@@ -204,6 +207,8 @@ cc-switch skills follow-catalog on | off
 cc-switch skills agents add <token> | remove <token>
 cc-switch skills doctor [--json]
 ```
+
+- `open`：第一次确认工作台的唯一入口（桌面同一 core）。至少一个 `--agent`；零个 Agent 拒绝。`--skill` 只许来自本节第一次候选规则；省略则开张后工作台为空。同名冲突整笔停。现场标 `local-draft`，空机器 `recommended` 标 `catalog-managed`。已开张再跑 `open` 拒绝。不另设 `init` / `bootstrap`。
 
 - `sync`：校验货架；副本被改脏则停。`follow_catalog=on` 时，把已在库中的 `catalog-managed` 对齐到当前货架（一笔，失败全回滚）。`off` 时不换版，只把**当前库**投影到在用 Agent。不把货架未入库条目装进来。`--check` 只计算。
 - `install` / `uninstall`：可一批多名。从货架进库或出库是**一笔**：勾一批、一次确认；任一名字或任一在用 Agent 失败，整批都不进/不卸。不把半截成功留在库里。进库标 `catalog-managed`。
@@ -256,7 +261,7 @@ dev-rules **保留**项目 `.cursor/skills` 编辑入口；**删除**的是 home
 
 1. **agent-skills** README writer 声明先合（[youxuanxue/agent-skills#66](https://github.com/youxuanxue/agent-skills/pull/66)）。货架门口不得还挂旧 writer。
 2. **本文件 merge。** 进 main 前 `approved_by` 必须是具体人名（R5），禁止先合再翻。
-3. **cc-switch Core**：catalog reader → 库成员 / 在用名单 → 本节全部 CLI（含 import / follow-catalog / upgrade，及未开张拒写）→ Cursor/Antigravity + `claude-cursor` 布局 → UI（库 + 在用 Agent + 诊断，无矩阵开关）。
+3. **cc-switch Core**：catalog reader → 库成员 / 在用名单 → 本节全部 CLI（含 `open` / import / follow-catalog / upgrade，及未开张拒写）→ Cursor/Antigravity + `claude-cursor` 布局（不以 `get_app_skills_dir(Claude)` 为写入目标）→ UI（库 + 在用 Agent + 诊断，无矩阵开关）。
 4. **dev-rules / Twin**：inactive contract（小 PR，绑定本文件）。
 5. **在用 Agent 逐个入伙** → **删除 legacy writer**。
 
@@ -268,7 +273,8 @@ dev-rules **保留**项目 `.cursor/skills` 编辑入口；**删除**的是 home
 - 库成员是工作集唯一 SSOT；symlink 与 `skills-control.json` 是生成物。
 - 装/卸/导入/自建/入伙：可一批一笔；进库不看来源，全部在用 Agent 写齐才算成功，半截不留。provenance 只有两种：货架 `install` = `catalog-managed`，其余 = `local-draft`。无 `bundled`。
 - 改 `local-draft` 存盘即再投影；写不齐则库内那份回滚，不留半截改。
-- 第一次先勾在用 Agent（默认全不勾，看见过不预勾），再确认工作台；一个都不勾 = 未开张；去掉最后一个在用 = 关张（账清空，不拆链接，旧库目录不当候选；目录里还在的算现场）；有现场不混 `recommended`；同名内容不一致则整笔停，不替人挑。未开张时除第一次确认外写库命令拒绝；`agents add` 只在已开张时入伙。
+- 第一次先勾在用 Agent（默认全不勾，看见过不预勾），再 `open` 确认工作台；一个都不勾 = 未开张；去掉最后一个在用 = 关张（账清空，不拆链接，旧库目录不当候选；目录里还在的算现场）；有现场不混 `recommended`；同名内容不一致则整笔停，不替人挑。未开张时除 `open` 外写库命令拒绝；`agents add` 只在已开张时入伙。
+- `claude-cursor` 在用时按本节布局投影，不把 `get_app_skills_dir(Claude)` 当写入目标。
 - catalog 新增默认不进库。
 - 货架换版只有总闸「自动同步」（默认开）；关掉则钉死，显式 upgrade。不按技能设闸。自动跟上失败整笔回滚。
 - foreign 不自动进库、不被删。
@@ -277,8 +283,8 @@ dev-rules **保留**项目 `.cursor/skills` 编辑入口；**删除**的是 home
 
 ## 验证（Core 实现 PR 承担）
 
-- **单元**：catalog 解析、库成员、在用名单、`claude-cursor` 布局、Pi 在用后跟库、整笔失败、foreign、先勾 Agent 再出候选、默认不预勾、零勾选不算开张、未开张时 install/import/sync/upgrade/follow-catalog/agents add 拒绝、去掉最后一个为关张、关张不拆链接、关张后旧库目录不当候选且不挡住 `recommended`、空目录才用 `recommended`、catalog 新增不进库、follow_catalog 默认开、关掉则 sync 不换版、自动跟上失败整笔回滚、`local-draft` 进库即投影且不跟总闸、导入失败整批不动、改 `local-draft` 失败则库内回滚、第一次现场标 `local-draft` 且不对 hash 提升、空机器 `recommended` 标 `catalog-managed`、无 `bundled`、第一次同名 hash 不同则确认失败且库不动、`doctor --json` 含 `open`/`library`/`legacy_writers_stopped`。
-- **集成**：先定在用再确认工作台；有现场只确认已用项且进库为 `local-draft`；同名冲突整笔停；关张后 `agents add` 拒绝；入伙对齐；一批装/卸/导入中断后收敛且半截不留；在用 Agent 失败则库不变；改 `local-draft` 投影失败后库与 Agent 都回到存盘前；关张后再开张不把旧库名单当候选，目录里还在的链接仍按现场提。
+- **单元**：catalog 解析、库成员、在用名单、`claude-cursor` 布局且不写 `get_app_skills_dir(Claude)`、Pi 在用后跟库、整笔失败、foreign、先勾 Agent 再出候选、默认不预勾、零勾选不算开张、只有 `open` 能开张、未开张时 install/import/sync/upgrade/follow-catalog/agents add 拒绝、已开张再 `open` 拒绝、去掉最后一个为关张、关张不拆链接、关张后旧库目录不当候选且不挡住 `recommended`、空目录才用 `recommended`、catalog 新增不进库、follow_catalog 默认开、关掉则 sync 不换版、自动跟上失败整笔回滚、`local-draft` 进库即投影且不跟总闸、导入失败整批不动、改 `local-draft` 失败则库内回滚、第一次现场标 `local-draft` 且不对 hash 提升、空机器 `recommended` 标 `catalog-managed`、无 `bundled`、第一次同名 hash 不同则确认失败且库不动、`doctor --json` 含 `open`/`library`/`legacy_writers_stopped`。
+- **集成**：先定在用再 `open`；有现场只确认已用项且进库为 `local-draft`；同名冲突整笔停；关张后 `agents add` 拒绝、只能再 `open`；入伙对齐；一批装/卸/导入中断后收敛且半截不留；在用 Agent 失败则库不变；改 `local-draft` 投影失败后库与 Agent 都回到存盘前；关张后再开张不把旧库名单当候选，目录里还在的链接仍按现场提。
 - **主机**：`doctor --json` 对当前在用名单 exit 0，字段与本节契约一致；屏幕上的库与 doctor 一致。
 
 ---
