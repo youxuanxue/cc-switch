@@ -183,16 +183,21 @@ pub fn is_inspector_noise(command: &str) -> bool {
     if lower.contains("cc-switch") || lower.contains("cursor-agent") {
         return true;
     }
-    command
-        .split_whitespace()
-        .next()
-        .is_some_and(|token| {
-            matches!(
-                command_basename(token),
-                "ps" | "lsof" | "rg" | "grep" | "git" | "vim" | "nvim" | "less" | "cat" | "head"
-                    | "tail"
-            )
-        })
+    command.split_whitespace().next().is_some_and(|token| {
+        matches!(
+            command_basename(token),
+            "ps" | "lsof"
+                | "rg"
+                | "grep"
+                | "git"
+                | "vim"
+                | "nvim"
+                | "less"
+                | "cat"
+                | "head"
+                | "tail"
+        )
+    })
 }
 
 pub fn is_session_runner_command(command: &str) -> bool {
@@ -448,14 +453,6 @@ pub fn resume_decision_for_session(
     decide_resume(find_live_writer(session_id, source_path, config_dir, view).as_ref())
 }
 
-pub fn resume_decision_for_codex_session(
-    config_dir: &Path,
-    session_id: &str,
-    view: &dyn ProcessView,
-) -> ResumeDecision {
-    resume_decision_for_session(session_id, None, config_dir, view)
-}
-
 pub fn appearance_from_decision(decision: &ResumeDecision) -> SessionResumeAppearance {
     match decision {
         ResumeDecision::LaunchNew => SessionResumeAppearance::Resume,
@@ -592,12 +589,7 @@ mod tests {
         MapView::new(HashMap::from([
             proc(pid, 100, Some("ttys019"), command),
             proc(100, 99, Some("ttys019"), "-zsh"),
-            proc(
-                99,
-                1,
-                None,
-                "/Applications/iTerm.app/Contents/MacOS/iTerm2",
-            ),
+            proc(99, 1, None, "/Applications/iTerm.app/Contents/MacOS/iTerm2"),
         ]))
     }
 
@@ -650,9 +642,10 @@ mod tests {
             ),
         ]));
 
-        let decision = resume_decision_for_codex_session(
-            Path::new("/tmp/codex"),
+        let decision = resume_decision_for_session(
             "01a04642-3684-7963-b9cf-d0db978ce131",
+            None,
+            Path::new("/tmp/codex"),
             &view,
         );
 
@@ -692,9 +685,10 @@ mod tests {
         ]))
         .with_holder(lock, 80683);
 
-        let decision = resume_decision_for_codex_session(
-            Path::new("/tmp/codex"),
+        let decision = resume_decision_for_session(
             "01a04642-3684-7963-b9cf-d0db978ce131",
+            None,
+            Path::new("/tmp/codex"),
             &view,
         );
 
@@ -711,7 +705,7 @@ mod tests {
         let view = MapView::new(HashMap::new());
 
         assert_eq!(
-            resume_decision_for_codex_session(Path::new("/tmp/codex"), "session-1", &view),
+            resume_decision_for_session("session-1", None, Path::new("/tmp/codex"), &view),
             ResumeDecision::LaunchNew
         );
     }
