@@ -1,7 +1,7 @@
 ---
 title: 统一 Agent Skill Catalog 与 CC Switch Skills Core
-status: pending
-approved_by: pending
+status: approved
+approved_by: feng
 risk_level: high
 related_prs: []
 related_commits: []
