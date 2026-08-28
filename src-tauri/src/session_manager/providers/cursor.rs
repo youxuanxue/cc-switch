@@ -20,7 +20,6 @@ pub enum CursorIndexStatus {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[allow(dead_code)]
 pub struct CursorSessionRecord {
     pub chat_id: String,
     pub title: Option<String>,
@@ -244,7 +243,6 @@ pub fn index_status() -> CursorIndexStatus {
     index_status_in(&cursor_chats_root())
 }
 
-#[allow(dead_code)]
 pub fn find_session(session_id: &str) -> Result<CursorSessionRecord, String> {
     find_session_in(&cursor_chats_root(), session_id)
 }

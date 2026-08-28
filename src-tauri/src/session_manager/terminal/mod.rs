@@ -1,4 +1,62 @@
+use std::path::Path;
 use std::process::Command;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct CursorLauncherTerminalRequest {
+    target: String,
+    command: String,
+    cwd: String,
+    custom_config: Option<String>,
+}
+
+fn preferred_terminal_target(preferred: Option<&str>) -> String {
+    match preferred {
+        Some("iterm2") => "iterm".to_string(),
+        Some(target) => target.to_string(),
+        None => "terminal".to_string(),
+    }
+}
+
+pub(crate) fn cursor_launcher_command(launcher_path: &Path) -> Result<String, String> {
+    if !launcher_path.is_absolute() {
+        return Err("Cursor launcher path must be absolute".to_string());
+    }
+    let launcher_path = launcher_path
+        .to_str()
+        .ok_or_else(|| "Cursor launcher path must be valid UTF-8".to_string())?;
+    Ok(shell_escape(launcher_path))
+}
+
+fn cursor_launcher_request(
+    preferred: Option<&str>,
+    launcher_path: &Path,
+    workspace: &Path,
+) -> Result<CursorLauncherTerminalRequest, String> {
+    if !workspace.is_absolute() {
+        return Err("Cursor workspace path must be absolute".to_string());
+    }
+    let cwd = workspace
+        .to_str()
+        .ok_or_else(|| "Cursor workspace path must be valid UTF-8".to_string())?
+        .to_string();
+    Ok(CursorLauncherTerminalRequest {
+        target: preferred_terminal_target(preferred),
+        command: cursor_launcher_command(launcher_path)?,
+        cwd,
+        custom_config: None,
+    })
+}
+
+pub(crate) fn launch_cursor_launcher(launcher_path: &Path, workspace: &Path) -> Result<(), String> {
+    let preferred = crate::settings::get_preferred_terminal();
+    let request = cursor_launcher_request(preferred.as_deref(), launcher_path, workspace)?;
+    launch_terminal(
+        &request.target,
+        &request.command,
+        Some(&request.cwd),
+        request.custom_config.as_deref(),
+    )
+}
 
 pub fn launch_terminal(
     target: &str,
@@ -445,6 +503,23 @@ fn escape_osascript(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn cursor_launcher_request_accepts_only_a_path_and_workspace() {
+        let launcher = Path::new("/private/tmp/cc-switch launcher/cursor-launcher.sh");
+        let workspace = Path::new("/workspace/project");
+
+        let request = cursor_launcher_request(Some("iterm2"), launcher, workspace).unwrap();
+
+        assert_eq!(request.target, "iterm");
+        assert_eq!(
+            request.command,
+            "'/private/tmp/cc-switch launcher/cursor-launcher.sh'"
+        );
+        assert_eq!(request.cwd, "/workspace/project");
+        assert!(request.custom_config.is_none());
+    }
 
     #[test]
     fn build_shell_command_keeps_command_without_cwd_prefix_when_not_provided() {

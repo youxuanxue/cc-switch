@@ -54,6 +54,9 @@ Run:
 ## Evidence
 
 - Approval evidence: design status approved by user-chat-2026-08-28.
-- Execution evidence is recorded when the Story advances to InTest and Done.
+- 2026-08-28 RED: `cargo test --manifest-path src-tauri/Cargo.toml services::cursor_official::tests -- --nocapture` exited 101 because the approved workspace resolver, fixed resume argv, private launcher lifecycle, lookup revalidation, launch result, and narrow terminal launcher interfaces did not exist.
+- 2026-08-28 GREEN (backend resume): the same focused service command passed 15 tests; `cargo test --manifest-path src-tauri/Cargo.toml session_manager::terminal::tests -- --nocapture` passed 11 tests; `cargo test --manifest-path src-tauri/Cargo.toml session_manager:: -- --nocapture` passed 91 tests. Coverage includes canonical metadata/override selection, fixed argv, Login chaining, official environment cleanup, private self-deleting launchers, 24-hour owned-prefix cleanup, TOCTOU revalidation, sanitized terminal failures, and the launcher-path-only terminal boundary.
+- 2026-08-28 backend resume gate: Rust formatting, `git diff --check`, `cargo check`, and the external project preflight all exited 0; preflight retained only the repository's known dev-rules integration skips and approved-doc branch warning.
+- Remaining backend GREEN, renderer, and e2e evidence is recorded before this Story advances to Done.
 
-- Status: Ready
+- Status: InTest

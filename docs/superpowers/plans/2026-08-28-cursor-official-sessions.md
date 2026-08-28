@@ -313,7 +313,7 @@ git commit -m "feat(cursor): probe official cli authentication"
 - Produces: `launch_session`, `launch_login`, and `launch_login_and_session`.
 - Consumes: `cursor::find_session`, private settings, preferred terminal, and the Cursor executable resolver.
 
-- [ ] **Step 1: Write failing workspace and launcher tests**
+- [x] **Step 1: Write failing workspace and launcher tests**
 
 Cover metadata cwd precedence, required workspace, canonical override acceptance, file/missing-path rejection, fixed argv order, login-success chaining, Login/API-key environments, no key in terminal command/result/error, `0700` permissions, self-delete prologue, failed-terminal cleanup, and stale launcher cleanup.
 
@@ -334,21 +334,21 @@ fn launcher_is_private_and_deletes_itself_before_cursor_runs() {
 }
 ```
 
-- [ ] **Step 2: Run focused tests and verify RED**
+- [x] **Step 2: Run focused tests and verify RED**
 
 Run: `cargo test --manifest-path src-tauri/Cargo.toml services::cursor_official::tests -- --nocapture`
 
 Expected: FAIL because resume and launcher helpers do not exist.
 
-- [ ] **Step 3: Implement canonical workspace resolution**
+- [x] **Step 3: Implement canonical workspace resolution**
 
 Re-read and deduplicate metadata on every context/launch request. Prefer a canonical existing metadata `cwd`; otherwise validate the override. Return `WorkspaceRequired` for no path or a path removed after a prior context check, but return an error for an existing non-directory or a canonicalization failure. Validate the UUID before scanning.
 
-- [ ] **Step 4: Implement a terminal launcher-path entry point**
+- [x] **Step 4: Implement a terminal launcher-path entry point**
 
 Add a narrow terminal helper that receives the already-created launcher path and workspace, maps the existing preferred terminal, and invokes the existing terminal launch code. The command passed to terminals must be only `shell_escape(launcher_path)`; the key and Cursor argv remain inside the private file.
 
-- [ ] **Step 5: Implement launcher lifecycle**
+- [x] **Step 5: Implement launcher lifecycle**
 
 Create a random private directory and `cursor-launcher.sh` using `tempfile`, set the directory and file to `0700`, write an `unset` block, optional `export CURSOR_API_KEY=<shell-escaped-key>`, self-delete/rmdir lines, and either:
 
@@ -368,7 +368,7 @@ fi
 
 Delete the launcher directory immediately when terminal launch returns an error. Before creation, remove only CC Switch-owned launcher directories older than 24 hours whose names match the generated prefix.
 
-- [ ] **Step 6: Run focused tests and verify GREEN**
+- [x] **Step 6: Run focused tests and verify GREEN**
 
 Run: `cargo test --manifest-path src-tauri/Cargo.toml services::cursor_official::tests -- --nocapture`
 
@@ -376,7 +376,7 @@ Run: `cargo test --manifest-path src-tauri/Cargo.toml session_manager::terminal:
 
 Expected: PASS on all platforms; macOS-only launch execution remains cfg-gated, while pure launcher tests run on Unix.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src-tauri/src/services/cursor_official.rs src-tauri/src/session_manager/terminal/mod.rs
