@@ -11,11 +11,11 @@ related_commits: []
 
 ## 裁决
 
-**不再实现 CodeG Skills Core。** 本机 Skill 安装、启用、诊断与 runtime 链接的唯一长期 writer 是 **CC Switch Skills Core**（基于现有 `SkillService` 扩展）。
+本机 Skill 安装、启用、诊断与 runtime 链接的唯一长期 writer 是 **CC Switch Skills Core**（基于现有 `SkillService` 扩展）。
 
 - **agent-skills**：catalog / provenance SSOT；不安装、不写 runtime 目录。
 - **cc-switch**：中央库、activation、sync/doctor、runtime adapter。
-- **dev-rules / Twin / CodeG**：迁移期 legacy writer；稳定后 inactive 并删除写入路径。
+- **dev-rules / Twin**：迁移期 legacy writer；稳定后 inactive 并删除写入路径。
 
 ## 产品承诺
 
@@ -47,7 +47,7 @@ cc-switch skills doctor [--json]
 - 不要求所有 runtime 看到相同 active set。
 - 不做 agent-side router、session attestation、immutable 多版本 Store。
 - 不做 Project Skill 统一管理（`.cursor/skills` 等项目路径保持现有规则）。
-- **不在 agent-skills 扩 install/sync CLI**；不在 CodeG 投资 Skills Core。
+- **不在 agent-skills 扩 install/sync CLI。**
 - 不把 skills.sh / 硬编码 GitHub 仓库列表升格为 catalog SSOT（仅作补充发现源）。
 - 不把 Claude Desktop / OpenClaw 纳入 v1 Skills managed（现网无可用 skill sync）。
 
@@ -58,7 +58,6 @@ cc-switch skills doctor [--json]
 - **dev-rules** `sync.sh`：Cursor、Claude（经 cursor 整链）、Codex、Antigravity。
 - **cc-switch**：`~/.cc-switch/skills/` → Claude/Codex/Gemini/Pi 等（逐 skill 链接）。
 - **Twin**：`~/.twin/skills/twin` 及多个消费入口。
-- **CodeG**（legacy）：`~/.codeg/skills/`。
 
 **正确动作不是重写，而是扩展 cc-switch 已有地基：**
 
@@ -143,13 +142,13 @@ catalog-managed 磁盘 drift：`sync` fail closed，提示真实 Git owner，不
 | 场景 | 行为 |
 | --- | --- |
 | 全新机器 | 可用 `recommended` 生成**候选**初始 profile；UI 或 CLI **必须确认** |
-| 已有 legacy | doctor 识别 dev-rules / Twin / CodeG / cc-switch 旧装的 **active set**，作为候选 profile，展示 migration diff 后确认 |
+| 已有 legacy | doctor 识别 dev-rules / Twin / cc-switch 旧装的 **active set**，作为候选 profile，展示 migration diff 后确认 |
 | catalog 新增条目 | 默认**不启用**；不覆盖已有选择 |
 | foreign entry | **永不**自动接管 |
 
 `recommended` 只在 runtime **首次**进入 `managed` 时形成候选；确认后永不自动重放。
 
-**Pi 裁决：** 现网 Pi 是 exists=active（`toggle` 不持久化 `enabled_pi`，磁盘存在即启用）。这与「SQLite 是启用态唯一 SSOT」冲突。v1：Pi 进入 `managed` 后，exists=active 降为 adapter 生成物（磁盘存在跟随 SQLite）；未接管前保持现状。禁止把 exists=active 写成第二套启用态。
+**Pi 裁决：接管后跟数据库。** 现网 Pi 是「文件夹在就是开、不在就是关」，数据库不记开关。未接管前保持这套老规矩。一旦进入 `managed`，改成跟别的 Agent 一样：CC Switch 数据库说开就开、说关就关；磁盘上有没有文件夹只是执行结果，不能再当第二本账。
 
 ### Runtime adapters
 
@@ -192,7 +191,6 @@ cc-switch 在 **managed** 模式下必须采用上述布局，**废弃**向 `~/.
 **legacy import 扫描范围（首次接管）：**
 
 - `~/.cursor/skills`、`~/.codex/skills`、`~/.gemini/antigravity-cli/skills`
-- `~/.codeg/skills`（CodeG legacy）
 - `~/.twin/skills/twin`
 - 现有 cc-switch SSOT 与 `SKILLS_APP_IDS` 对应 runtime 目录
 
@@ -238,7 +236,6 @@ legacy writer 读到 marker 且自身 runtime 在 `managed_runtimes` 内（Claud
 | --- | --- | --- |
 | dev-rules | inactive contract；marker 存在时 skip home skill 写入 | 删除 home/global skill writer |
 | Twin | inactive；`twin` 走 catalog git 源 | 删除 runtime skill installer |
-| CodeG | legacy；`scan_unmanaged` 从 `~/.codeg/skills` 导入 | 不实现 Core；用户迁移后停用 |
 
 dev-rules **保留**项目 `.cursor/skills` 编辑入口与规则/sync；**删除**的是 home 层 skill symlink writer。
 
@@ -263,7 +260,7 @@ dev-rules **保留**项目 `.cursor/skills` 编辑入口与规则/sync；**删�
 
 - 用户在 CC Switch 完成 Library → 矩阵 → 诊断的完整旅程。
 - 共享 Skill 有唯一 Git owner + catalog identity。
-- SQLite activation 是本机启用态唯一 SSOT；symlink 与 `skills-control.json` 只是生成产物。Pi 进入 managed 后不再以 exists=active 为启用态。
+- SQLite activation 是本机启用态唯一 SSOT；symlink 与 `skills-control.json` 只是生成产物。Pi **接管后跟数据库**，不再用「文件夹在不在」当开关。
 - 已有 legacy 机器首次接管导入 active set，而非静默缩成两个 `recommended` skill。
 - foreign collision / catalog drift / writer overlap 在改链接前 fail closed。
 - UI 与 `cc-switch skills` CLI 共享同一 core 与 `--json` 语义。
@@ -271,10 +268,10 @@ dev-rules **保留**项目 `.cursor/skills` 编辑入口与规则/sync；**删�
 
 ## 验证
 
-- **单元测试**：catalog 解析、provenance 分类、身份映射 token、claude-cursor 布局、Pi managed 后启用态走 SQLite、managed/legacy 判定、foreign 分类、首次接管只应用一次 `recommended`。
+- **单元测试**：catalog 解析、provenance 分类、身份映射 token、claude-cursor 布局、Pi 接管后开关跟数据库、managed/legacy 判定、foreign 分类、首次接管只应用一次 `recommended`。
 - **集成测试**：clean-home 接管；legacy import；中断后重跑收敛；单 runtime legacy 不阻塞其它 runtime。
 - **主机验收**：`cc-switch skills doctor --json` 对已 managed runtime exit 0；矩阵选择与 runtime discovery 一致。
 
 ---
 
-**Supersedes：** 本地 ignored 稿 `2026-08-27-skill-ssot-design.md`（CodeG 控制面版本）。该稿不进入任何仓库主线；以本文件为唯一审批基线。
+**Supersedes：** 本地 ignored 稿 `2026-08-27-skill-ssot-design.md`。该稿不进入任何仓库主线；以本文件为唯一审批基线。
