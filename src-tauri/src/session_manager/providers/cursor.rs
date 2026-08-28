@@ -238,7 +238,6 @@ pub fn scan_sessions() -> Vec<SessionMeta> {
     scan_sessions_or_empty_in(&cursor_chats_root())
 }
 
-#[allow(dead_code)]
 pub fn index_status() -> CursorIndexStatus {
     index_status_in(&cursor_chats_root())
 }

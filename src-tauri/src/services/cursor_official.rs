@@ -505,7 +505,6 @@ fn get_status_with_runner<R: CursorCommandRunner>(
     )
 }
 
-#[allow(dead_code)]
 pub fn get_status() -> CursorOfficialStatus {
     get_status_with_runner(
         &SystemCursorCommandRunner,
@@ -595,7 +594,6 @@ fn get_resume_context_with_lookup<L: CursorSessionLookup>(
     }
 }
 
-#[allow(dead_code)]
 pub fn get_resume_context(
     session_id: &str,
     workspace_override: Option<&str>,
@@ -946,7 +944,6 @@ fn launch_login_with<R: CursorCommandRunner, T: CursorTerminalLauncher>(
     launch_prepared(terminal, &prepared, &workspace, &known_secrets)
 }
 
-#[allow(dead_code)]
 pub fn launch_session(
     session_id: &str,
     workspace_override: Option<&str>,
@@ -963,7 +960,6 @@ pub fn launch_session(
     )
 }
 
-#[allow(dead_code)]
 pub fn launch_login() -> Result<CursorLaunchResult, String> {
     launch_login_with(
         &SystemCursorCommandRunner,
@@ -973,7 +969,6 @@ pub fn launch_login() -> Result<CursorLaunchResult, String> {
     )
 }
 
-#[allow(dead_code)]
 pub fn launch_login_and_session(
     session_id: &str,
     workspace_override: Option<&str>,

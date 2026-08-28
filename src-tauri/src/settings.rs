@@ -807,8 +807,6 @@ pub fn get_settings_for_frontend() -> AppSettings {
     settings_for_frontend(get_settings())
 }
 
-// Consumed by the Cursor service/commands added later in this feature branch.
-#[allow(dead_code)]
 pub fn get_cursor_official_settings() -> CursorOfficialSettings {
     get_settings().cursor_official.unwrap_or_default()
 }
@@ -851,7 +849,6 @@ where
     Ok(())
 }
 
-#[allow(dead_code)]
 fn apply_cursor_official_update(
     settings: &mut AppSettings,
     auth_mode: CursorOfficialAuthMode,
@@ -876,14 +873,12 @@ fn apply_cursor_official_update(
     Ok(())
 }
 
-#[allow(dead_code)]
 fn clear_cursor_user_api_key_in(settings: &mut AppSettings) {
     if let Some(cursor) = &mut settings.cursor_official {
         cursor.user_api_key = None;
     }
 }
 
-#[allow(dead_code)]
 pub fn update_cursor_official_settings(
     auth_mode: CursorOfficialAuthMode,
     user_api_key: Option<String>,
@@ -891,7 +886,6 @@ pub fn update_cursor_official_settings(
     try_mutate_settings(|settings| apply_cursor_official_update(settings, auth_mode, user_api_key))
 }
 
-#[allow(dead_code)]
 pub fn clear_cursor_user_api_key() -> Result<(), AppError> {
     mutate_settings(clear_cursor_user_api_key_in)
 }

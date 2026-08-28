@@ -394,21 +394,21 @@ git commit -m "feat(cursor): resume sessions through private launchers"
 - Produces commands: `get_cursor_official_status`, `update_cursor_official_auth`, `clear_cursor_user_api_key`, `get_cursor_session_index_status`, `get_cursor_session_resume_context`, `launch_cursor_session`, `launch_cursor_login`, `launch_cursor_login_and_session`.
 - Command parameters use camelCase names `authMode`, `userApiKey`, `sessionId`, `workspaceOverride`.
 
-- [ ] **Step 1: Write failing command-layer tests for validation and serialization**
+- [x] **Step 1: Write failing command-layer tests for validation and serialization**
 
 Factor command input validation into ordinary functions so tests can call them without a Tauri runtime. Assert unknown auth mode and empty key fail, omitted key preserves, clear is explicit, and all launch results serialize to the approved structured states.
 
-- [ ] **Step 2: Run command tests and verify RED**
+- [x] **Step 2: Run command tests and verify RED**
 
 Run: `cargo test --manifest-path src-tauri/Cargo.toml commands::cursor::tests -- --nocapture`
 
 Expected: compile failure because the command module is absent.
 
-- [ ] **Step 3: Implement commands and registration**
+- [x] **Step 3: Implement commands and registration**
 
 Use `spawn_blocking` for filesystem/process work. Register all eight commands in `tauri::generate_handler!`; do not register Cursor as an app or provider.
 
-- [ ] **Step 4: Run command tests and a compile check**
+- [x] **Step 4: Run command tests and a compile check**
 
 Run: `cargo test --manifest-path src-tauri/Cargo.toml commands::cursor::tests -- --nocapture`
 
@@ -416,7 +416,7 @@ Run: `cargo check --manifest-path src-tauri/Cargo.toml`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src-tauri/src/commands/cursor.rs src-tauri/src/commands/mod.rs src-tauri/src/lib.rs

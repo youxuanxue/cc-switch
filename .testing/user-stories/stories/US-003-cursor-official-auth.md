@@ -59,6 +59,9 @@ Run:
 - 2026-08-28 RED (CLI service): `cargo test --manifest-path src-tauri/Cargo.toml services::cursor_official::tests -- --nocapture` exited 101 because the runner, official environment, status parser, runtime DTO, and sanitization interfaces did not exist.
 - 2026-08-28 RED (runtime hardening): the same suite then exposed blank legacy Key handling and a descendant process surviving output timeout.
 - 2026-08-28 GREEN (CLI service): the same command passed 9 tests without warnings, covering command order, bounded execution, official-only environment, safe status schema, remediation states, and credential redaction.
+- 2026-08-28 RED (command boundary): `cargo test --manifest-path src-tauri/Cargo.toml commands::cursor::tests -- --nocapture` exited 101 because the narrow auth-mode/key validator did not exist; DTO serialization assertions were already bound to the approved structured states.
+- 2026-08-28 GREEN (command boundary): the same command passed 2 tests, `cargo check --manifest-path src-tauri/Cargo.toml` exited 0, and `cargo test --manifest-path src-tauri/Cargo.toml us003_ -- --nocapture` passed all 5 cross-boundary US-003 Rust tests. Eight registered commands now expose only Login/User API Key, redacted status/index/context, and dedicated launch actions.
+- 2026-08-28 command gate: Rust formatting, `git diff --check`, and external project preflight exited 0 with only the repository's known integration skips and approved-doc branch warning.
 - Remaining auth service, command, renderer, and e2e evidence is recorded before this Story advances to Done.
 
 - Status: InTest
