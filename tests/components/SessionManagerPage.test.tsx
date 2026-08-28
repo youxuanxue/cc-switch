@@ -711,10 +711,12 @@ describe("SessionManagerPage", () => {
     );
 
     expect(
-      await screen.findByRole("button", { name: /回到会话/i }),
+      await screen.findByRole("button", {
+        name: /sessionManager.returnToSession/i,
+      }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: /恢复会话/i }),
+      screen.queryByRole("button", { name: /sessionManager.resume$/i }),
     ).not.toBeInTheDocument();
   });
 
@@ -732,7 +734,9 @@ describe("SessionManagerPage", () => {
     );
 
     expect(
-      await screen.findByRole("button", { name: /回到 CodeG/i }),
+      await screen.findByRole("button", {
+        name: /sessionManager.returnToCodeG/i,
+      }),
     ).toBeInTheDocument();
   });
 
@@ -750,7 +754,9 @@ describe("SessionManagerPage", () => {
       ).toBeInTheDocument(),
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /恢复会话/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /sessionManager.resume$/i }),
+    );
 
     await waitFor(() => {
       expect(launch).toHaveBeenCalledWith({
@@ -782,7 +788,9 @@ describe("SessionManagerPage", () => {
       ).toBeInTheDocument(),
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /恢复会话/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /sessionManager.resume$/i }),
+    );
 
     await waitFor(() => {
       expect(launch).toHaveBeenCalledWith({
@@ -810,7 +818,9 @@ describe("SessionManagerPage", () => {
       ).toBeInTheDocument(),
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /恢复会话/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /sessionManager.resume$/i }),
+    );
 
     await waitFor(() => {
       expect(toastErrorMock).toHaveBeenCalledWith(

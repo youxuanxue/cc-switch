@@ -73,7 +73,7 @@ import {
   getProviderLabel,
   getSessionDirectoryGroupKey,
   getSessionKey,
-  getSessionResumeButtonCopy,
+  getSessionResumeI18nKeys,
   groupSessionsByProviderAndDirectory,
   type SessionDirectoryGroup,
   type SessionProviderGroup,
@@ -346,7 +346,7 @@ export function SessionManagerPage({ appId }: { appId: string }) {
     selectedSession?.sessionId,
     selectedSession?.sourcePath,
   );
-  const resumeButton = getSessionResumeButtonCopy(resumeState?.appearance);
+  const resumeCopy = getSessionResumeI18nKeys(resumeState?.appearance);
   const deleteSessionMutation = useDeleteSessionMutation();
   const isDeleting = deleteSessionMutation.isPending || isBatchDeleting;
 
@@ -1618,33 +1618,13 @@ export function SessionManagerPage({ appId }: { appId: string }) {
                               >
                                 <Play className="size-3.5" />
                                 <span className="hidden sm:inline">
-                                  {t(
-                                    resumeState?.appearance === "return"
-                                      ? "sessionManager.returnToSession"
-                                      : resumeState?.appearance ===
-                                          "returnToCodeG"
-                                        ? "sessionManager.returnToCodeG"
-                                        : "sessionManager.resume",
-                                    {
-                                      defaultValue: resumeButton.label,
-                                    },
-                                  )}
+                                  {t(resumeCopy.labelKey)}
                                 </span>
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent>
                               {selectedSession.resumeCommand
-                                ? t(
-                                    resumeState?.appearance === "return"
-                                      ? "sessionManager.returnToSessionTooltip"
-                                      : resumeState?.appearance ===
-                                          "returnToCodeG"
-                                        ? "sessionManager.returnToCodeGTooltip"
-                                        : "sessionManager.resumeTooltip",
-                                    {
-                                      defaultValue: resumeButton.tooltip,
-                                    },
-                                  )
+                                ? t(resumeCopy.tooltipKey)
                                 : t("sessionManager.noResumeCommand", {
                                     defaultValue: "此会话无法恢复",
                                   })}
