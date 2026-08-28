@@ -36,16 +36,19 @@ related_commits: []
 
 分头进门：可以先只用一部分 Agent。进了就必须共库。没有「在用但还按老规矩」的第三态。
 
-**第一次：候选 + 确认，不自动倒库。**
+**第一次：先定在用 Agent，再确认工作台。不自动倒库。**
+
+1. 人先勾这台机器**在用哪些 Agent**（v1 接不住的不出现）。确认前不改链接。
+2. 再出技能候选，两份不混：
 
 | 场景 | 候选从哪来 |
 | --- | --- |
-| 这台机器已有现场 | 只提各 Agent 目录里**已经在用的**；不把 catalog `recommended` 混进来 |
-| 空机器 | 只用 catalog `recommended` |
+| 已勾的在用 Agent 目录里已有技能 | 只提这些目录里**已经在用的**；不把 catalog `recommended` 混进来 |
+| 已勾的在用 Agent 都是空的（空机器） | 只用 catalog `recommended` |
 | catalog 后来新增 | **不进库**，除非人再装 |
 | 外来物（foreign） | **永不**自动进库、不删 |
 
-两份名单不混成一堆。确认前不改任何 runtime 链接。浏览 UI 不得隐式改库或在用名单。
+确认工作台之前不改任何 runtime 链接。浏览 UI 不得隐式改库或在用名单。
 
 **后来入伙。** 对齐当前库才能进门：库里缺的必须补上，否则入伙失败。它自己多出来、库里没有的，当外来物，不碰。
 
@@ -102,7 +105,7 @@ per-agent adapters（symlink / copy）
 
 - `source.kind: self` → 当前 catalog commit 内路径。
 - `source.kind: git` → `https://github.com/.../*.git` + 40 位 SHA。
-- `recommended` **只**给空机器第一次候选；不是工作台状态，确认后不重放。
+- `recommended` **只**给「已勾在用 Agent 目录都空」的第一次技能候选；不是工作台状态，确认后不重放。
 
 description 从来源 `SKILL.md` 派生；catalog 不维护第二份 metadata。
 
@@ -139,7 +142,7 @@ description 从来源 `SKILL.md` 派生；catalog 不维护第二份 metadata。
 ~/.claude/skills         → ~/.cursor/skills
 ```
 
-第一次候选扫描：`~/.cursor/skills`、`~/.codex/skills`、`~/.gemini/antigravity-cli/skills`、`~/.twin/skills/twin`、现有中央库与 `SKILLS_APP_IDS` 对应目录。只生成候选，不自动进库。
+第一次技能候选**只扫已勾为在用的** Agent 目录（及其中已有的中央库投影）。未勾的目录、货架、其它发现源不进候选。只生成名单，不自动进库。
 
 ### Ownership marker
 
@@ -206,7 +209,7 @@ dev-rules **保留**项目 `.cursor/skills` 编辑入口；**删除**的是 home
 - 下一份实现不出现第二 writer、第二本启用账、技能 × Agent 开关。
 - 库成员是工作集唯一 SSOT；symlink 与 `skills-control.json` 是生成物。
 - 装/卸/入伙：全部在用 Agent 写齐才算成功。
-- 第一次只出候选；有现场不混 `recommended`。
+- 第一次先勾在用 Agent，再确认工作台；有现场不混 `recommended`。
 - catalog 新增默认不进库。
 - foreign 不自动进库、不被删。
 - 在用 token 上 legacy writer 可被 doctor 证明已停写。
@@ -214,8 +217,8 @@ dev-rules **保留**项目 `.cursor/skills` 编辑入口；**删除**的是 home
 
 ## 验证（Core 实现 PR 承担）
 
-- **单元**：catalog 解析、库成员、在用名单、`claude-cursor` 布局、Pi 在用后跟库、整笔失败、foreign、空机器 vs 有现场的第一次候选、catalog 新增不进库。
-- **集成**：空机器确认 `recommended`；有现场只确认已用项；入伙对齐；装/卸中断后收敛；在用 Agent 失败则库不变。
+- **单元**：catalog 解析、库成员、在用名单、`claude-cursor` 布局、Pi 在用后跟库、整笔失败、foreign、先勾 Agent 再出候选、空目录才用 `recommended`、catalog 新增不进库。
+- **集成**：先定在用再确认工作台；有现场只确认已用项；入伙对齐；装/卸中断后收敛；在用 Agent 失败则库不变。
 - **主机**：`doctor --json` 对当前在用名单 exit 0；屏幕上的库与 doctor 一致。
 
 ---
