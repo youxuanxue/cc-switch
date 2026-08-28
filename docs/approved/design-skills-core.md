@@ -21,6 +21,13 @@ related_commits: []
 
 用户在 CC Switch 里完成一件事：**看见技能库 → 选择 Agent → 启用 / 停用 → 看到真实诊断**。用户不需要理解各 runtime 的 skills 目录，也不手工维护 symlink。
 
+v1 **技能库**只由两类条目组成：
+
+- **catalog-managed**：来自 `agent-skills/skills.yaml`
+- **本机已装**：`bundled` / `local-draft`
+
+skills.sh 与现有硬编码 GitHub 仓库只保留当前发现入口，**冻结不再新增**；不升格为库的 SSOT，也不在矩阵里变成第三、第四条货架。
+
 一个事实只有一个 owner：
 
 | 事实 | Owner |
@@ -48,7 +55,7 @@ cc-switch skills doctor [--json]
 - 不做 agent-side router、session attestation、immutable 多版本 Store。
 - 不做 Project Skill 统一管理（`.cursor/skills` 等项目路径保持现有规则）。
 - **不在 agent-skills 扩 install/sync CLI。**
-- 不把 skills.sh / 硬编码 GitHub 仓库列表升格为 catalog SSOT（仅作补充发现源）。
+- 不把 skills.sh / 硬编码 GitHub 仓库列表升格为 catalog SSOT；只保留现有发现入口并冻结，不再新增仓库或发现源。
 - 不把 Claude Desktop / OpenClaw 纳入 v1 Skills managed（现网无可用 skill sync）。
 
 ## 现状与地基
