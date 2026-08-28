@@ -17,6 +17,8 @@ GEMINI.md
 /.idea
 /.vscode
 vitest-report.json
+playwright-report/
+test-results/
 nul
 
 # Flatpak build artifacts

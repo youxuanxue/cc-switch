@@ -50,7 +50,7 @@ Run:
     cargo test --manifest-path src-tauri/Cargo.toml session_manager:: -- --nocapture
     pnpm exec vitest run tests/config/cursorCapabilities.test.ts tests/components/cursorResumeState.test.ts tests/components/SessionManagerPage.test.tsx tests/scripts/check-cursor-session-ssot.test.ts
     node scripts/check-cursor-session-ssot.mjs
-    pnpm test:e2e -- tests/e2e/cursor-official-sessions.spec.ts --grep "US-004"
+    pnpm test:e2e tests/e2e/cursor-official-sessions.spec.ts --grep "US-004"
 
 ## Evidence
 
@@ -65,6 +65,7 @@ Run:
 - 2026-08-28 GREEN (detail boundary): the Cursor-specific detail integration test supplies defensive `sourcePath` and `resumeCommand` values yet renders only `CursorResumeGate`; it does not request messages, show transcript/empty/count/TOC shells, expose the generic command preview, or call `launch_session_terminal`.
 - 2026-08-28 RED (mechanical SSOT contract): `pnpm exec vitest run tests/scripts/check-cursor-session-ssot.test.ts` failed all 5 executable fixture cases because `scripts/check-cursor-session-ssot.mjs` did not exist.
 - 2026-08-28 GREEN (mechanical SSOT contract): the same command passed 5 tests after the checker gained stable auth, resume, delete, and generic-terminal finding codes. `node scripts/check-cursor-session-ssot.mjs` returned `cursor-session-ssot: PASS` for the real repository, and project preflight executed the same command from `.preflight/local-lint.conf` successfully.
-- Remaining real-renderer e2e and final full-suite evidence is recorded before this Story advances to Done.
+- 2026-08-28 GREEN (real renderer): Playwright confirmed Cursor exposes no delete button, batch-management action, checkbox, transcript/message shell, generic terminal launch, or `supported | conditional | unsupported` label, and keeps technical details collapsed by default.
+- Remaining final full-suite evidence is recorded before this Story advances to Done.
 
 - Status: InTest

@@ -49,7 +49,7 @@ Run:
     cargo test --manifest-path src-tauri/Cargo.toml services::cursor_official::tests -- --nocapture
     cargo test --manifest-path src-tauri/Cargo.toml session_manager::terminal::tests -- --nocapture
     pnpm test:unit -- tests/components/cursorResumeState.test.ts tests/components/CursorResumeGate.test.tsx tests/components/SessionManagerPage.test.tsx
-    pnpm test:e2e -- tests/e2e/cursor-official-sessions.spec.ts --grep "US-002"
+    pnpm test:e2e tests/e2e/cursor-official-sessions.spec.ts --grep "US-002"
 
 ## Evidence
 
@@ -61,6 +61,7 @@ Run:
 - 2026-08-28 GREEN (renderer state): `pnpm exec vitest run tests/hooks/useCursorOfficial.test.tsx tests/config/cursorCapabilities.test.ts tests/components/cursorResumeState.test.ts` passed 7 tests, including the fixed platform → CLI → workspace → authentication → ready priority; `pnpm typecheck`, targeted Prettier, and `git diff --check` exited 0.
 - 2026-08-28 RED (inline resume): `pnpm exec vitest run tests/components/CursorResumeGate.test.tsx tests/components/SessionManagerPage.test.tsx` exited 1 because `CursorResumeGate` did not exist and the Cursor detail still lacked the dedicated Continue action. A second focused RED proved that a selected path had to be replaced by the canonical workspace returned from resume-context validation before launch.
 - 2026-08-28 GREEN (inline resume): the same focused command passed 31 tests. Coverage includes dedicated ready/Login/User API Key launch IPC, silent directory cancellation, canonical override retention through authentication, per-session override reset, fixed state priority, separate index diagnostics, launch-time `workspaceRequired` recovery, collapsed technical details, and the absence of Cursor message/generic-terminal calls. `pnpm typecheck`, targeted Prettier, and `git diff --check` exited 0.
-- Remaining backend GREEN, renderer, and e2e evidence is recorded before this Story advances to Done.
+- 2026-08-28 GREEN (real renderer): Playwright verified one-click ready resume calls only `launch_cursor_session`, while a moved workspace is selected once, canonicalized through resume context, retained through Login remediation, and launched only through `launch_cursor_login_and_session`; no generic terminal IPC is recorded.
+- Remaining final full-suite evidence is recorded before this Story advances to Done.
 
 - Status: InTest

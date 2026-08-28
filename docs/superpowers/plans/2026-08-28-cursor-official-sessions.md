@@ -729,19 +729,19 @@ git commit -m "test(cursor): guard session state owners"
 - The IPC harness installs `window.__TAURI_INTERNALS__` before renderer modules execute, records command/payload calls, supports event callbacks, and returns stateful command results.
 - Test state never records or returns the submitted User API Key body after `update_cursor_official_auth` resolves.
 
-- [ ] **Step 1: Add Playwright and write the failing browser spec**
+- [x] **Step 1: Add Playwright and write the failing browser spec**
 
 Install `@playwright/test` as a dev dependency. Drive the full renderer by setting existing localStorage navigation keys before load, then cover Auth Center, Cursor filtering/grouping, ready resume, workspace remediation, login/API-key combinations, hidden transcript/delete/capability labels, and collapsed technical details.
 
-- [ ] **Step 2: Run e2e and verify RED**
+- [x] **Step 2: Run e2e and verify RED**
 
 Run: `pnpm exec playwright install chromium`
 
-Run: `pnpm test:e2e -- tests/e2e/cursor-official-sessions.spec.ts`
+Run: `pnpm test:e2e tests/e2e/cursor-official-sessions.spec.ts`
 
 Expected: FAIL until the IPC harness and UI contracts are complete.
 
-- [ ] **Step 3: Implement the Tauri IPC browser harness**
+- [x] **Step 3: Implement the Tauri IPC browser harness**
 
 Use `page.addInitScript` to install Tauri metadata, callback registration, event listen/unlisten behavior, and an async `invoke(cmd, payload)` switch. Return safe defaults for normal App bootstrap commands and explicit Cursor fixtures for the acceptance paths. Expose only a sanitized call log to assertions:
 
@@ -751,13 +751,13 @@ type RecordedInvoke = { command: string; payloadKeys: string[]; payload: unknown
 
 For auth update, record `payloadKeys` and replace `userApiKey` with `"[REDACTED]"` before storage.
 
-- [ ] **Step 4: Make the browser spec GREEN and add CI execution**
+- [x] **Step 4: Make the browser spec GREEN and add CI execution**
 
-Run: `pnpm test:e2e -- tests/e2e/cursor-official-sessions.spec.ts`
+Run: `pnpm test:e2e tests/e2e/cursor-official-sessions.spec.ts`
 
 Expected: PASS in Chromium against the Vite renderer. Add a frontend CI step that installs Chromium and runs `pnpm test:e2e` after unit/type checks.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add package.json pnpm-lock.yaml playwright.config.ts tests/e2e/tauriIpcHarness.ts tests/e2e/cursor-official-sessions.spec.ts .github/workflows/ci.yml
@@ -786,7 +786,7 @@ Scan `/Users/feng/.cursor/chats/*/*/meta.json` and report only counts: files, pa
 cargo test --manifest-path src-tauri/Cargo.toml session_manager::providers::cursor::tests -- --nocapture
 cargo test --manifest-path src-tauri/Cargo.toml services::cursor_official::tests -- --nocapture
 pnpm test:unit -- tests/config/cursorCapabilities.test.ts tests/hooks/useCursorOfficial.test.tsx tests/components/CursorOfficialAuthControl.test.tsx tests/components/cursorResumeState.test.ts tests/components/CursorResumeGate.test.tsx tests/components/SessionManagerPage.test.tsx tests/config/localeCoverage.test.ts tests/scripts/check-cursor-session-ssot.test.ts
-pnpm test:e2e -- tests/e2e/cursor-official-sessions.spec.ts
+pnpm test:e2e tests/e2e/cursor-official-sessions.spec.ts
 ```
 
 Expected: PASS.

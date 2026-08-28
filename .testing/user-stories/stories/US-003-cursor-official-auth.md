@@ -49,7 +49,7 @@ Run:
 
     cargo test --manifest-path src-tauri/Cargo.toml us003_ -- --nocapture
     pnpm exec vitest run tests/hooks/useCursorOfficial.test.tsx tests/components/CursorOfficialAuthControl.test.tsx tests/components/SettingsDialog.test.tsx tests/msw/cursorFixtures.test.ts
-    pnpm test:e2e -- tests/e2e/cursor-official-sessions.spec.ts --grep "US-003"
+    pnpm test:e2e tests/e2e/cursor-official-sessions.spec.ts --grep "US-003"
 
 ## Evidence
 
@@ -69,6 +69,7 @@ Run:
 - 2026-08-28 GREEN (shared auth UI): `pnpm exec vitest run tests/components/CursorOfficialAuthControl.test.tsx tests/components/SettingsDialog.test.tsx` passed 15 tests. Coverage keeps Login visible as the primary path, places User API Key under “其他方式”, clears submitted input, renders only the configured mask, routes compact continuation callbacks, uses explicit clear, removes the center-level Beta, and preserves existing auth sections through thin composition; `pnpm typecheck` and `git diff --check` exited 0.
 - 2026-08-28 RED (locale and IPC fixtures): four locale contract cases failed with the missing Cursor key set; the Cursor IPC fixture test then failed because state setters and the `update_cursor_official_auth` MSW handler did not exist.
 - 2026-08-28 GREEN (locale and IPC fixtures): `pnpm exec vitest run tests/config/localeCoverage.test.ts tests/msw/cursorFixtures.test.ts tests/components/SessionManagerPage.test.tsx tests/components/SettingsDialog.test.tsx` passed 47 tests. Four locales now carry the complete Cursor runtime copy contract, and the stateful `cursorApi → invoke → MSW` fixture immediately redacts `userApiKey` in its recorded call while returning only `hasUserApiKey`. `pnpm typecheck`, targeted Prettier, and `git diff --check` exited 0.
-- Remaining SSOT-contract, real-renderer e2e, and final full-suite evidence is recorded before this Story advances to Done.
+- 2026-08-28 GREEN (real renderer): Playwright opened Settings → Auth, kept Login primary and User API Key under “其他方式”, cleared the submitted input, displayed only the configured mask, and proved the browser IPC call log stores `[REDACTED]` rather than the submitted key body.
+- Remaining final full-suite evidence is recorded before this Story advances to Done.
 
 - Status: InTest

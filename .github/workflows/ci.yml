@@ -43,6 +43,7 @@ jobs:
               - "tsconfig.node.json"
               - "vite.config.ts"
               - "vitest.config.ts"
+              - "playwright.config.ts"
               - "tailwind.config.cjs"
               - "postcss.config.cjs"
               - "components.json"
@@ -98,6 +99,12 @@ jobs:
 
       - name: Unit tests
         run: pnpm test:unit
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Browser acceptance tests
+        run: pnpm test:e2e
 
   backend:
     name: Backend Checks
