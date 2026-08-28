@@ -249,3 +249,26 @@ export const highlightText = (text: string, query: string): ReactNode => {
       : part,
   );
 };
+
+export type SessionResumeAppearance = "resume" | "return" | "returnToCodeG";
+
+export function getSessionResumeButtonCopy(
+  appearance: SessionResumeAppearance | undefined,
+): { label: string; tooltip: string } {
+  if (appearance === "return") {
+    return {
+      label: "回到会话",
+      tooltip: "切换到已打开的会话窗口",
+    };
+  }
+  if (appearance === "returnToCodeG") {
+    return {
+      label: "回到 CodeG",
+      tooltip: "该会话已在 CodeG 中打开",
+    };
+  }
+  return {
+    label: "恢复会话",
+    tooltip: "在终端中恢复此会话",
+  };
+}

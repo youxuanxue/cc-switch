@@ -12,6 +12,17 @@ export interface DeleteSessionResult extends DeleteSessionOptions {
   error?: string;
 }
 
+export type ResumeLaunchResult =
+  | { action: "launched" }
+  | { action: "focused"; app: string }
+  | { action: "occupied"; holder: string };
+
+export type SessionResumeAppearance = "resume" | "return" | "returnToCodeG";
+
+export interface SessionResumeState {
+  appearance: SessionResumeAppearance;
+}
+
 export const sessionsApi = {
   async list(): Promise<SessionMeta[]> {
     return await invoke("list_sessions");
@@ -22,6 +33,16 @@ export const sessionsApi = {
     sourcePath: string,
   ): Promise<SessionMessage[]> {
     return await invoke("get_session_messages", { providerId, sourcePath });
+  },
+
+  async getResumeState(
+    providerId: string,
+    sessionId: string,
+  ): Promise<SessionResumeState> {
+    return await invoke("get_session_resume_state", {
+      providerId,
+      sessionId,
+    });
   },
 
   async delete(options: DeleteSessionOptions): Promise<boolean> {
@@ -43,12 +64,16 @@ export const sessionsApi = {
     command: string;
     cwd?: string | null;
     customConfig?: string | null;
-  }): Promise<boolean> {
-    const { command, cwd, customConfig } = options;
+    sessionId?: string | null;
+    providerId?: string | null;
+  }): Promise<ResumeLaunchResult> {
+    const { command, cwd, customConfig, sessionId, providerId } = options;
     return await invoke("launch_session_terminal", {
       command,
       cwd,
       customConfig,
+      sessionId,
+      providerId,
     });
   },
 };
