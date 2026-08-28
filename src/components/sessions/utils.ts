@@ -252,23 +252,23 @@ export const highlightText = (text: string, query: string): ReactNode => {
 
 export type SessionResumeAppearance = "resume" | "return" | "returnToCodeG";
 
-export function getSessionResumeButtonCopy(
+export function getSessionResumeI18nKeys(
   appearance: SessionResumeAppearance | undefined,
-): { label: string; tooltip: string } {
+): { labelKey: string; tooltipKey: string } {
   if (appearance === "return") {
     return {
-      label: "回到会话",
-      tooltip: "切换到已打开的会话窗口",
+      labelKey: "sessionManager.returnToSession",
+      tooltipKey: "sessionManager.returnToSessionTooltip",
     };
   }
   if (appearance === "returnToCodeG") {
     return {
-      label: "回到 CodeG",
-      tooltip: "该会话已在 CodeG 中打开",
+      labelKey: "sessionManager.returnToCodeG",
+      tooltipKey: "sessionManager.returnToCodeGTooltip",
     };
   }
   return {
-    label: "恢复会话",
-    tooltip: "在终端中恢复此会话",
+    labelKey: "sessionManager.resume",
+    tooltipKey: "sessionManager.resumeTooltip",
   };
 }

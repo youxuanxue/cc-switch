@@ -325,7 +325,7 @@ fn collect_file_holder(path: &Path, view: &dyn ProcessView, pids: &mut Vec<u32>)
 pub fn find_live_writer(
     session_id: &str,
     source_path: Option<&Path>,
-    config_dir: &Path,
+    lock_config_dir: Option<&Path>,
     view: &dyn ProcessView,
 ) -> Option<WriterInfo> {
     if !is_safe_session_id(session_id) {
@@ -347,7 +347,7 @@ pub fn find_live_writer(
     if let Some(path) = source_path {
         collect_file_holder(path, view, &mut pids);
     }
-    if let Some(lock_path) = writer_lock_path(config_dir, session_id) {
+    if let Some(lock_path) = lock_config_dir.and_then(|dir| writer_lock_path(dir, session_id)) {
         collect_file_holder(&lock_path, view, &mut pids);
     }
 
@@ -447,10 +447,10 @@ pub fn apply_decision(decision: ResumeDecision) -> Result<ResumeLaunchResult, St
 pub fn resume_decision_for_session(
     session_id: &str,
     source_path: Option<&Path>,
-    config_dir: &Path,
+    lock_config_dir: Option<&Path>,
     view: &dyn ProcessView,
 ) -> ResumeDecision {
-    decide_resume(find_live_writer(session_id, source_path, config_dir, view).as_ref())
+    decide_resume(find_live_writer(session_id, source_path, lock_config_dir, view).as_ref())
 }
 
 pub fn appearance_from_decision(decision: &ResumeDecision) -> SessionResumeAppearance {
@@ -465,17 +465,16 @@ pub fn appearance_from_decision(decision: &ResumeDecision) -> SessionResumeAppea
 }
 
 pub fn resume_state_for_session(
-    _provider_id: &str,
     session_id: &str,
     source_path: Option<&Path>,
-    config_dir: &Path,
+    lock_config_dir: Option<&Path>,
     view: &dyn ProcessView,
 ) -> SessionResumeState {
     SessionResumeState {
         appearance: appearance_from_decision(&resume_decision_for_session(
             session_id,
             source_path,
-            config_dir,
+            lock_config_dir,
             view,
         )),
     }
@@ -645,7 +644,7 @@ mod tests {
         let decision = resume_decision_for_session(
             "01a04642-3684-7963-b9cf-d0db978ce131",
             None,
-            Path::new("/tmp/codex"),
+            Some(Path::new("/tmp/codex")),
             &view,
         );
 
@@ -688,7 +687,7 @@ mod tests {
         let decision = resume_decision_for_session(
             "01a04642-3684-7963-b9cf-d0db978ce131",
             None,
-            Path::new("/tmp/codex"),
+            Some(Path::new("/tmp/codex")),
             &view,
         );
 
@@ -705,7 +704,7 @@ mod tests {
         let view = MapView::new(HashMap::new());
 
         assert_eq!(
-            resume_decision_for_session("session-1", None, Path::new("/tmp/codex"), &view),
+            resume_decision_for_session("session-1", None, Some(Path::new("/tmp/codex")), &view),
             ResumeDecision::LaunchNew
         );
     }
@@ -763,14 +762,7 @@ mod tests {
             SessionResumeAppearance::Resume
         );
         assert_eq!(
-            resume_state_for_session(
-                "claude",
-                "any",
-                None,
-                Path::new("/tmp/codex"),
-                &MapView::new(HashMap::new()),
-            )
-            .appearance,
+            resume_state_for_session("any", None, None, &MapView::new(HashMap::new())).appearance,
             SessionResumeAppearance::Resume
         );
     }
@@ -794,21 +786,14 @@ mod tests {
     fn live_claude_tui_is_return_not_resume() {
         let view = iterm_view(42, "claude --resume ses_abc123");
         assert_eq!(
-            resume_decision_for_session("ses_abc123", None, Path::new("/tmp/claude"), &view),
+            resume_decision_for_session("ses_abc123", None, None, &view),
             ResumeDecision::Focus {
                 app: "iTerm".to_string(),
                 tty: Some("ttys019".to_string()),
             }
         );
         assert_eq!(
-            resume_state_for_session(
-                "claude",
-                "ses_abc123",
-                None,
-                Path::new("/tmp/claude"),
-                &view,
-            )
-            .appearance,
+            resume_state_for_session("ses_abc123", None, None, &view).appearance,
             SessionResumeAppearance::Return
         );
     }
@@ -822,7 +807,7 @@ mod tests {
         ] {
             let view = iterm_view(42, command);
             assert_eq!(
-                resume_decision_for_session(session_id, None, Path::new("/tmp/unused"), &view),
+                resume_decision_for_session(session_id, None, None, &view),
                 ResumeDecision::Focus {
                     app: "iTerm".to_string(),
                     tty: Some("ttys019".to_string()),
@@ -839,7 +824,7 @@ mod tests {
             proc(10, 1, None, "rg ses_abc123 ~/.claude"),
         ]));
         assert_eq!(
-            resume_decision_for_session("ses_abc123", None, Path::new("/tmp/claude"), &view),
+            resume_decision_for_session("ses_abc123", None, None, &view),
             ResumeDecision::LaunchNew
         );
     }
@@ -859,12 +844,7 @@ mod tests {
         .with_holder(source.clone(), 77);
 
         assert_eq!(
-            resume_decision_for_session(
-                "ses_abc123",
-                Some(&source),
-                Path::new("/tmp/claude"),
-                &view,
-            ),
+            resume_decision_for_session("ses_abc123", Some(&source), None, &view),
             ResumeDecision::Occupied {
                 holder: "CodeG".to_string(),
             }
@@ -882,5 +862,32 @@ mod tests {
         assert_eq!(procs[0].tty.as_deref(), Some("ttys019"));
         assert_eq!(procs[0].command, "claude --resume ses_abc123");
         assert_eq!(procs[1].tty, None);
+    }
+
+    #[test]
+    fn a_codex_lock_does_not_occupy_a_claude_session() {
+        let session_id = "ses_shared";
+        let lock = writer_lock_path(Path::new("/tmp/codex"), session_id).expect("lock");
+        let view = MapView::new(HashMap::from([
+            proc(77, 76, None, "node /opt/homebrew/bin/codex-acp"),
+            proc(
+                76,
+                1,
+                None,
+                "/Users/feng/Codes/dev/codeg-deploy-0261/src-tauri/target/release/codeg-server",
+            ),
+        ]))
+        .with_holder(lock, 77);
+
+        assert_eq!(
+            resume_decision_for_session(session_id, None, None, &view),
+            ResumeDecision::LaunchNew
+        );
+        assert_eq!(
+            resume_decision_for_session(session_id, None, Some(Path::new("/tmp/codex")), &view),
+            ResumeDecision::Occupied {
+                holder: "CodeG".to_string(),
+            }
+        );
     }
 }
