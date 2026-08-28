@@ -4,7 +4,7 @@ pub mod terminal;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
-use providers::{claude, codex, gemini, grokbuild, hermes, openclaw, opencode, pi};
+use providers::{claude, codex, cursor, gemini, grokbuild, hermes, openclaw, opencode, pi};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -56,7 +56,7 @@ pub struct DeleteSessionOutcome {
 }
 
 pub fn scan_sessions() -> Vec<SessionMeta> {
-    let (r1, r2, r3, r4, r5, r6, r7, r8) = std::thread::scope(|s| {
+    let (r1, r2, r3, r4, r5, r6, r7, r8, r9) = std::thread::scope(|s| {
         let h1 = s.spawn(codex::scan_sessions);
         let h2 = s.spawn(claude::scan_sessions);
         let h3 = s.spawn(opencode::scan_sessions);
@@ -65,6 +65,7 @@ pub fn scan_sessions() -> Vec<SessionMeta> {
         let h6 = s.spawn(hermes::scan_sessions);
         let h7 = s.spawn(grokbuild::scan_sessions);
         let h8 = s.spawn(pi::scan_sessions);
+        let h9 = s.spawn(cursor::scan_sessions);
         (
             h1.join().unwrap_or_default(),
             h2.join().unwrap_or_default(),
@@ -74,6 +75,7 @@ pub fn scan_sessions() -> Vec<SessionMeta> {
             h6.join().unwrap_or_default(),
             h7.join().unwrap_or_default(),
             h8.join().unwrap_or_default(),
+            h9.join().unwrap_or_default(),
         )
     });
 
@@ -86,6 +88,7 @@ pub fn scan_sessions() -> Vec<SessionMeta> {
     sessions.extend(r6);
     sessions.extend(r7);
     sessions.extend(r8);
+    sessions.extend(r9);
 
     sessions.sort_by(|a, b| {
         let a_ts = a.last_active_at.or(a.created_at).unwrap_or(0);
@@ -321,6 +324,17 @@ mod tests {
                 .expect_err("expected missing source path to fail");
 
         assert!(err.contains("session source not found"));
+    }
+
+    #[test]
+    fn us004_rejects_cursor_message_loading_and_deletion() {
+        let message_error = load_messages("cursor", "/tmp/does-not-matter")
+            .expect_err("Cursor transcripts are unsupported");
+        assert_eq!(message_error, "Unsupported provider: cursor");
+
+        let delete_error = delete_session("cursor", "session-id", "/tmp/does-not-matter")
+            .expect_err("Cursor deletion is unsupported");
+        assert_eq!(delete_error, "Unsupported provider: cursor");
     }
 
     #[test]

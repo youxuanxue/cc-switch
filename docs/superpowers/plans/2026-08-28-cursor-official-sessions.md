@@ -172,7 +172,7 @@ git commit -m "feat(cursor): secure official auth settings"
 - Produces: `find_session(session_id: &str) -> Result<CursorSessionRecord, String>` using the same scan/dedup function as listing.
 - Produces: `CursorSessionRecord { chat_id, title, cwd, created_at_ms, updated_at_ms, metadata_path }` for resume resolution.
 
-- [ ] **Step 1: Write failing adapter tests with real temporary directory layouts**
+- [x] **Step 1: Write failing adapter tests with real temporary directory layouts**
 
 Cover valid mapping, `hasConversation=false`, malformed JSON isolation, invalid UUID directory names, empty/missing `cwd`, missing directories, duplicate chat IDs, equal timestamps, and non-existent/unreadable/unrecognized roots.
 
@@ -196,13 +196,13 @@ fn winning_non_conversation_record_suppresses_older_conversation_record() {
 }
 ```
 
-- [ ] **Step 2: Run adapter tests and verify RED**
+- [x] **Step 2: Run adapter tests and verify RED**
 
 Run: `cargo test --manifest-path src-tauri/Cargo.toml session_manager::providers::cursor::tests -- --nocapture`
 
 Expected: compile failure because the Cursor provider module and interfaces do not exist.
 
-- [ ] **Step 3: Implement the scanner and shared resolver**
+- [x] **Step 3: Implement the scanner and shared resolver**
 
 Walk exactly `<root>/<workspace-bucket>/<chat-id>/meta.json`, require `uuid::Uuid::parse_str(chat_id)`, canonicalize metadata paths for tie-breaking, skip individual read/parse failures, deduplicate before applying the winning record's `hasConversation`, and map records as:
 
@@ -222,17 +222,17 @@ SessionMeta {
 
 Add Cursor as the ninth scoped scan thread. Log an unavailable Cursor index at debug/warn level and return an empty Cursor slice without changing `scan_sessions() -> Vec<SessionMeta>`.
 
-- [ ] **Step 4: Add deletion/message dispatch protection tests**
+- [x] **Step 4: Add deletion/message dispatch protection tests**
 
 Add tests in `session_manager/mod.rs` asserting `load_messages("cursor", ...)` and `delete_session("cursor", ...)` return `Unsupported provider: cursor` before any filesystem mutation.
 
-- [ ] **Step 5: Run focused tests and verify GREEN**
+- [x] **Step 5: Run focused tests and verify GREEN**
 
 Run: `cargo test --manifest-path src-tauri/Cargo.toml session_manager:: -- --nocapture`
 
 Expected: PASS; Cursor sessions have no source or resume command and other provider tests remain green.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src-tauri/src/session_manager/providers/cursor.rs src-tauri/src/session_manager/providers/mod.rs src-tauri/src/session_manager/mod.rs

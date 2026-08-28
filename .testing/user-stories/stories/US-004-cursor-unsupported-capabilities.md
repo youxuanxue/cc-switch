@@ -53,6 +53,8 @@ Run:
 ## Evidence
 
 - Approval evidence: design status approved by user-chat-2026-08-28.
-- Execution evidence is recorded when the Story advances to InTest and Done.
+- 2026-08-28 RED context: the Cursor provider test module was introduced with backend message/deletion rejection coverage while discovery interfaces were still absent; the combined focused suite exited 101 on those missing discovery interfaces.
+- 2026-08-28 GREEN (backend unsupported paths): `cargo test --manifest-path src-tauri/Cargo.toml session_manager:: -- --nocapture` passed 90 tests, including exact `Unsupported provider: cursor` rejection before message loading or deletion.
+- Remaining unsupported-capability, renderer, contract-check, and e2e evidence is recorded before this Story advances to Done.
 
-- Status: Ready
+- Status: InTest
