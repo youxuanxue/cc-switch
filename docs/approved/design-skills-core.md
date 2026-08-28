@@ -29,6 +29,8 @@ related_commits: []
 
 **一把开关，开关就是库。** 没有「装着但关掉」。进库 = 放到工作台 = 所有在用 Agent 看见。出库 = 卸下。效率靠管库（装/卸），不靠静音。Catalog 可以很大；**同步 catalog ≠ 把货架未入库的条目装进来**。
 
+**进库不看来源。** 货架装、本机自建、导入（含现有 `import_from_apps`），都是进工作台，立刻投影到全部在用 Agent；一批一笔，半截不留。来源只标 provenance：`catalog-managed` 才跟总闸换版；`local-draft` / `bundled` 不跟。不给本机件另开一套开关或延迟投影。
+
 **货架换版：一把总闸「自动同步」，默认打开。** 不是按技能各开各的。
 
 - **开（默认）**：`sync` 把库里已有的 `catalog-managed` 对齐到当前货架 revision，再投影到全部在用 Agent。这一轮要对齐的更新是**一笔**；任一技能或任一在用 Agent 失败，整笔回滚，库成员与副本 revision 都不变。
@@ -86,6 +88,7 @@ related_commits: []
 - 不把 Claude Desktop / OpenClaw 列为在用。
 - 不把整个 catalog 倒进库。
 - 不给每个技能单独设「自动同步」；只有总闸。
+- 不给本机自建 / 导入另开一套投影规则或「先入库、稍后同步」。
 
 ## 现状与地基
 
@@ -121,11 +124,11 @@ description 从来源 `SKILL.md` 派生；catalog 不维护第二份 metadata。
 
 ### 库（工作台）
 
-每条库内 Skill 在 DB 标 provenance：`catalog-managed`（来自货架，副本只读）/ `local-draft`（本机创建或导入，可编辑）/ `bundled`（历史安装、尚未上货架）。
+每条库内 Skill 在 DB 标 provenance：`catalog-managed`（来自货架，副本只读，跟总闸换版）/ `local-draft`（本机创建或导入，可编辑，不跟货架）/ `bundled`（历史安装、尚未上货架，不跟货架）。三者进库后的投影规则相同。
 
 同名：货架新条目不得静默覆盖 `local-draft` / `bundled`；hash 完全一致才允许提升为 `catalog-managed`，否则 fail closed。`catalog-managed` 磁盘 drift：`sync` fail closed，提示 Git owner，不静默覆盖。
 
-装进库或从库卸下：可勾一批、一次确认。对**全部在用 Agent** 预检（foreign collision、路径重叠、budget）通过后再改链接；任一名字或任一在用 Agent 写不上，整批失败、库成员不变。不把半截成功留下。中断后重跑必须收敛。
+装进库或从库卸下（货架 `install` / 本机创建 / 导入 / `uninstall`）：可勾一批、一次确认。对**全部在用 Agent** 预检（foreign collision、路径重叠、budget）通过后再改链接；任一名字或任一在用 Agent 写不上，整批失败、库成员不变。不把半截成功留下。中断后重跑必须收敛。
 
 ### 在用 Agent
 
@@ -180,6 +183,7 @@ legacy writer 读到 marker 且自身对应 token 在 `in_use_agents` 内时必�
 ```bash
 cc-switch skills sync [--check]
 cc-switch skills install <name>... | uninstall <name>...
+cc-switch skills import <path>...
 cc-switch skills upgrade [<name>]
 cc-switch skills follow-catalog on | off
 cc-switch skills agents add <token> | remove <token>
@@ -188,6 +192,7 @@ cc-switch skills doctor [--json]
 
 - `sync`：校验货架；副本被改脏则停。`follow_catalog=on` 时，把已在库中的 `catalog-managed` 对齐到当前货架（一笔，失败全回滚）。`off` 时不换版，只把**当前库**投影到在用 Agent。不把货架未入库条目装进来。`--check` 只计算。
 - `install` / `uninstall`：可一批多名。从货架进库或出库是**一笔**：勾一批、一次确认；任一名字或任一在用 Agent 失败，整批都不进/不卸。不把半截成功留在库里。
+- `import`：本机路径 / zip（及现有 `import_from_apps`）进库，标 `local-draft`。与 `install` 同一笔：进库即投影到全部在用 Agent；失败整批不动。不跟总闸换版。桌面「新建技能」同一条。
 - `upgrade`：钉死模式下的显式换版；省略 `<name>` 则升级库内全部已过期的 `catalog-managed`。同样整笔。
 - `follow-catalog`：总闸，默认 `on`。
 - `agents add`：按当前库对齐后入伙；补不上则失败。多出来的外来物不碰。`remove`：该 Agent 退出在用，控制面不再写它（不 cascading 删外来物）。去掉最后一个 = 关张。
@@ -223,7 +228,7 @@ dev-rules **保留**项目 `.cursor/skills` 编辑入口；**删除**的是 home
 
 - 下一份实现不出现第二 writer、第二本启用账、技能 × Agent 开关。
 - 库成员是工作集唯一 SSOT；symlink 与 `skills-control.json` 是生成物。
-- 装/卸/入伙：可一批一笔；全部在用 Agent 写齐才算成功，半截不留。
+- 装/卸/导入/自建/入伙：可一批一笔；进库不看来源，全部在用 Agent 写齐才算成功，半截不留。来源只决定是否跟货架换版。
 - 第一次先勾在用 Agent（默认全不勾，看见过不预勾），再确认工作台；一个都不勾 = 未开张；去掉最后一个在用 = 关张；有现场不混 `recommended`。
 - catalog 新增默认不进库。
 - 货架换版只有总闸「自动同步」（默认开）；关掉则钉死，显式 upgrade。不按技能设闸。自动跟上失败整笔回滚。
@@ -233,8 +238,8 @@ dev-rules **保留**项目 `.cursor/skills` 编辑入口；**删除**的是 home
 
 ## 验证（Core 实现 PR 承担）
 
-- **单元**：catalog 解析、库成员、在用名单、`claude-cursor` 布局、Pi 在用后跟库、整笔失败、foreign、先勾 Agent 再出候选、默认不预勾、零勾选不算开张、去掉最后一个为关张、空目录才用 `recommended`、catalog 新增不进库、follow_catalog 默认开、关掉则 sync 不换版、自动跟上失败整笔回滚。
-- **集成**：先定在用再确认工作台；有现场只确认已用项；入伙对齐；一批装/卸中断后收敛且半截不留；在用 Agent 失败则库不变。
+- **单元**：catalog 解析、库成员、在用名单、`claude-cursor` 布局、Pi 在用后跟库、整笔失败、foreign、先勾 Agent 再出候选、默认不预勾、零勾选不算开张、去掉最后一个为关张、空目录才用 `recommended`、catalog 新增不进库、follow_catalog 默认开、关掉则 sync 不换版、自动跟上失败整笔回滚、`local-draft` 进库即投影且不跟总闸、导入失败整批不动。
+- **集成**：先定在用再确认工作台；有现场只确认已用项；入伙对齐；一批装/卸/导入中断后收敛且半截不留；在用 Agent 失败则库不变。
 - **主机**：`doctor --json` 对当前在用名单 exit 0；屏幕上的库与 doctor 一致。
 
 ---
