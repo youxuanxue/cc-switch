@@ -42,12 +42,13 @@
 - tests/hooks/useCursorOfficial.test.tsx::US-003 shares Cursor auth state without returning the key
 - tests/components/CursorOfficialAuthControl.test.tsx::US-003 keeps Login primary and User API Key secondary
 - tests/components/SettingsDialog.test.tsx::US-003 renders Cursor Official in the official authentication center
+- tests/msw/cursorFixtures.test.ts::Cursor MSW IPC fixtures never store or return the submitted User API Key body
 - tests/e2e/cursor-official-sessions.spec.ts::US-003 manages Cursor Official authentication without key echo
 
 Run:
 
     cargo test --manifest-path src-tauri/Cargo.toml us003_ -- --nocapture
-    pnpm test:unit -- tests/hooks/useCursorOfficial.test.tsx tests/components/CursorOfficialAuthControl.test.tsx tests/components/SettingsDialog.test.tsx
+    pnpm exec vitest run tests/hooks/useCursorOfficial.test.tsx tests/components/CursorOfficialAuthControl.test.tsx tests/components/SettingsDialog.test.tsx tests/msw/cursorFixtures.test.ts
     pnpm test:e2e -- tests/e2e/cursor-official-sessions.spec.ts --grep "US-003"
 
 ## Evidence
@@ -66,6 +67,8 @@ Run:
 - 2026-08-28 GREEN (renderer auth owner): `useCursorOfficial.updateAuth` now invokes the IPC boundary directly, stores only the redacted status in QueryCache, and keeps the key out of MutationCache. The 4 hook behavior tests plus `pnpm typecheck` passed.
 - 2026-08-28 RED (shared auth UI): the focused component run failed because `CursorOfficialAuthControl` did not exist; the settings integration test also exposed the old “OAuth 认证中心” title, center-level Beta, and missing Cursor section. A separate explicit-clear test failed until the control wired the dedicated clear action.
 - 2026-08-28 GREEN (shared auth UI): `pnpm exec vitest run tests/components/CursorOfficialAuthControl.test.tsx tests/components/SettingsDialog.test.tsx` passed 15 tests. Coverage keeps Login visible as the primary path, places User API Key under “其他方式”, clears submitted input, renders only the configured mask, routes compact continuation callbacks, uses explicit clear, removes the center-level Beta, and preserves existing auth sections through thin composition; `pnpm typecheck` and `git diff --check` exited 0.
-- Remaining auth service, command, renderer, and e2e evidence is recorded before this Story advances to Done.
+- 2026-08-28 RED (locale and IPC fixtures): four locale contract cases failed with the missing Cursor key set; the Cursor IPC fixture test then failed because state setters and the `update_cursor_official_auth` MSW handler did not exist.
+- 2026-08-28 GREEN (locale and IPC fixtures): `pnpm exec vitest run tests/config/localeCoverage.test.ts tests/msw/cursorFixtures.test.ts tests/components/SessionManagerPage.test.tsx tests/components/SettingsDialog.test.tsx` passed 47 tests. Four locales now carry the complete Cursor runtime copy contract, and the stateful `cursorApi → invoke → MSW` fixture immediately redacts `userApiKey` in its recorded call while returning only `hasUserApiKey`. `pnpm typecheck`, targeted Prettier, and `git diff --check` exited 0.
+- Remaining SSOT-contract, real-renderer e2e, and final full-suite evidence is recorded before this Story advances to Done.
 
 - Status: InTest

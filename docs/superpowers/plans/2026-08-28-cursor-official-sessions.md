@@ -632,35 +632,36 @@ git commit -m "feat(cursor): add inline session resume flow"
 - Modify: `tests/config/localeCoverage.test.ts`
 - Modify: `tests/msw/state.ts`
 - Modify: `tests/msw/handlers.ts`
+- Create: `tests/msw/cursorFixtures.test.ts`
 
 **Interfaces:**
 - Adds `apps.cursor`, `settings.authCenter.cursor*`, and `sessionManager.cursor*` keys with identical interpolation variables in all locales.
 - Adds stateful mock Cursor status/index/context/launch handlers without ever storing a literal production-like key in returned DTOs or call records.
 
-- [ ] **Step 1: Write failing locale coverage tests**
+- [x] **Step 1: Write failing locale coverage tests**
 
 Create a Cursor key selection analogous to the Pi coverage test and require all non-English locales to contain every Cursor key and matching interpolation variables.
 
-- [ ] **Step 2: Run locale tests and verify RED**
+- [x] **Step 2: Run locale tests and verify RED**
 
 Run: `pnpm test:unit -- tests/config/localeCoverage.test.ts`
 
 Expected: FAIL with the missing Cursor key list.
 
-- [ ] **Step 3: Add concise runtime-focused copy in four locales**
+- [x] **Step 3: Add concise runtime-focused copy in four locales**
 
 Include labels for Official Auth Center, Login, Other methods, User API Key, configured mask, CLI missing, status unavailable, index unavailable, choose directory and continue, login and continue, configure and continue, platform unavailable, technical details, local-settings backup boundary, and fixed command labels. Do not expose capability-level words in rendered copy.
 
-- [ ] **Step 4: Extend MSW IPC fixtures and run focused tests**
+- [x] **Step 4: Extend MSW IPC fixtures and run focused tests**
 
-Run: `pnpm test:unit -- tests/config/localeCoverage.test.ts tests/components/SessionManagerPage.test.tsx tests/components/SettingsDialog.test.tsx`
+Run: `pnpm exec vitest run tests/config/localeCoverage.test.ts tests/msw/cursorFixtures.test.ts tests/components/SessionManagerPage.test.tsx tests/components/SettingsDialog.test.tsx`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
-git add src/i18n/locales/en.json src/i18n/locales/zh.json src/i18n/locales/zh-TW.json src/i18n/locales/ja.json tests/config/localeCoverage.test.ts tests/msw/state.ts tests/msw/handlers.ts
+git add src/i18n/locales/en.json src/i18n/locales/zh.json src/i18n/locales/zh-TW.json src/i18n/locales/ja.json tests/config/localeCoverage.test.ts tests/msw/state.ts tests/msw/handlers.ts tests/msw/cursorFixtures.test.ts .testing/user-stories docs/superpowers/plans/2026-08-28-cursor-official-sessions.md
 git commit -m "feat(cursor): localize official session flows"
 ```
 

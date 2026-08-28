@@ -46,6 +46,50 @@ const piReference = new Map(
 const piProductReferences = new Map(
   [...reference].filter(([, value]) => /\bPi\b/.test(value)),
 );
+const cursorRequiredKeys = [
+  "apps.cursor",
+  "settings.authCenter.title",
+  "settings.authCenter.description",
+  "settings.authCenter.cursorDescription",
+  "settings.authCenter.cursorReady",
+  "settings.authCenter.cursorNeedsLogin",
+  "settings.authCenter.cursorNeedsApiKey",
+  "settings.authCenter.cursorCliMissing",
+  "settings.authCenter.cursorStatusUnavailable",
+  "settings.authCenter.cursorStatusLoading",
+  "settings.authCenter.cursorApiKeyConfigured",
+  "settings.authCenter.cursorLoginDescription",
+  "settings.authCenter.cursorLoginAndContinue",
+  "settings.authCenter.cursorLogin",
+  "settings.authCenter.cursorOtherMethods",
+  "settings.authCenter.cursorApiKeyPlaceholder",
+  "settings.authCenter.cursorApiKeyLocalOnly",
+  "settings.authCenter.cursorConfigureAndContinue",
+  "settings.authCenter.cursorSaveApiKey",
+  "settings.authCenter.cursorClearApiKey",
+  "settings.authCenter.cursorTechnicalDetails",
+  "settings.authCenter.cursorAuthMode",
+  "settings.authCenter.cursorRefresh",
+  "sessionManager.cursorIndexUnavailable",
+  "sessionManager.cursorContinueTitle",
+  "sessionManager.cursorContinueDescription",
+  "sessionManager.cursorPlatformUnavailable",
+  "sessionManager.cursorCliMissing",
+  "sessionManager.cursorRetryStatus",
+  "sessionManager.cursorRetryContext",
+  "sessionManager.cursorChooseDirectoryAndContinue",
+  "sessionManager.cursorContinue",
+  "sessionManager.cursorCheckingResume",
+  "sessionManager.cursorTechnicalDetails",
+  "sessionManager.cursorWorkspacePath",
+  "sessionManager.cursorFixedCommand",
+] as const;
+const cursorReference = new Map(
+  cursorRequiredKeys.flatMap((key) => {
+    const value = reference.get(key);
+    return value === undefined ? [] : [[key, value] as const];
+  }),
+);
 const locales = [
   ["zh", zh],
   ["ja", ja],
@@ -53,6 +97,41 @@ const locales = [
 ] as const;
 
 describe("locale coverage", () => {
+  it("defines every Cursor translation key in English", () => {
+    const missing = cursorRequiredKeys.filter((key) => !reference.has(key));
+
+    expect(missing).toEqual([]);
+  });
+
+  it.each(locales)(
+    "covers every Cursor translation key in %s",
+    (_name, tree) => {
+      const translations = flattenStrings(tree as TranslationTree);
+      const missing = cursorRequiredKeys.filter(
+        (key) => !translations.has(key),
+      );
+
+      expect(missing).toEqual([]);
+    },
+  );
+
+  it.each(locales)(
+    "preserves every Cursor interpolation variable in %s",
+    (_name, tree) => {
+      const translations = flattenStrings(tree as TranslationTree);
+      const mismatched = [...cursorReference].flatMap(([key, expected]) => {
+        const actual = translations.get(key);
+        return actual !== undefined &&
+          interpolationVariables(actual).join("\0") !==
+            interpolationVariables(expected).join("\0")
+          ? [key]
+          : [];
+      });
+
+      expect(mismatched).toEqual([]);
+    },
+  );
+
   it.each(locales)("covers every Pi translation key in %s", (_name, tree) => {
     const translations = flattenStrings(tree as TranslationTree);
     const missing = [...piReference.keys()].filter(

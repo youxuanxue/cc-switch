@@ -24,6 +24,13 @@ import {
   setMcpServerEnabled,
   upsertMcpServer,
   deleteMcpServer,
+  clearCursorUserApiKeyState,
+  getCursorLaunchResult,
+  getCursorOfficialStatus,
+  getCursorSessionIndexStatus,
+  getCursorSessionResumeContext,
+  recordCursorIpcCall,
+  updateCursorOfficialAuthState,
 } from "./state";
 
 const TAURI_ENDPOINT = "http://tauri.local";
@@ -133,6 +140,88 @@ export const handlers = [
   http.post(`${TAURI_ENDPOINT}/open_external`, () => success(true)),
 
   http.post(`${TAURI_ENDPOINT}/list_sessions`, () => success(listSessions())),
+
+  http.post(`${TAURI_ENDPOINT}/get_cursor_official_status`, () => {
+    recordCursorIpcCall("get_cursor_official_status");
+    return success(getCursorOfficialStatus());
+  }),
+
+  http.post(
+    `${TAURI_ENDPOINT}/update_cursor_official_auth`,
+    async ({ request }) => {
+      const payload = await withJson<{
+        authMode?: "login" | "userApiKey";
+        userApiKey?: string;
+      }>(request);
+      recordCursorIpcCall("update_cursor_official_auth", payload);
+
+      if (payload.authMode !== "login" && payload.authMode !== "userApiKey") {
+        return HttpResponse.json("Unsupported Cursor auth mode", {
+          status: 400,
+        });
+      }
+      if (
+        payload.userApiKey !== undefined &&
+        payload.userApiKey.trim().length === 0
+      ) {
+        return HttpResponse.json("Cursor User API Key cannot be empty", {
+          status: 400,
+        });
+      }
+
+      return success(
+        updateCursorOfficialAuthState(payload.authMode, payload.userApiKey),
+      );
+    },
+  ),
+
+  http.post(`${TAURI_ENDPOINT}/clear_cursor_user_api_key`, () => {
+    recordCursorIpcCall("clear_cursor_user_api_key");
+    return success(clearCursorUserApiKeyState());
+  }),
+
+  http.post(`${TAURI_ENDPOINT}/get_cursor_session_index_status`, () => {
+    recordCursorIpcCall("get_cursor_session_index_status");
+    return success(getCursorSessionIndexStatus());
+  }),
+
+  http.post(
+    `${TAURI_ENDPOINT}/get_cursor_session_resume_context`,
+    async ({ request }) => {
+      const payload = await withJson<{
+        sessionId: string;
+        workspaceOverride?: string;
+      }>(request);
+      recordCursorIpcCall("get_cursor_session_resume_context", payload);
+      return success(getCursorSessionResumeContext());
+    },
+  ),
+
+  http.post(`${TAURI_ENDPOINT}/launch_cursor_session`, async ({ request }) => {
+    const payload = await withJson<{
+      sessionId: string;
+      workspaceOverride?: string;
+    }>(request);
+    recordCursorIpcCall("launch_cursor_session", payload);
+    return success(getCursorLaunchResult("launch_cursor_session"));
+  }),
+
+  http.post(`${TAURI_ENDPOINT}/launch_cursor_login`, () => {
+    recordCursorIpcCall("launch_cursor_login");
+    return success(getCursorLaunchResult("launch_cursor_login"));
+  }),
+
+  http.post(
+    `${TAURI_ENDPOINT}/launch_cursor_login_and_session`,
+    async ({ request }) => {
+      const payload = await withJson<{
+        sessionId: string;
+        workspaceOverride?: string;
+      }>(request);
+      recordCursorIpcCall("launch_cursor_login_and_session", payload);
+      return success(getCursorLaunchResult("launch_cursor_login_and_session"));
+    },
+  ),
 
   http.post(`${TAURI_ENDPOINT}/get_session_messages`, async ({ request }) => {
     const { providerId, sourcePath } = await withJson<{
