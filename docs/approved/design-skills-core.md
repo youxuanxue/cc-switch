@@ -27,7 +27,13 @@ related_commits: []
 
 **一份内容。** 技能文件只在中央库有一份（默认 `~/.cc-switch/skills/<name>/`，保留现有 `SkillStorageLocation`）。各在用 Agent 只拿链接或等价投影。
 
-**一把开关，开关就是库。** 没有「装着但关掉」。进库 = 放到工作台 = 所有在用 Agent 看见。出库 = 卸下。效率靠管库（装/卸），不靠静音。Catalog 可以很大；**同步 catalog ≠ 装满库**。
+**一把开关，开关就是库。** 没有「装着但关掉」。进库 = 放到工作台 = 所有在用 Agent 看见。出库 = 卸下。效率靠管库（装/卸），不靠静音。Catalog 可以很大；**同步 catalog ≠ 把货架未入库的条目装进来**。
+
+**货架换版：一把总闸「自动同步」，默认打开。** 不是按技能各开各的。
+
+- **开（默认）**：`sync` 把库里已有的 `catalog-managed` 对齐到当前货架 revision，再投影到全部在用 Agent。这一轮要对齐的更新是**一笔**；任一技能或任一在用 Agent 失败，整笔回滚，库成员与副本 revision 都不变。
+- **关**：钉死。货架走了只在 doctor 报「有新版」；换版必须显式 `upgrade`，同样整笔失败则不换。
+- 副本被人改脏（和入库 revision 对不上）：两种模式都 **fail closed**，不静默覆盖。
 
 **在用 / 不用。** 没有 `managed | legacy | unsupported` 三态主模型。
 
@@ -64,6 +70,7 @@ related_commits: []
 | 货架（catalog / provenance / `recommended`） | `agent-skills/skills.yaml` |
 | 工作台（库里有哪些） | CC Switch SQLite（可导出 JSON；SQLite 为权威） |
 | 这台机器在用哪些 Agent | 同上 |
+| 货架换版是否自动跟上 | 同上（总闸，默认开） |
 | 已装副本与 hash | 中央库目录 |
 | runtime 路径 | adapter 表（`SkillService::get_app_skills_dir` 为现网 SSOT；单元测试固定） |
 | 磁盘是否与库一致 | `cc-switch skills doctor` |
@@ -78,6 +85,7 @@ related_commits: []
 - 不把 skills.sh / 硬编码 GitHub 仓库升格为货架或工作台；只保留现有发现入口并冻结。
 - 不把 Claude Desktop / OpenClaw 列为在用。
 - 不把整个 catalog 倒进库。
+- 不给每个技能单独设「自动同步」；只有总闸。
 
 ## 现状与地基
 
@@ -158,7 +166,8 @@ description 从来源 `SKILL.md` 派生；catalog 不维护第二份 metadata。
     "repo": "https://github.com/youxuanxue/agent-skills.git",
     "revision": "<40-char-sha>"
   },
-  "in_use_agents": ["claude-cursor", "codex"]
+  "in_use_agents": ["claude-cursor", "codex"],
+  "follow_catalog": true
 }
 ```
 
@@ -171,14 +180,18 @@ legacy writer 读到 marker 且自身对应 token 在 `in_use_agents` 内时必�
 ```bash
 cc-switch skills sync [--check]
 cc-switch skills install <name> | uninstall <name>
+cc-switch skills upgrade [<name>]
+cc-switch skills follow-catalog on | off
 cc-switch skills agents add <token> | remove <token>
 cc-switch skills doctor [--json]
 ```
 
-- `sync`：校验货架、更新**已在库中**的 catalog-managed 副本（drift 则停）、把库投影到全部在用 Agent。不把货架未入库条目装进来。`--check` 只计算。
+- `sync`：校验货架；副本被改脏则停。`follow_catalog=on` 时，把已在库中的 `catalog-managed` 对齐到当前货架（一笔，失败全回滚）。`off` 时不换版，只把**当前库**投影到在用 Agent。不把货架未入库条目装进来。`--check` 只计算。
 - `install` / `uninstall`：改库成员；任一在用 Agent 失败则整笔失败。
+- `upgrade`：钉死模式下的显式换版；省略 `<name>` 则升级库内全部已过期的 `catalog-managed`。同样整笔。
+- `follow-catalog`：总闸，默认 `on`。
 - `agents add`：按当前库对齐后入伙；补不上则失败。多出来的外来物不碰。`remove`：该 Agent 退出在用，控制面不再写它（不 cascading 删外来物）。去掉最后一个 = 关张。
-- `doctor --json`：货架 revision、库成员、在用名单 vs 实际投影、foreign / broken / duplicate、legacy writer 是否已对在用 token 停写、各在用 Agent 的数量与 description 字符量、reload。妨碍安全投影则 **exit 1**。`--json` 是 UI / CI / dev-rules 的机器契约。
+- `doctor --json`：货架 revision、`follow_catalog`、库成员与是否落后货架、在用名单 vs 实际投影、foreign / broken / duplicate、legacy writer 是否已对在用 token 停写、各在用 Agent 的数量与 description 字符量、reload。妨碍安全投影则 **exit 1**。`--json` 是 UI / CI / dev-rules 的机器契约。
 
 ## Legacy writer 过渡
 
@@ -213,13 +226,14 @@ dev-rules **保留**项目 `.cursor/skills` 编辑入口；**删除**的是 home
 - 装/卸/入伙：全部在用 Agent 写齐才算成功。
 - 第一次先勾在用 Agent（默认全不勾，看见过不预勾），再确认工作台；一个都不勾 = 未开张；去掉最后一个在用 = 关张；有现场不混 `recommended`。
 - catalog 新增默认不进库。
+- 货架换版只有总闸「自动同步」（默认开）；关掉则钉死，显式 upgrade。不按技能设闸。自动跟上失败整笔回滚。
 - foreign 不自动进库、不被删。
 - 在用 token 上 legacy writer 可被 doctor 证明已停写。
 - UI 与 CLI 同一 core、同一 `--json`。
 
 ## 验证（Core 实现 PR 承担）
 
-- **单元**：catalog 解析、库成员、在用名单、`claude-cursor` 布局、Pi 在用后跟库、整笔失败、foreign、先勾 Agent 再出候选、默认不预勾、零勾选不算开张、去掉最后一个为关张、空目录才用 `recommended`、catalog 新增不进库。
+- **单元**：catalog 解析、库成员、在用名单、`claude-cursor` 布局、Pi 在用后跟库、整笔失败、foreign、先勾 Agent 再出候选、默认不预勾、零勾选不算开张、去掉最后一个为关张、空目录才用 `recommended`、catalog 新增不进库、follow_catalog 默认开、关掉则 sync 不换版、自动跟上失败整笔回滚。
 - **集成**：先定在用再确认工作台；有现场只确认已用项；入伙对齐；装/卸中断后收敛；在用 Agent 失败则库不变。
 - **主机**：`doctor --json` 对当前在用名单 exit 0；屏幕上的库与 doctor 一致。
 
