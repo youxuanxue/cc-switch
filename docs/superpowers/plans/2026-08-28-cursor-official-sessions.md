@@ -581,7 +581,7 @@ git commit -m "feat(cursor): add safe session capability filtering"
 - `CursorResumeGate({ session }: { session: SessionMeta })` owns only selected-session override and resume orchestration.
 - Consumes: `useCursorOfficial`, `cursorApi.getSessionResumeContext`, `cursorApi.launchSession`, `cursorApi.launchLoginAndSession`, `settingsApi.pickDirectory`, and shared compact `CursorOfficialAuthControl`.
 
-- [ ] **Step 1: Write failing resume-gate tests**
+- [x] **Step 1: Write failing resume-gate tests**
 
 Cover ready launch, login-and-continue, API-key save-and-continue, workspace selection/cancel, workspace+auth combination retaining one override, session switch clearing override, CLI/platform/index diagnoses, final `workspaceRequired` returning to directory selection, and technical details collapsed by default.
 
@@ -595,27 +595,27 @@ expect(launchSession).toHaveBeenCalledWith({
 expect(launchTerminal).not.toHaveBeenCalled();
 ```
 
-- [ ] **Step 2: Run tests and verify RED**
+- [x] **Step 2: Run tests and verify RED**
 
 Run: `pnpm test:unit -- tests/components/CursorResumeGate.test.tsx tests/components/SessionManagerPage.test.tsx`
 
 Expected: FAIL because Cursor resume composition is absent.
 
-- [ ] **Step 3: Implement the gate with fixed priority and override lifecycle**
+- [x] **Step 3: Implement the gate with fixed priority and override lifecycle**
 
 Fetch resume context by `[sessionId, workspaceOverride]`. On directory cancel, do nothing and show no toast. On valid selection, persist the override in component state, then either launch immediately when auth is ready or render the compact auth remediation. Route Login through `launchLoginAndSession`. After User API Key save, call `launchSession` with the retained override.
 
-- [ ] **Step 4: Replace Cursor transcript/detail behavior in the manager**
+- [x] **Step 4: Replace Cursor transcript/detail behavior in the manager**
 
 Disable `useSessionMessagesQuery` for Cursor by passing undefined provider/source. In the selected-session branch, render `CursorResumeGate` instead of generic resume command preview, transcript header, message count, empty transcript state, and TOC. Keep title, directory basename, and last-active time in the main header; move full path, chat ID, and fixed command preview into the gate's collapsed technical details.
 
-- [ ] **Step 5: Run focused tests and verify GREEN**
+- [x] **Step 5: Run focused tests and verify GREEN**
 
 Run: `pnpm test:unit -- tests/components/CursorResumeGate.test.tsx tests/components/SessionManagerPage.test.tsx`
 
 Expected: PASS; no call to `get_session_messages` or `launch_session_terminal` occurs for Cursor.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/components/sessions/CursorResumeGate.tsx src/components/sessions/SessionManagerPage.tsx tests/components/CursorResumeGate.test.tsx tests/components/SessionManagerPage.test.tsx

@@ -15,6 +15,45 @@ import { sessionsApi } from "@/lib/api/sessions";
 import type { SessionMessage, SessionMeta } from "@/types";
 import { setSessionFixtures } from "../msw/state";
 
+const cursorApiMocks = vi.hoisted(() => ({
+  getOfficialStatus: vi.fn(),
+  updateOfficialAuth: vi.fn(),
+  clearUserApiKey: vi.fn(),
+  getSessionIndexStatus: vi.fn(),
+  getSessionResumeContext: vi.fn(),
+  launchSession: vi.fn(),
+  launchLogin: vi.fn(),
+  launchLoginAndSession: vi.fn(),
+}));
+
+const platformMocks = vi.hoisted(() => ({
+  isMac: vi.fn(),
+}));
+
+vi.mock("@/lib/api/cursor", () => ({
+  cursorApi: {
+    getOfficialStatus: (...args: unknown[]) =>
+      cursorApiMocks.getOfficialStatus(...args),
+    updateOfficialAuth: (...args: unknown[]) =>
+      cursorApiMocks.updateOfficialAuth(...args),
+    clearUserApiKey: (...args: unknown[]) =>
+      cursorApiMocks.clearUserApiKey(...args),
+    getSessionIndexStatus: (...args: unknown[]) =>
+      cursorApiMocks.getSessionIndexStatus(...args),
+    getSessionResumeContext: (...args: unknown[]) =>
+      cursorApiMocks.getSessionResumeContext(...args),
+    launchSession: (...args: unknown[]) =>
+      cursorApiMocks.launchSession(...args),
+    launchLogin: (...args: unknown[]) => cursorApiMocks.launchLogin(...args),
+    launchLoginAndSession: (...args: unknown[]) =>
+      cursorApiMocks.launchLoginAndSession(...args),
+  },
+}));
+
+vi.mock("@/lib/platform", () => ({
+  isMac: () => platformMocks.isMac(),
+}));
+
 const toastSuccessMock = vi.fn();
 const toastErrorMock = vi.fn();
 const GROUP_EXPANSION_STORAGE_KEY =
@@ -157,6 +196,33 @@ describe("SessionManagerPage", () => {
     Element.prototype.scrollIntoView = vi.fn();
     window.localStorage.removeItem("cc-switch.sessionManager.listViewMode");
     window.localStorage.removeItem(GROUP_EXPANSION_STORAGE_KEY);
+    platformMocks.isMac.mockReset().mockReturnValue(true);
+    cursorApiMocks.getOfficialStatus.mockReset().mockResolvedValue({
+      installed: true,
+      version: "agent 1.0.0",
+      authMode: "login",
+      hasUserApiKey: false,
+      authenticated: true,
+      state: "ready",
+    });
+    cursorApiMocks.updateOfficialAuth.mockReset();
+    cursorApiMocks.clearUserApiKey.mockReset();
+    cursorApiMocks.getSessionIndexStatus
+      .mockReset()
+      .mockResolvedValue({ state: "indexReady" });
+    cursorApiMocks.getSessionResumeContext.mockReset().mockResolvedValue({
+      workspaceState: "ready",
+      workspace: "/mock/cursor/cursor-workspace",
+    });
+    cursorApiMocks.launchSession
+      .mockReset()
+      .mockResolvedValue({ state: "launched" });
+    cursorApiMocks.launchLogin
+      .mockReset()
+      .mockResolvedValue({ state: "launched" });
+    cursorApiMocks.launchLoginAndSession
+      .mockReset()
+      .mockResolvedValue({ state: "launched" });
 
     const sessions: SessionMeta[] = [
       {
@@ -407,6 +473,57 @@ describe("SessionManagerPage", () => {
     expect(
       screen.getByRole("button", { name: /批量管理/i }),
     ).toBeInTheDocument();
+  });
+
+  it("US-002/US-004 renders Cursor resume without transcript or generic terminal plumbing", async () => {
+    const user = userEvent.setup();
+    const getMessages = vi.spyOn(sessionsApi, "getMessages");
+    const launchTerminal = vi.spyOn(sessionsApi, "launchTerminal");
+    const defensiveSourcePath = "/mock/cursor/must-not-read.jsonl";
+    setSessionFixtures(
+      [
+        {
+          providerId: "cursor",
+          sessionId: "11111111-1111-4111-8111-111111111111",
+          title: "Cursor Alpha",
+          projectDir: "/mock/cursor/cursor-workspace",
+          createdAt: 0,
+          lastActiveAt: 4,
+          sourcePath: defensiveSourcePath,
+          resumeCommand: "must-not-launch-through-generic-terminal",
+        },
+      ],
+      {
+        [`cursor:${defensiveSourcePath}`]: [
+          { role: "user", content: "must not render", ts: 4 },
+        ],
+      },
+    );
+
+    renderPage("cursor");
+
+    expect(
+      await screen.findByRole("heading", { name: "Cursor Alpha" }),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: "继续会话" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("对话记录")).not.toBeInTheDocument();
+    expect(screen.queryByText("must not render")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("must-not-launch-through-generic-terminal"),
+    ).not.toBeInTheDocument();
+    expect(getMessages).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "继续会话" }));
+
+    await waitFor(() =>
+      expect(cursorApiMocks.launchSession).toHaveBeenCalledWith({
+        sessionId: "11111111-1111-4111-8111-111111111111",
+        workspaceOverride: undefined,
+      }),
+    );
+    expect(launchTerminal).not.toHaveBeenCalled();
   });
 
   it("US-004 hides Cursor item and group checkboxes in grouped batch mode", async () => {

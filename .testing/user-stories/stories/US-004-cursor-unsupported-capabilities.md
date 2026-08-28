@@ -38,7 +38,9 @@
 
 - tests/config/cursorCapabilities.test.ts::US-004 declares the approved Cursor capability boundaries
 - src-tauri/src/session_manager/mod.rs::tests::us004_rejects_cursor_message_loading_and_deletion
-- tests/components/SessionManagerPage.test.tsx::US-004 hides Cursor transcript and every delete affordance
+- tests/components/SessionManagerPage.test.tsx::US-002/US-004 renders Cursor resume without transcript or generic terminal plumbing
+- tests/components/SessionManagerPage.test.tsx::US-004 exposes the Cursor filter while hiding unsupported delete actions
+- tests/components/SessionManagerPage.test.tsx::US-004 hides Cursor item and group checkboxes in grouped batch mode
 - tests/components/cursorResumeState.test.ts::US-004 blocks Cursor resume outside macOS without blocking indexing
 - tests/scripts/check-cursor-session-ssot.test.ts::US-004 rejects Cursor owner and generic-terminal bypasses
 - tests/e2e/cursor-official-sessions.spec.ts::US-004 keeps unsupported Cursor capabilities absent from the UI
@@ -60,6 +62,7 @@ Run:
 - 2026-08-28 GREEN (auth presentation boundary): Auth Center integration coverage asserts that `supported`, `conditional`, and `unsupported` never render while Cursor runtime state and actions remain visible.
 - 2026-08-28 RED (delete presentation): the Session Manager tests failed because the Cursor filter and `sessionCapabilities` owner did not exist, and grouped selection rendered disabled Cursor provider/item checkboxes instead of hiding them.
 - 2026-08-28 GREEN (delete presentation): `pnpm exec vitest run tests/components/SessionManagerPage.test.tsx tests/components/sessionUtils.test.ts` passed 31 tests. `isSessionDeletable` rejects Cursor even with a defensive `sourcePath`, every single/item/group/batch delete affordance is absent for Cursor, switching to Cursor exits and clears batch selection, search-only empty results retain the explicit exit control, and existing source-backed providers remain deletable; `pnpm typecheck`, targeted Prettier, and `git diff --check` exited 0.
+- 2026-08-28 GREEN (detail boundary): the Cursor-specific detail integration test supplies defensive `sourcePath` and `resumeCommand` values yet renders only `CursorResumeGate`; it does not request messages, show transcript/empty/count/TOC shells, expose the generic command preview, or call `launch_session_terminal`.
 - Remaining unsupported-capability, renderer, contract-check, and e2e evidence is recorded before this Story advances to Done.
 
 - Status: InTest
