@@ -2650,6 +2650,27 @@
       "successSingle": "Skill {{name}} installed",
       "successMultiple": "Successfully installed {{count}} skills",
       "noSkillsFound": "No skills found in ZIP file (requires SKILL.md file)"
+    },
+    "core": {
+      "loading": "Loading skills control plane…",
+      "firstOpenTitle": "First time: pick in-use agents",
+      "firstOpenHint": "None are pre-checked. Seen directories are not pre-selected. Picking none keeps the shop closed.",
+      "open": "Open and confirm the workbench",
+      "candidates": "Candidates",
+      "conflict": "Same-name content conflicts; batch stopped: {{names}}",
+      "inUse": "In-use agents",
+      "followCatalog": "Follow catalog updates",
+      "remove": "Leave",
+      "addAgent": "Add {{token}}",
+      "library": "Library",
+      "libraryEmpty": "Library is empty. Install from the catalog or import a local skill.",
+      "behind": "catalog has a newer revision",
+      "installPlaceholder": "Catalog skill names, separated by space or comma",
+      "doctor": "Doctor",
+      "aligned": "Projections aligned",
+      "foreign": "Foreign",
+      "broken": "Broken",
+      "sync": "Sync"
     }
   },
   "deeplink": {

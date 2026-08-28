@@ -28,12 +28,12 @@ import { RepoManagerPanel } from "./RepoManagerPanel";
 import {
   useDiscoverableSkills,
   useInstalledSkills,
-  useInstallSkill,
   useSkillRepos,
   useAddSkillRepo,
   useRemoveSkillRepo,
   useSearchSkillsSh,
 } from "@/hooks/useSkills";
+import { skillsCoreApi } from "@/lib/api/skillsCore";
 import type { AppId } from "@/lib/api/types";
 import type {
   DiscoverableSkill,
@@ -91,7 +91,7 @@ const SKILLSSH_PAGE_SIZE = 20;
  * 用于浏览和安装来自仓库或 skills.sh 的 Skills
  */
 export const SkillsPage = forwardRef<SkillsPageHandle, SkillsPageProps>(
-  ({ initialApp = "claude", onSourceChange }, ref) => {
+  ({ initialApp: _initialApp = "claude", onSourceChange }, ref) => {
     const { t } = useTranslation();
     const [repoManagerOpen, setRepoManagerOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
@@ -108,9 +108,6 @@ export const SkillsPage = forwardRef<SkillsPageHandle, SkillsPageProps>(
     const [accumulatedResults, setAccumulatedResults] = useState<
       SkillsShDiscoverableSkill[]
     >([]);
-
-    // currentApp 用于安装时的默认应用
-    const currentApp = initialApp;
 
     // Queries
     const {
@@ -152,7 +149,6 @@ export const SkillsPage = forwardRef<SkillsPageHandle, SkillsPageProps>(
     };
 
     // Mutations
-    const installMutation = useInstallSkill();
     const addRepoMutation = useAddSkillRepo();
     const removeRepoMutation = useRemoveSkillRepo();
 
@@ -251,10 +247,7 @@ export const SkillsPage = forwardRef<SkillsPageHandle, SkillsPageProps>(
       }
 
       try {
-        await installMutation.mutateAsync({
-          skill,
-          currentApp,
-        });
+        await skillsCoreApi.install([skill.directory || skill.name]);
         toast.success(t("skills.installSuccess", { name: skill.name }), {
           closeButton: true,
         });

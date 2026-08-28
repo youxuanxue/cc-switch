@@ -338,3 +338,112 @@ pub fn install_skills_from_zip(
 
     SkillService::install_from_zip(&app_state.db, path, &app_type).map_err(|e| e.to_string())
 }
+
+// ========== Skills Core（库 + 在用名单） ==========
+
+#[tauri::command]
+pub fn skills_core_preview_open(
+    agents: Vec<String>,
+    app_state: State<'_, AppState>,
+) -> Result<crate::skills_core::FirstOpenPreview, String> {
+    crate::skills_core::preview_first_open(&app_state.db, &agents).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn skills_core_open(
+    agents: Vec<String>,
+    skills: Vec<String>,
+    app_state: State<'_, AppState>,
+) -> Result<crate::skills_core::DoctorReport, String> {
+    crate::skills_core::open(&app_state.db, &agents, &skills).map_err(|e| e.to_string())?;
+    crate::skills_core::doctor(&app_state.db).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn skills_core_doctor(
+    app_state: State<'_, AppState>,
+) -> Result<crate::skills_core::DoctorReport, String> {
+    crate::skills_core::doctor(&app_state.db).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn skills_core_install(
+    names: Vec<String>,
+    app_state: State<'_, AppState>,
+) -> Result<crate::skills_core::DoctorReport, String> {
+    crate::skills_core::install(&app_state.db, &names).map_err(|e| e.to_string())?;
+    crate::skills_core::doctor(&app_state.db).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn skills_core_uninstall(
+    names: Vec<String>,
+    app_state: State<'_, AppState>,
+) -> Result<crate::skills_core::DoctorReport, String> {
+    crate::skills_core::uninstall(&app_state.db, &names).map_err(|e| e.to_string())?;
+    crate::skills_core::doctor(&app_state.db).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn skills_core_import(
+    paths: Vec<String>,
+    app_state: State<'_, AppState>,
+) -> Result<crate::skills_core::DoctorReport, String> {
+    let paths = paths.into_iter().map(std::path::PathBuf::from).collect::<Vec<_>>();
+    crate::skills_core::import_paths(&app_state.db, &paths).map_err(|e| e.to_string())?;
+    crate::skills_core::doctor(&app_state.db).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn skills_core_sync(
+    check: bool,
+    app_state: State<'_, AppState>,
+) -> Result<crate::skills_core::DoctorReport, String> {
+    crate::skills_core::sync(&app_state.db, check).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn skills_core_upgrade(
+    name: Option<String>,
+    app_state: State<'_, AppState>,
+) -> Result<crate::skills_core::DoctorReport, String> {
+    crate::skills_core::upgrade(&app_state.db, name).map_err(|e| e.to_string())?;
+    crate::skills_core::doctor(&app_state.db).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn skills_core_follow_catalog(
+    on: bool,
+    app_state: State<'_, AppState>,
+) -> Result<crate::skills_core::DoctorReport, String> {
+    crate::skills_core::follow_catalog(&app_state.db, on).map_err(|e| e.to_string())?;
+    crate::skills_core::doctor(&app_state.db).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn skills_core_agents_add(
+    token: String,
+    app_state: State<'_, AppState>,
+) -> Result<crate::skills_core::DoctorReport, String> {
+    crate::skills_core::agents_add(&app_state.db, &token).map_err(|e| e.to_string())?;
+    crate::skills_core::doctor(&app_state.db).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn skills_core_agents_remove(
+    token: String,
+    app_state: State<'_, AppState>,
+) -> Result<crate::skills_core::DoctorReport, String> {
+    crate::skills_core::agents_remove(&app_state.db, &token).map_err(|e| e.to_string())?;
+    crate::skills_core::doctor(&app_state.db).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn skills_core_save_local_draft(
+    name: String,
+    body: String,
+    app_state: State<'_, AppState>,
+) -> Result<crate::skills_core::DoctorReport, String> {
+    crate::skills_core::save_local_draft(&app_state.db, &name, &body).map_err(|e| e.to_string())?;
+    crate::skills_core::doctor(&app_state.db).map_err(|e| e.to_string())
+}
