@@ -46,7 +46,7 @@ related_commits: []
 
 分头进门：可以先只用一部分 Agent。进了就必须共库。没有「在用但还按老规矩」的第三态。
 
-**去掉最后一个在用 Agent = 关张。** 停写、清空 marker、在用名单为空。库目录可以留在磁盘上，但不当开关；下次再来按第一次走。禁止「至少留一个在用」这种特殊态。
+**去掉最后一个在用 Agent = 关张。** 停写、清空 marker、在用名单为空、**库成员账清空**（SQLite 不再有工作台）。磁盘上的旧库目录可以留着，但是文件，不是开关、不是候选源。再开张仍按第一次：只从已勾 Agent 目录出候选；不把旧库名单端出来，也不因 `~/.cc-switch/skills/` 还在就跳过 `recommended`。要用旧文件，走 `import` 或从货架再装。禁止「至少留一个在用」这种特殊态。
 
 **第一次：先定在用 Agent，再确认工作台。不自动倒库。**
 
@@ -58,6 +58,7 @@ related_commits: []
 | 已勾的在用 Agent 目录里已有技能 | 只提这些目录里**已经在用的**；不把 catalog `recommended` 混进来 |
 | 已勾的在用 Agent 都是空的（空机器） | 只用 catalog `recommended` |
 | catalog 后来新增 | **不进库**，除非人再装 |
+| 关张后留下的旧库目录 | **不当候选**；不自动进工作台 |
 | 外来物（foreign） | **永不**自动进库、不删 |
 
 确认工作台之前不改任何 runtime 链接。浏览 UI 不得隐式改库或在用名单。
@@ -92,6 +93,7 @@ related_commits: []
 - 不给每个技能单独设「自动同步」；只有总闸。
 - 不给本机自建 / 导入另开一套投影规则或「先入库、稍后同步」。
 - 不把 `local-draft` 编辑做成「只改库、下次 sync 再投影」。
+- 不把关张后的旧库目录当成再开张的默认工作台或候选源。
 
 ## 现状与地基
 
@@ -201,7 +203,7 @@ cc-switch skills doctor [--json]
 - 改 `local-draft`（桌面存盘 / 经 core 的写入）：一笔投影；失败则库内副本回滚到存盘前。不另设 `edit` 子命令当第二开关。
 - `upgrade`：钉死模式下的显式换版；省略 `<name>` 则升级库内全部已过期的 `catalog-managed`。同样整笔。
 - `follow-catalog`：总闸，默认 `on`。
-- `agents add`：按当前库对齐后入伙；补不上则失败。多出来的外来物不碰。`remove`：该 Agent 退出在用，控制面不再写它（不 cascading 删外来物）。去掉最后一个 = 关张。
+- `agents add`：按当前库对齐后入伙；补不上则失败。多出来的外来物不碰。`remove`：该 Agent 退出在用，控制面不再写它（不 cascading 删外来物）。去掉最后一个 = 关张（清空库成员账与 marker；旧库文件留盘但不进下一次候选）。
 - `doctor --json`：货架 revision、`follow_catalog`、库成员与是否落后货架、在用名单 vs 实际投影、foreign / broken / duplicate、legacy writer 是否已对在用 token 停写、各在用 Agent 的数量与 description 字符量、reload。妨碍安全投影则 **exit 1**。`--json` 是 UI / CI / dev-rules 的机器契约。
 
 ## Legacy writer 过渡
@@ -236,7 +238,7 @@ dev-rules **保留**项目 `.cursor/skills` 编辑入口；**删除**的是 home
 - 库成员是工作集唯一 SSOT；symlink 与 `skills-control.json` 是生成物。
 - 装/卸/导入/自建/入伙：可一批一笔；进库不看来源，全部在用 Agent 写齐才算成功，半截不留。来源只决定是否跟货架换版。
 - 改 `local-draft` 存盘即再投影；写不齐则库内那份回滚，不留半截改。
-- 第一次先勾在用 Agent（默认全不勾，看见过不预勾），再确认工作台；一个都不勾 = 未开张；去掉最后一个在用 = 关张；有现场不混 `recommended`。
+- 第一次先勾在用 Agent（默认全不勾，看见过不预勾），再确认工作台；一个都不勾 = 未开张；去掉最后一个在用 = 关张（账清空，旧库目录不当候选）；有现场不混 `recommended`。
 - catalog 新增默认不进库。
 - 货架换版只有总闸「自动同步」（默认开）；关掉则钉死，显式 upgrade。不按技能设闸。自动跟上失败整笔回滚。
 - foreign 不自动进库、不被删。
@@ -245,8 +247,8 @@ dev-rules **保留**项目 `.cursor/skills` 编辑入口；**删除**的是 home
 
 ## 验证（Core 实现 PR 承担）
 
-- **单元**：catalog 解析、库成员、在用名单、`claude-cursor` 布局、Pi 在用后跟库、整笔失败、foreign、先勾 Agent 再出候选、默认不预勾、零勾选不算开张、去掉最后一个为关张、空目录才用 `recommended`、catalog 新增不进库、follow_catalog 默认开、关掉则 sync 不换版、自动跟上失败整笔回滚、`local-draft` 进库即投影且不跟总闸、导入失败整批不动、改 `local-draft` 失败则库内回滚。
-- **集成**：先定在用再确认工作台；有现场只确认已用项；入伙对齐；一批装/卸/导入中断后收敛且半截不留；在用 Agent 失败则库不变；改 `local-draft` 投影失败后库与 Agent 都回到存盘前。
+- **单元**：catalog 解析、库成员、在用名单、`claude-cursor` 布局、Pi 在用后跟库、整笔失败、foreign、先勾 Agent 再出候选、默认不预勾、零勾选不算开张、去掉最后一个为关张、关张后旧库目录不当候选且不挡住 `recommended`、空目录才用 `recommended`、catalog 新增不进库、follow_catalog 默认开、关掉则 sync 不换版、自动跟上失败整笔回滚、`local-draft` 进库即投影且不跟总闸、导入失败整批不动、改 `local-draft` 失败则库内回滚。
+- **集成**：先定在用再确认工作台；有现场只确认已用项；入伙对齐；一批装/卸/导入中断后收敛且半截不留；在用 Agent 失败则库不变；改 `local-draft` 投影失败后库与 Agent 都回到存盘前；关张后再开张不把旧库名单当候选。
 - **主机**：`doctor --json` 对当前在用名单 exit 0；屏幕上的库与 doctor 一致。
 
 ---
