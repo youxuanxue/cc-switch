@@ -56,13 +56,14 @@ related_commits: []
 | 场景 | 候选从哪来 |
 | --- | --- |
 | 已勾的在用 Agent 目录里已有技能 | 只提这些目录里**已经在用的**；不把 catalog `recommended` 混进来 |
+| 已勾目录里同名内容不一致 | **整笔停**；标冲突，不替人挑 |
 | 已勾的在用 Agent 都是空的（空机器） | 只用 catalog `recommended` |
 | catalog 后来新增 | **不进库**，除非人再装 |
 | 关张后留下的旧库目录 | **不当候选**；不自动进工作台 |
 | 关张后 Agent 目录里还在的链接 | **算现场**；已勾则按「已经在用」提 |
 | 外来物（foreign） | **永不**自动进库、不删 |
 
-确认进库时：现场一律 `local-draft`（不对 hash、不升格）。空机器确认的 `recommended` 从货架来，标 `catalog-managed`。确认工作台之前不改任何 runtime 链接。浏览 UI 不得隐式改库或在用名单。
+确认进库时：现场一律 `local-draft`（不对 hash、不升格）。空机器确认的 `recommended` 从货架来，标 `catalog-managed`。已勾目录里**同名内容不一致**（hash 不同）：整笔停，控制面不替人挑；人处理完再确认。确认工作台之前不改任何 runtime 链接。浏览 UI 不得隐式改库或在用名单。
 
 **后来入伙。** 对齐当前库才能进门：库里缺的必须补上，否则入伙失败。它自己多出来、库里没有的，当外来物，不碰。
 
@@ -97,6 +98,7 @@ related_commits: []
 - 不把关张后的旧库目录当成再开张的默认工作台或候选源。
 - 关张 / 出门不拆已投影链接（那是卸库的事）。
 - 不设第三态 `bundled`；第一次确认不对 hash、不把现场升成 `catalog-managed`。
+- 第一次同名内容不一致时不自动挑一份、不合并、不跳过该名继续装其余。
 
 ## 现状与地基
 
@@ -165,7 +167,7 @@ description 从来源 `SKILL.md` 派生；catalog 不维护第二份 metadata。
 ~/.claude/skills         → ~/.cursor/skills
 ```
 
-第一次技能候选**只扫已勾为在用的** Agent 目录（及其中已有的中央库投影）。未勾的目录、货架、其它发现源不进候选。只生成名单，不自动进库。
+第一次技能候选**只扫已勾为在用的** Agent 目录（及其中已有的中央库投影）。未勾的目录、货架、其它发现源不进候选。只生成名单，不自动进库。同名 hash 不同则标冲突，确认被拒，直到人处理。
 
 ### Ownership marker
 
@@ -241,7 +243,7 @@ dev-rules **保留**项目 `.cursor/skills` 编辑入口；**删除**的是 home
 - 库成员是工作集唯一 SSOT；symlink 与 `skills-control.json` 是生成物。
 - 装/卸/导入/自建/入伙：可一批一笔；进库不看来源，全部在用 Agent 写齐才算成功，半截不留。provenance 只有两种：货架 `install` = `catalog-managed`，其余 = `local-draft`。无 `bundled`。
 - 改 `local-draft` 存盘即再投影；写不齐则库内那份回滚，不留半截改。
-- 第一次先勾在用 Agent（默认全不勾，看见过不预勾），再确认工作台；一个都不勾 = 未开张；去掉最后一个在用 = 关张（账清空，不拆链接，旧库目录不当候选；目录里还在的算现场）；有现场不混 `recommended`。
+- 第一次先勾在用 Agent（默认全不勾，看见过不预勾），再确认工作台；一个都不勾 = 未开张；去掉最后一个在用 = 关张（账清空，不拆链接，旧库目录不当候选；目录里还在的算现场）；有现场不混 `recommended`；同名内容不一致则整笔停，不替人挑。
 - catalog 新增默认不进库。
 - 货架换版只有总闸「自动同步」（默认开）；关掉则钉死，显式 upgrade。不按技能设闸。自动跟上失败整笔回滚。
 - foreign 不自动进库、不被删。
@@ -250,8 +252,8 @@ dev-rules **保留**项目 `.cursor/skills` 编辑入口；**删除**的是 home
 
 ## 验证（Core 实现 PR 承担）
 
-- **单元**：catalog 解析、库成员、在用名单、`claude-cursor` 布局、Pi 在用后跟库、整笔失败、foreign、先勾 Agent 再出候选、默认不预勾、零勾选不算开张、去掉最后一个为关张、关张不拆链接、关张后旧库目录不当候选且不挡住 `recommended`、空目录才用 `recommended`、catalog 新增不进库、follow_catalog 默认开、关掉则 sync 不换版、自动跟上失败整笔回滚、`local-draft` 进库即投影且不跟总闸、导入失败整批不动、改 `local-draft` 失败则库内回滚、第一次现场标 `local-draft` 且不对 hash 提升、空机器 `recommended` 标 `catalog-managed`、无 `bundled`。
-- **集成**：先定在用再确认工作台；有现场只确认已用项且进库为 `local-draft`；入伙对齐；一批装/卸/导入中断后收敛且半截不留；在用 Agent 失败则库不变；改 `local-draft` 投影失败后库与 Agent 都回到存盘前；关张后再开张不把旧库名单当候选，目录里还在的链接仍按现场提。
+- **单元**：catalog 解析、库成员、在用名单、`claude-cursor` 布局、Pi 在用后跟库、整笔失败、foreign、先勾 Agent 再出候选、默认不预勾、零勾选不算开张、去掉最后一个为关张、关张不拆链接、关张后旧库目录不当候选且不挡住 `recommended`、空目录才用 `recommended`、catalog 新增不进库、follow_catalog 默认开、关掉则 sync 不换版、自动跟上失败整笔回滚、`local-draft` 进库即投影且不跟总闸、导入失败整批不动、改 `local-draft` 失败则库内回滚、第一次现场标 `local-draft` 且不对 hash 提升、空机器 `recommended` 标 `catalog-managed`、无 `bundled`、第一次同名 hash 不同则确认失败且库不动。
+- **集成**：先定在用再确认工作台；有现场只确认已用项且进库为 `local-draft`；同名冲突整笔停；入伙对齐；一批装/卸/导入中断后收敛且半截不留；在用 Agent 失败则库不变；改 `local-draft` 投影失败后库与 Agent 都回到存盘前；关张后再开张不把旧库名单当候选，目录里还在的链接仍按现场提。
 - **主机**：`doctor --json` 对当前在用名单 exit 0；屏幕上的库与 doctor 一致。
 
 ---
