@@ -344,6 +344,7 @@ export function SessionManagerPage({ appId }: { appId: string }) {
   const { data: resumeState } = useSessionResumeStateQuery(
     selectedSession?.providerId,
     selectedSession?.sessionId,
+    selectedSession?.sourcePath,
   );
   const resumeButton = getSessionResumeButtonCopy(resumeState?.appearance);
   const deleteSessionMutation = useDeleteSessionMutation();
@@ -453,6 +454,7 @@ export function SessionManagerPage({ appId }: { appId: string }) {
         cwd: selectedSession.projectDir ?? undefined,
         sessionId: selectedSession.sessionId,
         providerId: selectedSession.providerId,
+        sourcePath: selectedSession.sourcePath,
       });
       if (result?.action === "focused") {
         toast.success(
@@ -479,6 +481,7 @@ export function SessionManagerPage({ appId }: { appId: string }) {
         queryKey: sessionResumeStateKey(
           selectedSession.providerId,
           selectedSession.sessionId,
+          selectedSession.sourcePath,
         ),
       });
     } catch (error) {

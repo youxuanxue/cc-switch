@@ -38,10 +38,12 @@ export const sessionsApi = {
   async getResumeState(
     providerId: string,
     sessionId: string,
+    sourcePath?: string | null,
   ): Promise<SessionResumeState> {
     return await invoke("get_session_resume_state", {
       providerId,
       sessionId,
+      sourcePath,
     });
   },
 
@@ -66,14 +68,17 @@ export const sessionsApi = {
     customConfig?: string | null;
     sessionId?: string | null;
     providerId?: string | null;
+    sourcePath?: string | null;
   }): Promise<ResumeLaunchResult> {
-    const { command, cwd, customConfig, sessionId, providerId } = options;
+    const { command, cwd, customConfig, sessionId, providerId, sourcePath } =
+      options;
     return await invoke("launch_session_terminal", {
       command,
       cwd,
       customConfig,
       sessionId,
       providerId,
+      sourcePath,
     });
   },
 };

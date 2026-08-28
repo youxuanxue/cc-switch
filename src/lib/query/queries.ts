@@ -328,15 +328,18 @@ export const useSessionMessagesQuery = (
 export const sessionResumeStateKey = (
   providerId?: string,
   sessionId?: string,
-) => ["sessionResumeState", providerId, sessionId] as const;
+  sourcePath?: string,
+) => ["sessionResumeState", providerId, sessionId, sourcePath] as const;
 
 export const useSessionResumeStateQuery = (
   providerId?: string,
   sessionId?: string,
+  sourcePath?: string,
 ) => {
   return useQuery<SessionResumeState>({
-    queryKey: sessionResumeStateKey(providerId, sessionId),
-    queryFn: async () => sessionsApi.getResumeState(providerId!, sessionId!),
+    queryKey: sessionResumeStateKey(providerId, sessionId, sourcePath),
+    queryFn: async () =>
+      sessionsApi.getResumeState(providerId!, sessionId!, sourcePath),
     enabled: Boolean(providerId && sessionId),
     staleTime: 2 * 1000,
     refetchInterval: 4 * 1000,

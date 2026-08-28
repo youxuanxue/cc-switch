@@ -758,12 +758,41 @@ describe("SessionManagerPage", () => {
         cwd: "/mock/codex",
         sessionId: "codex-session-1",
         providerId: "codex",
+        sourcePath: "/mock/codex/session-1.jsonl",
       });
       expect(toastSuccessMock).toHaveBeenCalledWith(
         "已切换到已打开的会话窗口（iTerm）",
       );
     });
     expect(toastErrorMock).not.toHaveBeenCalled();
+    launch.mockRestore();
+  });
+
+  it("uses the same resume decision path for Claude sessions", async () => {
+    vi.spyOn(platform, "isMac").mockReturnValue(true);
+    const launch = vi.spyOn(sessionsApi, "launchTerminal").mockResolvedValue({
+      action: "focused",
+      app: "iTerm",
+    });
+
+    renderPage("claude");
+    await waitFor(() =>
+      expect(
+        screen.getByRole("heading", { name: "Claude Session" }),
+      ).toBeInTheDocument(),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /恢复会话/i }));
+
+    await waitFor(() => {
+      expect(launch).toHaveBeenCalledWith({
+        command: "claude --resume claude-session-1",
+        cwd: "/mock/claude",
+        sessionId: "claude-session-1",
+        providerId: "claude",
+        sourcePath: "/mock/claude/session-1.jsonl",
+      });
+    });
     launch.mockRestore();
   });
 
