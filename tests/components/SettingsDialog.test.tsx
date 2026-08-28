@@ -15,9 +15,27 @@ vi.mock("sonner", () => ({
   },
 }));
 
-const tMock = vi.fn((key: string) => key);
+const tMock = vi.fn((key: string, _options?: { defaultValue?: string }) => key);
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: tMock }),
+}));
+
+const cursorOfficialHookMock = vi.hoisted(() => vi.fn());
+
+vi.mock("@/hooks/useCursorOfficial", () => ({
+  useCursorOfficial: () => cursorOfficialHookMock(),
+}));
+
+vi.mock("@/components/providers/forms/CopilotAuthSection", () => ({
+  CopilotAuthSection: () => <div>copilot-auth-section</div>,
+}));
+
+vi.mock("@/components/providers/forms/CodexOAuthSection", () => ({
+  CodexOAuthSection: () => <div>codex-oauth-section</div>,
+}));
+
+vi.mock("@/components/providers/forms/XaiOAuthSection", () => ({
+  XaiOAuthSection: () => <div>xai-oauth-section</div>,
 }));
 
 vi.mock("@/hooks/useProxyStatus", () => ({
@@ -28,6 +46,10 @@ vi.mock("@/hooks/useProxyStatus", () => ({
     stopWithRestore: vi.fn(),
     isPending: false,
   }),
+}));
+
+vi.mock("@/hooks/useSkills", () => ({
+  useInstalledSkills: () => ({ data: [] }),
 }));
 
 interface SettingsMock {
@@ -256,6 +278,27 @@ const renderSettingsPage = (
 describe("SettingsPage Component", () => {
   beforeEach(async () => {
     tMock.mockImplementation((key: string) => key);
+    cursorOfficialHookMock.mockReset().mockReturnValue({
+      status: {
+        installed: true,
+        version: "agent 1.0",
+        authMode: "login",
+        hasUserApiKey: false,
+        authenticated: false,
+        state: "needsLogin",
+      },
+      error: null,
+      isLoading: false,
+      isError: false,
+      updateAuth: vi.fn(),
+      clearUserApiKey: vi.fn(),
+      launchLogin: vi.fn(),
+      refresh: vi.fn(),
+      isUpdating: false,
+      isClearing: false,
+      isLaunchingLogin: false,
+      isPending: false,
+    });
     settingsMock = createSettingsMock();
     importExportMock = createImportExportMock();
     useImportExportSpy.mockReset();
@@ -348,6 +391,29 @@ describe("SettingsPage Component", () => {
     // 清除选择按钮
     fireEvent.click(screen.getByRole("button", { name: "common.clear" }));
     expect(importExportMock.clearSelection).toHaveBeenCalled();
+  });
+
+  it("US-003 renders Cursor Official in the official authentication center", () => {
+    tMock.mockImplementation(
+      (key: string, options?: { defaultValue?: string }) =>
+        key === "settings.authCenter.title"
+          ? (options?.defaultValue ?? key)
+          : key === "settings.authCenter.beta"
+            ? "Beta"
+            : key,
+    );
+    renderSettingsPage();
+
+    fireEvent.click(screen.getByText("settings.tabAuth"));
+
+    expect(
+      screen.getByRole("heading", { name: "官方认证中心" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Cursor Official")).toBeInTheDocument();
+    expect(screen.queryByText("Beta")).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(
+      /\b(supported|conditional|unsupported)\b/i,
+    );
   });
 
   it("should reset tab content scroll position when switching settings tabs", () => {

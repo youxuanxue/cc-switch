@@ -497,27 +497,27 @@ git commit -m "feat(cursor): add renderer state owners"
 - `CursorOfficialAuthControl` accepts `variant: 'full' | 'compact'`, optional `onLogin`, and optional `onApiKeyReady`; it always consumes `useCursorOfficial` for auth state/mutations.
 - `CursorOfficialAuthSection` only composes heading/icon/copy plus the full shared control.
 
-- [ ] **Step 1: Write failing component tests**
+- [x] **Step 1: Write failing component tests**
 
 Assert Auth Center title is “官方认证中心”, the center-level Beta badge is absent, Cursor section is present, Login is primary, “其他方式” reveals the User API Key field, saved state shows only a mask/`hasUserApiKey`, and capability words (`supported`, `conditional`, `unsupported`) never render.
 
-- [ ] **Step 2: Run tests and verify RED**
+- [x] **Step 2: Run tests and verify RED**
 
 Run: `pnpm test:unit -- tests/components/CursorOfficialAuthControl.test.tsx tests/components/SettingsDialog.test.tsx`
 
 Expected: FAIL because Cursor UI and revised header do not exist.
 
-- [ ] **Step 3: Implement the shared auth UI**
+- [x] **Step 3: Implement the shared auth UI**
 
 Render runtime states only. Login mode shows the login button and status; User API Key remains collapsed under “其他方式” until selected/expanded. Clear uses the explicit command. Keep the input value local only until save completes, then clear it and render a masked configured state from `hasUserApiKey`.
 
-- [ ] **Step 4: Integrate Auth Center and verify GREEN**
+- [x] **Step 4: Integrate Auth Center and verify GREEN**
 
 Run: `pnpm test:unit -- tests/components/CursorOfficialAuthControl.test.tsx tests/components/SettingsDialog.test.tsx`
 
 Expected: PASS and existing Copilot/Codex/xAI sections retain their tests.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/components/cursor/CursorOfficialAuthControl.tsx src/components/settings/CursorOfficialAuthSection.tsx src/components/settings/AuthCenterPanel.tsx tests/components/CursorOfficialAuthControl.test.tsx tests/components/SettingsDialog.test.tsx

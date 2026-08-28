@@ -64,6 +64,8 @@ Run:
 - 2026-08-28 command gate: Rust formatting, `git diff --check`, and external project preflight exited 0 with only the repository's known integration skips and approved-doc branch warning.
 - 2026-08-28 RED (renderer credential cache): the first hook implementation stored the submitted User API Key in TanStack MutationCache; the focused hook test failed after inspecting mutation variables and proved the renderer-level leak.
 - 2026-08-28 GREEN (renderer auth owner): `useCursorOfficial.updateAuth` now invokes the IPC boundary directly, stores only the redacted status in QueryCache, and keeps the key out of MutationCache. The 4 hook behavior tests plus `pnpm typecheck` passed.
+- 2026-08-28 RED (shared auth UI): the focused component run failed because `CursorOfficialAuthControl` did not exist; the settings integration test also exposed the old “OAuth 认证中心” title, center-level Beta, and missing Cursor section. A separate explicit-clear test failed until the control wired the dedicated clear action.
+- 2026-08-28 GREEN (shared auth UI): `pnpm exec vitest run tests/components/CursorOfficialAuthControl.test.tsx tests/components/SettingsDialog.test.tsx` passed 15 tests. Coverage keeps Login visible as the primary path, places User API Key under “其他方式”, clears submitted input, renders only the configured mask, routes compact continuation callbacks, uses explicit clear, removes the center-level Beta, and preserves existing auth sections through thin composition; `pnpm typecheck` and `git diff --check` exited 0.
 - Remaining auth service, command, renderer, and e2e evidence is recorded before this Story advances to Done.
 
 - Status: InTest
