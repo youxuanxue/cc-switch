@@ -203,6 +203,22 @@ describe("SessionManagerPage", () => {
         sourcePath: "/mock/codex/session-3.jsonl",
         resumeCommand: "codex resume codex-session-3",
       },
+      {
+        providerId: "cursor",
+        sessionId: "11111111-1111-4111-8111-111111111111",
+        title: "Cursor Alpha",
+        projectDir: "/mock/cursor/cursor-workspace",
+        createdAt: 0,
+        lastActiveAt: 4,
+      },
+      {
+        providerId: "cursor",
+        sessionId: "22222222-2222-4222-8222-222222222222",
+        title: "Cursor Beta",
+        projectDir: "/mock/cursor/cursor-workspace",
+        createdAt: 0,
+        lastActiveAt: 3,
+      },
     ];
     const messages: Record<string, SessionMessage[]> = {
       "codex:/mock/codex/session-1.jsonl": [
@@ -357,6 +373,96 @@ describe("SessionManagerPage", () => {
     await waitFor(() => expect(screen.queryByText("Alpha Session")).toBeNull());
 
     expect(screen.getByRole("button", { name: /退出批量管理/i })).toBeVisible();
+  });
+
+  it("US-004 exposes the Cursor filter while hiding unsupported delete actions", async () => {
+    renderPage("all");
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("heading", { name: "Claude Session" }),
+      ).toBeInTheDocument(),
+    );
+
+    await switchProviderFilter(/Cursor/i);
+
+    expect(
+      await screen.findByRole("heading", { name: "Cursor Alpha" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /删除会话/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /批量管理/i }),
+    ).not.toBeInTheDocument();
+
+    await switchProviderFilter(/Codex/i);
+
+    expect(
+      await screen.findByRole("heading", { name: "Alpha Session" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /删除会话/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /批量管理/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("US-004 hides Cursor item and group checkboxes in grouped batch mode", async () => {
+    renderPage("all");
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("heading", { name: "Claude Session" }),
+      ).toBeInTheDocument(),
+    );
+
+    await enterGroupedBatchMode();
+    expandDirectoryGroup("cursor", "cursor-workspace");
+
+    expect(
+      screen.getByRole("button", { name: /Cursor Alpha/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("checkbox", {
+        name: /选择 cursor 供应商分组内会话/,
+      }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("checkbox", {
+        name: /选择 cursor-workspace 目录分组内会话/,
+      }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("checkbox", { name: "选择会话" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("exits batch mode and clears selection when switching to Cursor", async () => {
+    renderPage("all");
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("heading", { name: "Claude Session" }),
+      ).toBeInTheDocument(),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /批量管理/i }));
+    fireEvent.click(screen.getAllByRole("checkbox", { name: "选择会话" })[0]);
+    expect(screen.getByText("已选 1 项")).toBeInTheDocument();
+
+    await switchProviderFilter(/Cursor/i);
+
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", { name: /退出批量管理/i }),
+      ).not.toBeInTheDocument(),
+    );
+
+    await switchProviderFilter(/Codex/i);
+    fireEvent.click(screen.getByRole("button", { name: /批量管理/i }));
+    expect(screen.getByText("已选 0 项")).toBeInTheDocument();
   });
 
   it("drops hidden selections when search narrows the result set", async () => {

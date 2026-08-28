@@ -58,6 +58,8 @@ Run:
 - 2026-08-28 RED (capability contract): the full Vitest run kept 1,012 existing tests green and failed the new Cursor capability/resume suites only because their approved SSOT modules did not exist.
 - 2026-08-28 GREEN (capability contract): the focused capability and resume-state suites passed 3 tests with literal expectations for supported Login/User API Key/fixed resume, conditional local indexing, unsupported transcript/deletion, and non-macOS `platformUnavailable`; capability vocabulary remains an internal contract only.
 - 2026-08-28 GREEN (auth presentation boundary): Auth Center integration coverage asserts that `supported`, `conditional`, and `unsupported` never render while Cursor runtime state and actions remain visible.
+- 2026-08-28 RED (delete presentation): the Session Manager tests failed because the Cursor filter and `sessionCapabilities` owner did not exist, and grouped selection rendered disabled Cursor provider/item checkboxes instead of hiding them.
+- 2026-08-28 GREEN (delete presentation): `pnpm exec vitest run tests/components/SessionManagerPage.test.tsx tests/components/sessionUtils.test.ts` passed 31 tests. `isSessionDeletable` rejects Cursor even with a defensive `sourcePath`, every single/item/group/batch delete affordance is absent for Cursor, switching to Cursor exits and clears batch selection, search-only empty results retain the explicit exit control, and existing source-backed providers remain deletable; `pnpm typecheck`, targeted Prettier, and `git diff --check` exited 0.
 - Remaining unsupported-capability, renderer, contract-check, and e2e evidence is recorded before this Story advances to Done.
 
 - Status: InTest

@@ -538,31 +538,31 @@ git commit -m "feat(cursor): add official authentication center"
 - Produces: `isSessionDeletable(session: SessionMeta): boolean`, returning false for Cursor and preserving `Boolean(sourcePath)` for existing providers.
 - `SessionItem` receives `showSelectionControl` rather than a disabled-delete interpretation.
 
-- [ ] **Step 1: Write failing deletion-visibility tests**
+- [x] **Step 1: Write failing deletion-visibility tests**
 
 Add Cursor fixtures with no `sourcePath` and assert the Cursor provider filter exists, grouping uses `cwd/projectDir`, single delete is absent, item/group checkboxes are absent, batch mode exits and clears selection when switching to a filter with zero deletable sessions, and existing providers remain deletable.
 
-- [ ] **Step 2: Run tests and verify RED**
+- [x] **Step 2: Run tests and verify RED**
 
 Run: `pnpm test:unit -- tests/components/SessionManagerPage.test.tsx tests/components/sessionUtils.test.ts`
 
 Expected: FAIL because Cursor filter and shared capability do not exist and controls are currently disabled rather than hidden.
 
-- [ ] **Step 3: Implement the delete-capability owner and wire every consumer**
+- [x] **Step 3: Implement the delete-capability owner and wire every consumer**
 
-Replace all direct `Boolean(session.sourcePath)` eligibility decisions in the manager with `isSessionDeletable`. Render item and group checkboxes only when at least one eligible session exists. Render the single delete action only for eligible sessions. Add an effect that calls `exitSelectionMode()` when `deletableFilteredSessions.length === 0`.
+Replace all direct `Boolean(session.sourcePath)` eligibility decisions in the manager with `isSessionDeletable`. Render item and group checkboxes only when at least one eligible session exists. Render the single delete action only for eligible sessions. Exit selection mode when the selected provider has no deletable sessions; preserve the existing exit control when a search temporarily hides all results.
 
-- [ ] **Step 4: Add Cursor provider label/icon/filter**
+- [x] **Step 4: Add Cursor provider label/icon/filter**
 
 Add `cursor` to the local `ProviderFilter` union and filter menu, map it to a stable icon name/fallback, and add `apps.cursor` translations later. Do not add it to `APP_IDS` or `AppType`.
 
-- [ ] **Step 5: Run focused tests and verify GREEN**
+- [x] **Step 5: Run focused tests and verify GREEN**
 
 Run: `pnpm test:unit -- tests/components/SessionManagerPage.test.tsx tests/components/sessionUtils.test.ts`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/components/sessions/sessionCapabilities.ts src/components/sessions/SessionItem.tsx src/components/sessions/SessionManagerPage.tsx src/components/sessions/utils.ts tests/components/SessionManagerPage.test.tsx tests/components/sessionUtils.test.ts

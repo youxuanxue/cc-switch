@@ -51,6 +51,7 @@ Run:
 - Approval evidence: design status approved by user-chat-2026-08-28.
 - 2026-08-28 RED: `cargo test --manifest-path src-tauri/Cargo.toml session_manager::providers::cursor::tests -- --nocapture` exited 101 because the Cursor index status, scanner, deduplication, and lookup interfaces did not exist.
 - 2026-08-28 GREEN (backend discovery): the same focused command passed 4 Cursor adapter tests; `cargo test --manifest-path src-tauri/Cargo.toml session_manager:: -- --nocapture` passed 90 session-manager tests.
+- 2026-08-28 GREEN (renderer discovery): the focused Session Manager and utility suites passed 31 tests. Two Cursor sessions sharing one metadata `cwd` render through the existing provider → `projectDir` directory → session hierarchy and the new Cursor filter, with no Project ID, entity, table, or CRUD path.
 - Remaining discovery, renderer, and e2e evidence is recorded before this Story advances to Done.
 
 - Status: InTest

@@ -5,6 +5,7 @@ import {
   groupSessionsByProviderAndDirectory,
   shouldHideCodexMessageFromToc,
 } from "@/components/sessions/utils";
+import { isSessionDeletable } from "@/components/sessions/sessionCapabilities";
 import type { SessionMeta } from "@/types";
 
 describe("session utils", () => {
@@ -220,5 +221,59 @@ describe("session utils", () => {
     expect(
       groups[0].directories[0].sessions.map((session) => session.sessionId),
     ).toEqual(["newest", "oldest"]);
+  });
+
+  it("groups Cursor sessions directly by metadata cwd without a Project entity", () => {
+    const sessions: SessionMeta[] = [
+      {
+        providerId: "cursor",
+        sessionId: "11111111-1111-4111-8111-111111111111",
+        projectDir: "/workspace/cursor-app",
+      },
+      {
+        providerId: "cursor",
+        sessionId: "22222222-2222-4222-8222-222222222222",
+        projectDir: "/workspace/cursor-app",
+      },
+    ];
+
+    const groups = groupSessionsByProviderAndDirectory(sessions, "未知目录");
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0].providerId).toBe("cursor");
+    expect(groups[0].directories).toHaveLength(1);
+    expect(groups[0].directories[0]).toMatchObject({
+      projectDir: "/workspace/cursor-app",
+      label: "cursor-app",
+    });
+    expect(
+      groups[0].directories[0].sessions.map((session) => session.sessionId),
+    ).toEqual([
+      "11111111-1111-4111-8111-111111111111",
+      "22222222-2222-4222-8222-222222222222",
+    ]);
+  });
+
+  it("keeps deletion eligibility in one owner and always rejects Cursor", () => {
+    expect(
+      isSessionDeletable({
+        providerId: "codex",
+        sessionId: "source-backed",
+        sourcePath: "/tmp/session.jsonl",
+      }),
+    ).toBe(true);
+    expect(
+      isSessionDeletable({
+        providerId: "codex",
+        sessionId: "missing-source",
+      }),
+    ).toBe(false);
+    expect(
+      isSessionDeletable({
+        providerId: "cursor",
+        sessionId: "cursor-with-defensive-source",
+        sourcePath: "/tmp/must-not-delete.jsonl",
+      }),
+    ).toBe(false);
   });
 });

@@ -59,6 +59,7 @@ import { extractErrorMessage } from "@/utils/errorUtils";
 import { isMac } from "@/lib/platform";
 import { ProviderIcon } from "@/components/ProviderIcon";
 import { SessionItem } from "./SessionItem";
+import { isSessionDeletable } from "./sessionCapabilities";
 import { SessionMessageItem } from "./SessionMessageItem";
 import { SessionTocDialog, SessionTocSidebar } from "./SessionToc";
 import {
@@ -84,6 +85,7 @@ const SESSION_GROUP_EXPANSION_STORAGE_KEY =
 
 type ProviderFilter =
   | "all"
+  | "cursor"
   | "codex"
   | "grokbuild"
   | "claude"
@@ -215,6 +217,10 @@ export function SessionManagerPage({ appId }: { appId: string }) {
   );
   const [isBatchDeleting, setIsBatchDeleting] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
+  const exitSelectionMode = useCallback(() => {
+    setSelectionMode(false);
+    setSelectedSessionKeys(new Set());
+  }, []);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   const [search, setSearch] = useState("");
@@ -457,7 +463,7 @@ export function SessionManagerPage({ appId }: { appId: string }) {
       return;
     }
 
-    const targets = deleteTargets.filter((session) => session.sourcePath);
+    const targets = deleteTargets.filter(isSessionDeletable);
     setDeleteTargets(null);
 
     if (targets.length === 0) {
@@ -558,8 +564,18 @@ export function SessionManagerPage({ appId }: { appId: string }) {
   };
 
   const deletableFilteredSessions = useMemo(
-    () => filteredSessions.filter((session) => Boolean(session.sourcePath)),
+    () => filteredSessions.filter(isSessionDeletable),
     [filteredSessions],
+  );
+
+  const hasDeletableSessionsForProvider = useMemo(
+    () =>
+      sessions.some(
+        (session) =>
+          (providerFilter === "all" || session.providerId === providerFilter) &&
+          isSessionDeletable(session),
+      ),
+    [providerFilter, sessions],
   );
 
   const selectedSessions = useMemo(
@@ -571,9 +587,15 @@ export function SessionManagerPage({ appId }: { appId: string }) {
   );
 
   const selectedDeletableSessions = useMemo(
-    () => selectedSessions.filter((session) => Boolean(session.sourcePath)),
+    () => selectedSessions.filter(isSessionDeletable),
     [selectedSessions],
   );
+
+  useEffect(() => {
+    if (selectionMode && !hasDeletableSessionsForProvider) {
+      exitSelectionMode();
+    }
+  }, [exitSelectionMode, hasDeletableSessionsForProvider, selectionMode]);
 
   useEffect(() => {
     if (!selectionMode) return;
@@ -607,9 +629,7 @@ export function SessionManagerPage({ appId }: { appId: string }) {
   const getGroupSelectionState = (
     groupSessions: SessionMeta[],
   ): GroupSelectionState => {
-    const selectableSessions = groupSessions.filter((session) =>
-      Boolean(session.sourcePath),
-    );
+    const selectableSessions = groupSessions.filter(isSessionDeletable);
     const selectedCount = selectableSessions.filter((session) =>
       selectedSessionKeys.has(getSessionKey(session)),
     ).length;
@@ -627,7 +647,7 @@ export function SessionManagerPage({ appId }: { appId: string }) {
   };
 
   const toggleSessionChecked = (session: SessionMeta, checked: boolean) => {
-    if (!session.sourcePath) return;
+    if (!isSessionDeletable(session)) return;
     const key = getSessionKey(session);
     setSelectedSessionKeys((current) => {
       const next = new Set(current);
@@ -644,9 +664,7 @@ export function SessionManagerPage({ appId }: { appId: string }) {
     groupSessions: SessionMeta[],
     checked: boolean,
   ) => {
-    const selectableSessions = groupSessions.filter((session) =>
-      Boolean(session.sourcePath),
-    );
+    const selectableSessions = groupSessions.filter(isSessionDeletable);
     if (selectableSessions.length === 0) return;
 
     setSelectedSessionKeys((current) => {
@@ -701,10 +719,9 @@ export function SessionManagerPage({ appId }: { appId: string }) {
         key={sessionKey}
         session={session}
         isSelected={isSelected}
-        selectionMode={selectionMode}
+        showSelectionControl={selectionMode && isSessionDeletable(session)}
         searchQuery={search}
         isChecked={selectedSessionKeys.has(sessionKey)}
-        isCheckDisabled={!session.sourcePath}
         onSelect={setSelectedKey}
         onToggleChecked={(checked) => toggleSessionChecked(session, checked)}
       />
@@ -717,7 +734,7 @@ export function SessionManagerPage({ appId }: { appId: string }) {
     variant: "secondary" | "outline",
   ) => (
     <Badge variant={variant} className="shrink-0 text-xs">
-      {selectionMode
+      {selectionMode && selectionState.selectableCount > 0
         ? `${selectionState.selectedCount}/${selectionState.selectableCount}`
         : totalCount}
     </Badge>
@@ -728,12 +745,11 @@ export function SessionManagerPage({ appId }: { appId: string }) {
     providerLabel: string,
     selectionState: GroupSelectionState,
   ) => {
-    if (!selectionMode) return null;
+    if (!selectionMode || selectionState.selectableCount === 0) return null;
 
     return (
       <Checkbox
         checked={selectionState.checked}
-        disabled={selectionState.selectableCount === 0}
         aria-label={t("sessionManager.selectProviderGroupForBatch", {
           defaultValue: "选择 {{provider}} 供应商分组内会话",
           provider: providerLabel,
@@ -753,12 +769,11 @@ export function SessionManagerPage({ appId }: { appId: string }) {
     directoryGroup: SessionDirectoryGroup,
     selectionState: GroupSelectionState,
   ) => {
-    if (!selectionMode) return null;
+    if (!selectionMode || selectionState.selectableCount === 0) return null;
 
     return (
       <Checkbox
         checked={selectionState.checked}
-        disabled={selectionState.selectableCount === 0}
         aria-label={t("sessionManager.selectDirectoryGroupForBatch", {
           defaultValue: "选择 {{directory}} 目录分组内会话",
           directory: directoryGroup.label,
@@ -793,11 +808,6 @@ export function SessionManagerPage({ appId }: { appId: string }) {
   const openBatchDeleteDialog = () => {
     if (selectedDeletableSessions.length === 0) return;
     setDeleteTargets(selectedDeletableSessions);
-  };
-
-  const exitSelectionMode = () => {
-    setSelectionMode(false);
-    setSelectedSessionKeys(new Set());
   };
 
   return (
@@ -1110,6 +1120,16 @@ export function SessionManagerPage({ appId }: { appId: string }) {
                                 <span>
                                   {t("sessionManager.providerFilterAll")}
                                 </span>
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="cursor">
+                              <div className="flex items-center gap-2">
+                                <ProviderIcon
+                                  icon={getProviderIconName("cursor")}
+                                  name="cursor"
+                                  size={14}
+                                />
+                                <span>Cursor</span>
                               </div>
                             </SelectItem>
                             <SelectItem value="codex">
@@ -1596,37 +1616,37 @@ export function SessionManagerPage({ appId }: { appId: string }) {
                             </TooltipContent>
                           </Tooltip>
                         )}
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              className="gap-1.5"
-                              onClick={() =>
-                                setDeleteTargets([selectedSession])
-                              }
-                              disabled={
-                                !selectedSession.sourcePath || isDeleting
-                              }
-                            >
-                              <Trash2 className="size-3.5" />
-                              <span className="hidden sm:inline">
-                                {isDeleting
-                                  ? t("sessionManager.deleting", {
-                                      defaultValue: "删除中...",
-                                    })
-                                  : t("sessionManager.delete", {
-                                      defaultValue: "删除会话",
-                                    })}
-                              </span>
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            {t("sessionManager.deleteTooltip", {
-                              defaultValue: "永久删除此本地会话记录",
-                            })}
-                          </TooltipContent>
-                        </Tooltip>
+                        {isSessionDeletable(selectedSession) ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                className="gap-1.5"
+                                onClick={() =>
+                                  setDeleteTargets([selectedSession])
+                                }
+                                disabled={isDeleting}
+                              >
+                                <Trash2 className="size-3.5" />
+                                <span className="hidden sm:inline">
+                                  {isDeleting
+                                    ? t("sessionManager.deleting", {
+                                        defaultValue: "删除中...",
+                                      })
+                                    : t("sessionManager.delete", {
+                                        defaultValue: "删除会话",
+                                      })}
+                                </span>
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              {t("sessionManager.deleteTooltip", {
+                                defaultValue: "永久删除此本地会话记录",
+                              })}
+                            </TooltipContent>
+                          </Tooltip>
+                        ) : null}
                       </div>
                     </div>
 
