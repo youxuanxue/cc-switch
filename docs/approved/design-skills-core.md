@@ -36,6 +36,8 @@ related_commits: []
 
 分头进门：可以先只用一部分 Agent。进了就必须共库。没有「在用但还按老规矩」的第三态。
 
+**去掉最后一个在用 Agent = 关张。** 停写、清空 marker、在用名单为空。库目录可以留在磁盘上，但不当开关；下次再来按第一次走。禁止「至少留一个在用」这种特殊态。
+
 **第一次：先定在用 Agent，再确认工作台。不自动倒库。**
 
 1. 人先勾这台机器**在用哪些 Agent**（v1 接不住的不出现）。默认**全不勾**；探测到目录里有东西的只标「看见过」，不预勾。看见过 ≠ 在用。确认前不改链接。**一个都不勾 = 控制面未开张**：不写 marker、不碰磁盘、不建空库；下次再来仍是第一次。
@@ -175,7 +177,7 @@ cc-switch skills doctor [--json]
 
 - `sync`：校验货架、更新**已在库中**的 catalog-managed 副本（drift 则停）、把库投影到全部在用 Agent。不把货架未入库条目装进来。`--check` 只计算。
 - `install` / `uninstall`：改库成员；任一在用 Agent 失败则整笔失败。
-- `agents add`：按当前库对齐后入伙；补不上则失败。多出来的外来物不碰。`remove`：该 Agent 退出在用，控制面不再写它（不 cascading 删外来物）。
+- `agents add`：按当前库对齐后入伙；补不上则失败。多出来的外来物不碰。`remove`：该 Agent 退出在用，控制面不再写它（不 cascading 删外来物）。去掉最后一个 = 关张。
 - `doctor --json`：货架 revision、库成员、在用名单 vs 实际投影、foreign / broken / duplicate、legacy writer 是否已对在用 token 停写、各在用 Agent 的数量与 description 字符量、reload。妨碍安全投影则 **exit 1**。`--json` 是 UI / CI / dev-rules 的机器契约。
 
 ## Legacy writer 过渡
@@ -209,7 +211,7 @@ dev-rules **保留**项目 `.cursor/skills` 编辑入口；**删除**的是 home
 - 下一份实现不出现第二 writer、第二本启用账、技能 × Agent 开关。
 - 库成员是工作集唯一 SSOT；symlink 与 `skills-control.json` 是生成物。
 - 装/卸/入伙：全部在用 Agent 写齐才算成功。
-- 第一次先勾在用 Agent（默认全不勾，看见过不预勾），再确认工作台；一个都不勾 = 未开张；有现场不混 `recommended`。
+- 第一次先勾在用 Agent（默认全不勾，看见过不预勾），再确认工作台；一个都不勾 = 未开张；去掉最后一个在用 = 关张；有现场不混 `recommended`。
 - catalog 新增默认不进库。
 - foreign 不自动进库、不被删。
 - 在用 token 上 legacy writer 可被 doctor 证明已停写。
@@ -217,7 +219,7 @@ dev-rules **保留**项目 `.cursor/skills` 编辑入口；**删除**的是 home
 
 ## 验证（Core 实现 PR 承担）
 
-- **单元**：catalog 解析、库成员、在用名单、`claude-cursor` 布局、Pi 在用后跟库、整笔失败、foreign、先勾 Agent 再出候选、默认不预勾、零勾选不算开张、空目录才用 `recommended`、catalog 新增不进库。
+- **单元**：catalog 解析、库成员、在用名单、`claude-cursor` 布局、Pi 在用后跟库、整笔失败、foreign、先勾 Agent 再出候选、默认不预勾、零勾选不算开张、去掉最后一个为关张、空目录才用 `recommended`、catalog 新增不进库。
 - **集成**：先定在用再确认工作台；有现场只确认已用项；入伙对齐；装/卸中断后收敛；在用 Agent 失败则库不变。
 - **主机**：`doctor --json` 对当前在用名单 exit 0；屏幕上的库与 doctor 一致。
 
