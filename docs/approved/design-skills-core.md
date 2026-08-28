@@ -32,7 +32,7 @@ related_commits: []
 | runtime 路径契约 | CC Switch adapter 表（单元测试固定） |
 | 磁盘健康 | `cc-switch skills doctor` |
 
-长期命令面：
+长期命令面（**当前 crate 无 bin**；v1 必须提供与桌面同一 Rust core 的 headless 入口，供 CI / dev-rules 调用。子命令、`--json`、exit code 以本节为契约；分发形态留给 Core 实现 PR）：
 
 ```bash
 cc-switch skills sync [--check] [--runtime <id>] [--mode managed|legacy]
@@ -49,6 +49,7 @@ cc-switch skills doctor [--json]
 - 不做 Project Skill 统一管理（`.cursor/skills` 等项目路径保持现有规则）。
 - **不在 agent-skills 扩 install/sync CLI**；不在 CodeG 投资 Skills Core。
 - 不把 skills.sh / 硬编码 GitHub 仓库列表升格为 catalog SSOT（仅作补充发现源）。
+- 不把 Claude Desktop / OpenClaw 纳入 v1 Skills managed（现网无可用 skill sync）。
 
 ## 现状与地基
 
@@ -148,9 +149,27 @@ catalog-managed 磁盘 drift：`sync` fail closed，提示真实 Git owner，不
 
 `recommended` 只在 runtime **首次**进入 `managed` 时形成候选；确认后永不自动重放。
 
+**Pi 裁决：** 现网 Pi 是 exists=active（`toggle` 不持久化 `enabled_pi`，磁盘存在即启用）。这与「SQLite 是启用态唯一 SSOT」冲突。v1：Pi 进入 `managed` 后，exists=active 降为 adapter 生成物（磁盘存在跟随 SQLite）；未接管前保持现状。禁止把 exists=active 写成第二套启用态。
+
 ### Runtime adapters
 
 每个 runtime 独立处于 `managed` | `legacy` | `unsupported` 之一。一个 runtime 阻塞不阻止其它 runtime 接管。
+
+**身份映射（禁止实现期再发明第二套枚举）：**
+
+| 接管 token | 现有 `AppType` | 角色 |
+| --- | --- | --- |
+| `claude-cursor` | `Claude` + **新身份** Cursor | 原子耦合组；同启同停；`managed_runtimes` 只写此 token，不拆成 `claude`/`cursor` |
+| `codex` | `Codex` | 已有 Skills runtime |
+| `gemini` | `Gemini` | 已有；路径 `~/.gemini/skills`（Gemini CLI，不是 Antigravity） |
+| `grokbuild` | `GrokBuild` | 已有 |
+| `opencode` | `OpenCode` | 已有 |
+| `hermes` | `Hermes` | 已有 |
+| `pi` | `Pi` | 已有；接管后见上方 Pi 裁决 |
+| `antigravity` | **新身份** | 新 adapter |
+| — | `ClaudeDesktop` / `OpenClaw` | v1 **unsupported**（现网 skill sync no-op / `SkillApps` 永不启用） |
+
+已有 runtime 的消费路径以 `SkillService::get_app_skills_dir` 为 SSOT，设计不再抄路径表。
 
 **关键裁决：Claude + Cursor 耦合组 `claude-cursor`**
 
@@ -161,29 +180,25 @@ dev-rules 与 Cursor/Claude Code 的契约是：
 ~/.claude/skills         → ~/.cursor/skills （整目录 symlink）
 ```
 
-cc-switch 在 **managed** 模式下必须采用上述布局，**废弃**向 `~/.claude/skills/<name>` 逐 skill 写入的旧路径。矩阵中 Claude 与 Cursor 作为耦合组展示（同启同停）。
+cc-switch 在 **managed** 模式下必须采用上述布局，**废弃**向 `~/.claude/skills/<name>` 逐 skill 写入的旧路径。矩阵中展示为一列「Claude + Cursor」。
 
-**v1 需新增的 runtime adapter：**
+**v1 新增 adapter 路径：**
 
-| runtime | 消费路径 |
+| 接管 token | 消费路径 |
 | --- | --- |
-| Cursor | `~/.cursor/skills/<name>` |
-| Antigravity CLI | `~/.gemini/antigravity-cli/skills/<name>` |
-
-**cc-switch 已有、直接纳入 managed 的 runtime：**
-
-Codex、Gemini、Pi、OpenCode、OpenClaw、Hermes、GrokBuild、Claude Desktop（按现有 `AppType` 与路径表）。
+| `claude-cursor`（Cursor 侧） | `~/.cursor/skills/<name>` |
+| `antigravity` | `~/.gemini/antigravity-cli/skills/<name>` |
 
 **legacy import 扫描范围（首次接管）：**
 
 - `~/.cursor/skills`、`~/.codex/skills`、`~/.gemini/antigravity-cli/skills`
 - `~/.codeg/skills`（CodeG legacy）
 - `~/.twin/skills/twin`
-- 现有 cc-switch SSOT 与 runtime 目录
+- 现有 cc-switch SSOT 与 `SKILLS_APP_IDS` 对应 runtime 目录
 
 ### Ownership marker
 
-`~/.cc-switch/skills-control.json`：
+`~/.cc-switch/skills-control.json` 是 SQLite `skill_runtime_adoption` 的**生成物**（`sync` 重写，禁止手改）。给无法打开 SQLite 的 legacy writer 提供只读信号；「谁已被接管」的权威仍是 SQLite。
 
 ```json
 {
@@ -193,11 +208,11 @@ Codex、Gemini、Pi、OpenCode、OpenClaw、Hermes、GrokBuild、Claude Desktop�
     "repo": "https://github.com/youxuanxue/agent-skills.git",
     "revision": "<40-char-sha>"
   },
-  "managed_runtimes": ["cursor", "codex"]
+  "managed_runtimes": ["claude-cursor", "codex"]
 }
 ```
 
-legacy writer 读到 marker 且自身 runtime 在 `managed_runtimes` 内时 **必须停止写入**。仅观察 symlink 不能证明 writer 已停用。
+legacy writer 读到 marker 且自身 runtime 在 `managed_runtimes` 内（Claude / Cursor 均匹配 `claude-cursor`）时 **必须停止写入**。仅观察 symlink 不能证明 writer 已停用。
 
 ## 命令契约
 
@@ -209,7 +224,7 @@ legacy writer 读到 marker 且自身 runtime 在 `managed_runtimes` 内时 **�
 4. 全量预检（foreign collision、路径重叠、budget）通过后，再改链接。
 5. 中断后重跑必须收敛；输出 managed/legacy/unsupported 摘要。
 
-`--check` 只计算。`--mode managed|legacy` 必须与 `--runtime` 同用。
+`--check` 只计算。`--mode managed|legacy` 必须与 `--runtime` 同用。`--runtime` 取值即上方身份映射表的接管 token。
 
 ### `cc-switch skills doctor --json`
 
@@ -236,7 +251,7 @@ dev-rules **保留**项目 `.cursor/skills` 编辑入口与规则/sync；**删�
 
 ## 跨仓库 PR 顺序
 
-1. **本文件 merge**（cc-switch 审批基线）
+1. **本文件 merge**（cc-switch 审批基线）。**进 main 前** `approved_by` 必须从 `pending` 改为具体审批人名（R5）；禁止先合再翻转。
 2. **agent-skills**：README 改 writer 声明为 cc-switch（纯文档）
 3. **cc-switch Core**：catalog reader → DB 字段 → doctor/sync CLI → Cursor/Antigravity + claude-cursor → UI 接线
 4. **dev-rules / Twin**：inactive contract（小 PR，绑定本 approved doc）
@@ -248,7 +263,7 @@ dev-rules **保留**项目 `.cursor/skills` 编辑入口与规则/sync；**删�
 
 - 用户在 CC Switch 完成 Library → 矩阵 → 诊断的完整旅程。
 - 共享 Skill 有唯一 Git owner + catalog identity。
-- SQLite activation 是本机启用态唯一 SSOT；symlink 只是生成产物。
+- SQLite activation 是本机启用态唯一 SSOT；symlink 与 `skills-control.json` 只是生成产物。Pi 进入 managed 后不再以 exists=active 为启用态。
 - 已有 legacy 机器首次接管导入 active set，而非静默缩成两个 `recommended` skill。
 - foreign collision / catalog drift / writer overlap 在改链接前 fail closed。
 - UI 与 `cc-switch skills` CLI 共享同一 core 与 `--json` 语义。
@@ -256,7 +271,7 @@ dev-rules **保留**项目 `.cursor/skills` 编辑入口与规则/sync；**删�
 
 ## 验证
 
-- **单元测试**：catalog 解析、provenance 分类、claude-cursor 布局、managed/legacy 判定、foreign 分类、首次接管只应用一次 `recommended`。
+- **单元测试**：catalog 解析、provenance 分类、身份映射 token、claude-cursor 布局、Pi managed 后启用态走 SQLite、managed/legacy 判定、foreign 分类、首次接管只应用一次 `recommended`。
 - **集成测试**：clean-home 接管；legacy import；中断后重跑收敛；单 runtime legacy 不阻塞其它 runtime。
 - **主机验收**：`cc-switch skills doctor --json` 对已 managed runtime exit 0；矩阵选择与 runtime discovery 一致。
 
