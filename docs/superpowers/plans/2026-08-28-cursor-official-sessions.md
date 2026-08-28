@@ -797,6 +797,8 @@ Expected: PASS.
 pnpm typecheck
 pnpm format:check
 pnpm test:unit
+pnpm test:e2e tests/e2e/cursor-official-sessions.spec.ts
+cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 cargo test --manifest-path src-tauri/Cargo.toml
 git diff --check
 python3 /Users/feng/Codes/dev-rules/scripts/check_approved_docs.py
@@ -805,11 +807,11 @@ PREFLIGHT_REPO_ROOT=/Users/feng/Codes/dev/cc-switch-wt-cursor-official-sessions 
 
 Expected: all commands exit 0. The approved-doc checker may print the already-approved non-prototype branch notice but must not fail.
 
-- [ ] **Step 5: Run review and fix every actionable finding**
+- [x] **Step 5: Run review and fix every actionable finding**
 
 Use `$xj-review` on `origin/main...HEAD`, rerun all affected focused tests after each fix, then rerun Step 4.
 
-- [ ] **Step 6: Commit final verification-only fixes if needed**
+- [x] **Step 6: Commit final verification-only fixes if needed**
 
 ```bash
 git add -u

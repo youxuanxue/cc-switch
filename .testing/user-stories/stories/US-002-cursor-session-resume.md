@@ -38,10 +38,12 @@
 - src-tauri/src/services/cursor_official.rs::tests::us002_rejects_invalid_workspace_overrides
 - src-tauri/src/services/cursor_official.rs::tests::us002_private_launcher_self_deletes_and_never_exposes_key
 - src-tauri/src/services/cursor_official.rs::tests::us002_revalidates_workspace_and_cleans_failed_launch
+- src-tauri/src/services/cursor_official.rs::tests::stale_cleanup_preserves_spoofed_or_extended_same_prefix_directories
 - tests/components/cursorResumeState.test.ts::US-002 derives resume state in fixed priority order
 - tests/components/CursorResumeGate.test.tsx::US-002 resumes a ready session through dedicated Cursor IPC
 - tests/components/CursorResumeGate.test.tsx::US-002 retains one workspace override through authentication remediation
 - tests/components/CursorResumeGate.test.tsx::US-002 resets workspace override when the selected session changes
+- tests/components/SessionManagerPage.test.tsx::US-002/US-004 never polls generic resume state for Cursor
 - tests/e2e/cursor-official-sessions.spec.ts::US-002 resumes Cursor sessions through inline remediation
 
 Run:
@@ -60,8 +62,12 @@ Run:
 - 2026-08-28 RED (renderer state): the approved `pnpm test:unit -- ...` command exposed a repository script quirk and ran the full Vitest suite; 1,012 existing tests passed while the two new Cursor suites failed only because `cursorCapabilities` and `cursorResumeState` did not exist. Subsequent focused commands use `pnpm exec vitest run <files>`.
 - 2026-08-28 GREEN (renderer state): `pnpm exec vitest run tests/hooks/useCursorOfficial.test.tsx tests/config/cursorCapabilities.test.ts tests/components/cursorResumeState.test.ts` passed 7 tests, including the fixed platform → CLI → workspace → authentication → ready priority; `pnpm typecheck`, targeted Prettier, and `git diff --check` exited 0.
 - 2026-08-28 RED (inline resume): `pnpm exec vitest run tests/components/CursorResumeGate.test.tsx tests/components/SessionManagerPage.test.tsx` exited 1 because `CursorResumeGate` did not exist and the Cursor detail still lacked the dedicated Continue action. A second focused RED proved that a selected path had to be replaced by the canonical workspace returned from resume-context validation before launch.
-- 2026-08-28 GREEN (inline resume): the same focused command passed 31 tests. Coverage includes dedicated ready/Login/User API Key launch IPC, silent directory cancellation, canonical override retention through authentication, per-session override reset, fixed state priority, separate index diagnostics, launch-time `workspaceRequired` recovery, collapsed technical details, and the absence of Cursor message/generic-terminal calls. `pnpm typecheck`, targeted Prettier, and `git diff --check` exited 0.
+- 2026-08-28 GREEN (inline resume): the same focused command passed 31 tests. Coverage includes dedicated ready/Login/User API Key launch IPC, silent directory cancellation, canonical override retention through authentication, per-session override reset, fixed state priority, launch-time `workspaceRequired` recovery, collapsed technical details, and the absence of Cursor message/generic-terminal calls. `pnpm typecheck`, targeted Prettier, and `git diff --check` exited 0.
 - 2026-08-28 GREEN (real renderer): Playwright verified one-click ready resume calls only `launch_cursor_session`, while a moved workspace is selected once, canonicalized through resume context, retained through Login remediation, and launched only through `launch_cursor_login_and_session`; no generic terminal IPC is recorded.
-- 2026-08-28 FINAL: 15 focused Cursor Official service tests, 64 focused renderer tests, and 4 real-renderer Playwright journeys passed. The complete Cargo suite passed 2,890 tests with 5 ignored; the complete Vitest suite passed 1,057 tests across 140 files.
+- 2026-08-28 RED (review R-002): the selected Cursor session still invoked the generic `get_session_resume_state` query, and the original mechanical contract did not reject that bypass.
+- 2026-08-28 GREEN (review R-002): all three generic resume-query identifiers are now disabled for Cursor, the dedicated owner remains unchanged, and the SSOT checker rejects future regressions. The focused Session Manager and checker suites exited 0.
+- 2026-08-28 RED (final review R-001/R-004): the 17-test Cursor Official service suite failed two new regressions because stale cleanup recursively deleted spoofed same-prefix directories and resume-context validation treated a supplied missing override as `workspaceRequired`.
+- 2026-08-28 GREEN (final review R-001/R-004): stale cleanup now requires the exact private launcher shape, mode, and owner header, preserves unknown contents, and removes only the known file plus an empty directory. Context validation rejects empty or missing supplied overrides, while final launch still returns `workspaceRequired` when a previously valid override disappears. The service suite passed 17/17.
+- 2026-08-28 FINAL: 17 focused Cursor Official service tests, 55 focused renderer/contract tests, and 5 real-renderer Playwright journeys passed in the final fix round. The complete Cargo suite passed 2,911 tests with 5 ignored; the complete Vitest suite passed 1,073/1,073 before final review.
 
 - Status: Done

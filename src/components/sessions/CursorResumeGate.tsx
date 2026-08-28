@@ -11,7 +11,6 @@ import {
 import { CursorOfficialAuthControl } from "@/components/cursor/CursorOfficialAuthControl";
 import { Button } from "@/components/ui/button";
 import { useCursorOfficial } from "@/hooks/useCursorOfficial";
-import { useCursorSessionIndex } from "@/hooks/useCursorSessionIndex";
 import { cursorApi, type CursorLaunchResult } from "@/lib/api/cursor";
 import { settingsApi } from "@/lib/api/settings";
 import { isMac } from "@/lib/platform";
@@ -37,7 +36,6 @@ interface LaunchVariables {
 export function CursorResumeGate({ session }: CursorResumeGateProps) {
   const { t } = useTranslation();
   const official = useCursorOfficial();
-  const index = useCursorSessionIndex();
   const [workspaceOverrideState, setWorkspaceOverrideState] =
     useState<SessionWorkspaceOverride | null>(null);
   const [
@@ -167,12 +165,6 @@ export function CursorResumeGate({ session }: CursorResumeGateProps) {
     }
   };
 
-  const indexUnavailableReason =
-    index.status?.state === "indexUnavailable"
-      ? index.status.reason
-      : index.isError
-        ? extractErrorMessage(index.error)
-        : null;
   const contextError = resumeContext.isError
     ? extractErrorMessage(resumeContext.error)
     : null;
@@ -183,21 +175,6 @@ export function CursorResumeGate({ session }: CursorResumeGateProps) {
   return (
     <div className="h-full overflow-y-auto p-4">
       <div className="mx-auto max-w-2xl space-y-4">
-        {indexUnavailableReason ? (
-          <div
-            role="alert"
-            className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200"
-          >
-            <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-            <span>
-              {t("sessionManager.cursorIndexUnavailable", {
-                defaultValue: "Cursor 会话索引不可用",
-              })}
-              ：{indexUnavailableReason}
-            </span>
-          </div>
-        ) : null}
-
         <div className="space-y-4 rounded-lg border border-border/60 bg-background/50 p-4">
           <div className="space-y-1">
             <h3 className="text-sm font-semibold">

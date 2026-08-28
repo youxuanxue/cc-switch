@@ -3,10 +3,11 @@ import { cursorApi, type CursorSessionIndexStatus } from "@/lib/api/cursor";
 
 export const cursorSessionIndexQueryKey = ["cursor-session-index"] as const;
 
-export function useCursorSessionIndex() {
+export function useCursorSessionIndex(enabled = true) {
   const query = useQuery<CursorSessionIndexStatus>({
     queryKey: cursorSessionIndexQueryKey,
     queryFn: () => cursorApi.getSessionIndexStatus(),
+    enabled,
   });
 
   return {

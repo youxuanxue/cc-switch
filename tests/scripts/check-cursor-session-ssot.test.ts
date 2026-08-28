@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -24,6 +30,11 @@ function createConformingFixture() {
     root,
     "src/hooks/useCursorOfficial.ts",
     "export function useCursorOfficial() { return { status: null }; }\n",
+  );
+  writeFixtureFile(
+    root,
+    "src/hooks/useCursorSessionIndex.ts",
+    "export function useCursorSessionIndex() { return { status: null }; }\n",
   );
   writeFixtureFile(
     root,
@@ -84,7 +95,16 @@ function createConformingFixture() {
     [
       'import { CursorResumeGate } from "./CursorResumeGate";',
       'import { isSessionDeletable } from "./sessionCapabilities";',
-      "export function SessionManagerPage({ session }: { session: any }) {",
+      'import { useCursorSessionIndex } from "../../hooks/useCursorSessionIndex";',
+      'import { useSessionResumeStateQuery } from "../../lib/query";',
+      "export function SessionManagerPage({ session, providerFilter }: { session: any; providerFilter: string }) {",
+      '  const isCursorSession = session?.providerId === "cursor";',
+      '  useCursorSessionIndex(providerFilter === "cursor");',
+      "  useSessionResumeStateQuery(",
+      "    isCursorSession ? undefined : session?.providerId,",
+      "    isCursorSession ? undefined : session?.sessionId,",
+      "    isCursorSession ? undefined : session?.sourcePath,",
+      "  );",
       "  return isSessionDeletable(session) ? <CursorResumeGate /> : null;",
       "}",
     ].join("\n"),
@@ -140,6 +160,174 @@ describe("US-004 Cursor session SSOT checker", () => {
     expect(result.output).toContain("CursorResumeClone.tsx");
   });
 
+  it("rejects generic resume-state polling that remains enabled for Cursor", () => {
+    const root = createConformingFixture();
+    writeFixtureFile(
+      root,
+      "src/components/sessions/SessionManagerPage.tsx",
+      [
+        'import { CursorResumeGate } from "./CursorResumeGate";',
+        'import { isSessionDeletable } from "./sessionCapabilities";',
+        'import { useSessionResumeStateQuery } from "../../lib/query";',
+        "export function SessionManagerPage({ session }: { session: any }) {",
+        "  useSessionResumeStateQuery(",
+        "    session?.providerId,",
+        "    session?.sessionId,",
+        "    session?.sourcePath,",
+        "  );",
+        "  return isSessionDeletable(session) ? <CursorResumeGate /> : null;",
+        "}",
+      ].join("\n"),
+    );
+
+    const result = runChecker(root);
+
+    expect(result.status).toBe(1);
+    expect(result.output).toContain("CURSOR_RESUME_OWNER_BYPASS");
+    expect(result.output).toContain("SessionManagerPage.tsx");
+    expect(result.output).toContain("generic resume-state query");
+  });
+
+  it("rejects every unguarded generic resume query even when another call is guarded", () => {
+    const root = createConformingFixture();
+    writeFixtureFile(
+      root,
+      "src/components/sessions/SessionManagerPage.tsx",
+      [
+        'import { CursorResumeGate } from "./CursorResumeGate";',
+        'import { isSessionDeletable } from "./sessionCapabilities";',
+        'import { useCursorSessionIndex } from "../../hooks/useCursorSessionIndex";',
+        'import { useSessionResumeStateQuery } from "../../lib/query";',
+        "export function SessionManagerPage({ session, providerFilter }: { session: any; providerFilter: string }) {",
+        '  const isCursorSession = session?.providerId === "cursor";',
+        '  useCursorSessionIndex(providerFilter === "cursor");',
+        "  useSessionResumeStateQuery(",
+        "    isCursorSession ? undefined : session?.providerId,",
+        "    isCursorSession ? undefined : session?.sessionId,",
+        "    isCursorSession ? undefined : session?.sourcePath,",
+        "  );",
+        "  useSessionResumeStateQuery(",
+        "    session?.providerId,",
+        "    session?.sessionId,",
+        "    session?.sourcePath,",
+        "  );",
+        "  return isSessionDeletable(session) ? <CursorResumeGate /> : null;",
+        "}",
+      ].join("\n"),
+    );
+
+    const result = runChecker(root);
+
+    expect(result.status).toBe(1);
+    expect(result.output).toContain("CURSOR_RESUME_OWNER_BYPASS");
+    expect(result.output).toContain("generic resume-state query");
+  });
+
+  it("requires the Session Manager index query to be gated by the Cursor filter", () => {
+    const root = createConformingFixture();
+    writeFixtureFile(
+      root,
+      "src/components/sessions/SessionManagerPage.tsx",
+      [
+        'import { CursorResumeGate } from "./CursorResumeGate";',
+        'import { isSessionDeletable } from "./sessionCapabilities";',
+        'import { useCursorSessionIndex } from "../../hooks/useCursorSessionIndex";',
+        'import { useSessionResumeStateQuery } from "../../lib/query";',
+        "export function SessionManagerPage({ session }: { session: any }) {",
+        '  const isCursorSession = session?.providerId === "cursor";',
+        "  useCursorSessionIndex();",
+        "  useSessionResumeStateQuery(",
+        "    isCursorSession ? undefined : session?.providerId,",
+        "    isCursorSession ? undefined : session?.sessionId,",
+        "    isCursorSession ? undefined : session?.sourcePath,",
+        "  );",
+        "  return isSessionDeletable(session) ? <CursorResumeGate /> : null;",
+        "}",
+      ].join("\n"),
+    );
+
+    const result = runChecker(root);
+
+    expect(result.status).toBe(1);
+    expect(result.output).toContain("CURSOR_INDEX_OWNER_BYPASS");
+    expect(result.output).toContain("Cursor filter");
+  });
+
+  it("rejects Cursor index-status consumers outside SessionManagerPage", () => {
+    const root = createConformingFixture();
+    writeFixtureFile(
+      root,
+      "src/components/sessions/CursorResumeGate.tsx",
+      [
+        'import { CursorOfficialAuthControl } from "../cursor/CursorOfficialAuthControl";',
+        'import { useCursorOfficial } from "../../../hooks/useCursorOfficial";',
+        'import { useCursorSessionIndex } from "../../../hooks/useCursorSessionIndex";',
+        'import { deriveCursorResumeState } from "./cursorResumeState";',
+        "export function CursorResumeGate() {",
+        "  useCursorOfficial();",
+        "  useCursorSessionIndex();",
+        "  deriveCursorResumeState({ ready: true });",
+        "  return <CursorOfficialAuthControl />;",
+        "}",
+      ].join("\n"),
+    );
+
+    const result = runChecker(root);
+
+    expect(result.status).toBe(1);
+    expect(result.output).toContain("CURSOR_INDEX_OWNER_BYPASS");
+    expect(result.output).toContain("CursorResumeGate.tsx");
+  });
+
+  it("requires SessionManagerPage to consume the Cursor index owner", () => {
+    const root = createConformingFixture();
+    writeFixtureFile(
+      root,
+      "src/components/sessions/SessionManagerPage.tsx",
+      [
+        'import { CursorResumeGate } from "./CursorResumeGate";',
+        'import { isSessionDeletable } from "./sessionCapabilities";',
+        'import { useSessionResumeStateQuery } from "../../lib/query";',
+        "export function SessionManagerPage({ session }: { session: any }) {",
+        '  const isCursorSession = session?.providerId === "cursor";',
+        "  useSessionResumeStateQuery(",
+        "    isCursorSession ? undefined : session?.providerId,",
+        "    isCursorSession ? undefined : session?.sessionId,",
+        "    isCursorSession ? undefined : session?.sourcePath,",
+        "  );",
+        "  return isSessionDeletable(session) ? <CursorResumeGate /> : null;",
+        "}",
+      ].join("\n"),
+    );
+
+    const result = runChecker(root);
+
+    expect(result.status).toBe(1);
+    expect(result.output).toContain("CURSOR_INDEX_OWNER_BYPASS");
+    expect(result.output).toContain("SessionManagerPage.tsx");
+  });
+
+  it("rejects direct Cursor index API use outside the index hook", () => {
+    const root = createConformingFixture();
+    writeFixtureFile(
+      root,
+      "src/components/sessions/CursorIndexPanel.tsx",
+      [
+        'import { cursorApi } from "../../lib/api/cursor";',
+        "export async function CursorIndexPanel() {",
+        "  await cursorApi.getSessionIndexStatus();",
+        "  return null;",
+        "}",
+      ].join("\n"),
+    );
+
+    const result = runChecker(root);
+
+    expect(result.status).toBe(1);
+    expect(result.output).toContain("CURSOR_INDEX_OWNER_BYPASS");
+    expect(result.output).toContain("CursorIndexPanel.tsx");
+  });
+
   it("rejects direct Cursor authentication API use from page components", () => {
     const root = createConformingFixture();
     writeFixtureFile(
@@ -159,6 +347,22 @@ describe("US-004 Cursor session SSOT checker", () => {
     expect(result.status).toBe(1);
     expect(result.output).toContain("CURSOR_AUTH_OWNER_BYPASS");
     expect(result.output).toContain("CursorAuthPage.tsx");
+  });
+
+  it("routes Cursor sentinel-only changes through frontend CI", () => {
+    const workflow = readFileSync(
+      resolve(process.cwd(), ".github/workflows/ci.yml"),
+      "utf8",
+    );
+    const frontendFilter = workflow.match(
+      /\n\s{12}frontend:\n([\s\S]*?)\n\s{12}backend:/,
+    )?.[1];
+
+    expect(frontendFilter).toBeDefined();
+    expect(frontendFilter).toContain(
+      '- "scripts/check-cursor-session-ssot.mjs"',
+    );
+    expect(frontendFilter).toContain('- ".preflight/local-lint.conf"');
   });
 
   it("rejects direct sourcePath-based Cursor deletion eligibility", () => {

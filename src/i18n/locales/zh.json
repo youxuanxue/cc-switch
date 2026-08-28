@@ -348,7 +348,6 @@
     "authCenter": {
       "title": "官方认证中心",
       "description": "集中管理各工具的官方登录与订阅认证。",
-      "beta": "Beta",
       "cursorDescription": "管理 Cursor Agent CLI 的官方登录和 User API Key。",
       "cursorReady": "已就绪",
       "cursorNeedsLogin": "需要登录",

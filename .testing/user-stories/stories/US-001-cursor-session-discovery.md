@@ -36,8 +36,11 @@
 - src-tauri/src/session_manager/providers/cursor.rs::tests::us001_deduplicates_chat_ids_before_conversation_filter
 - src-tauri/src/session_manager/providers/cursor.rs::tests::us001_skips_bad_metadata_without_losing_valid_sessions
 - src-tauri/src/session_manager/providers/cursor.rs::tests::us001_reports_unavailable_index_without_breaking_global_scan
+- src-tauri/src/session_manager/providers/cursor.rs::tests::us001_reports_structurally_unrecognized_index_as_unavailable
 - tests/components/SessionManagerPage.test.tsx::US-001 groups Cursor sessions by metadata cwd
+- tests/components/SessionManagerPage.test.tsx::US-001 shows Cursor index diagnostics in the Cursor-filter empty state
 - tests/e2e/cursor-official-sessions.spec.ts::US-001 discovers Cursor sessions by project directory
+- tests/e2e/cursor-official-sessions.spec.ts::US-001 shows an unavailable Cursor index in the real empty-state journey
 
 Run:
 
@@ -53,6 +56,12 @@ Run:
 - 2026-08-28 GREEN (backend discovery): the same focused command passed 4 Cursor adapter tests; `cargo test --manifest-path src-tauri/Cargo.toml session_manager:: -- --nocapture` passed 90 session-manager tests.
 - 2026-08-28 GREEN (renderer discovery): the focused Session Manager and utility suites passed 31 tests. Two Cursor sessions sharing one metadata `cwd` render through the existing provider → `projectDir` directory → session hierarchy and the new Cursor filter, with no Project ID, entity, table, or CRUD path.
 - 2026-08-28 GREEN (real renderer): Playwright drove the actual renderer through the Tauri IPC boundary and verified Cursor filtering, one `cwd` directory containing multiple sessions, a second directory group, no project CRUD IPC, and the absence of Cursor deletion/transcript/capability-label UI.
-- 2026-08-28 FINAL: the private metadata smoke reported 480 files, 479 unique chat IDs, 1 duplicate ID, 0 parse failures, 376 conversation-bearing records, 52 missing `cwd` values, and 0 invalid UUIDs without printing any title, path, or ID. Focused discovery tests passed 4/4; the final frontend, browser, Rust, approved-doc, diff, and preflight gates all exited 0.
+- 2026-08-28 RED (review R-003): a readable non-empty directory without `<bucket>/<UUID>/meta.json` was incorrectly reported as `indexReady`; the new structural-layout test failed until status and scanning shared one layout resolver.
+- 2026-08-28 GREEN (review R-003): the Cursor adapter suite passed 5/5, including empty-root readiness and non-empty unrecognized-layout rejection through the same metadata-location set used by scanning.
+- 2026-08-28 RED (review R-004): both the Session Manager test and real-renderer Playwright journey failed to find the required index-unavailable alert when the Cursor list was empty.
+- 2026-08-28 GREEN (review R-004): `SessionManagerPage` is now the sole index-status consumer, queries only under the Cursor filter, renders the unavailable title and sanitized reason in the list empty state, and refreshes sessions plus diagnostics together. The focused page/hook/checker suites and the five-journey Playwright file exited 0.
+- 2026-08-28 RED (final review R-003): the mechanical owner check still accepted an unconditional `useCursorSessionIndex()` call even though the list owner must probe only under the Cursor filter.
+- 2026-08-28 GREEN (final review R-003): the checker now inspects every index-hook call and requires the exact Cursor-filter predicate; its executable suite passed 12/12 and the repository checker returned `cursor-session-ssot: PASS`.
+- 2026-08-28 FINAL: the private metadata smoke reported 480 files, 479 unique chat IDs, 1 duplicate ID, 0 parse failures, 376 conversation-bearing records, 52 missing `cwd` values, and 0 invalid UUIDs without printing any title, path, or ID. The complete Cargo run passed 2,911 tests with 5 ignored; Vitest passed 1,073/1,073, Playwright passed 5/5, and full type, format, approved-doc, diff, and preflight gates exited 0 before final review.
 
 - Status: Done

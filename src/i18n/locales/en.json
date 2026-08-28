@@ -348,7 +348,6 @@
     "authCenter": {
       "title": "Official Authentication Center",
       "description": "Manage official sign-ins and subscription credentials for supported tools.",
-      "beta": "Beta",
       "cursorDescription": "Manage official Login and User API Key for Cursor Agent CLI.",
       "cursorReady": "Ready",
       "cursorNeedsLogin": "Login required",

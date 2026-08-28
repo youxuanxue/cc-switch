@@ -91,6 +91,27 @@ test("US-001/US-004 groups Cursor sessions by cwd without exposing unsupported c
   expect(calls.some((call) => call.command.startsWith("project"))).toBe(false);
 });
 
+test("US-001 shows an unavailable Cursor index in the real empty-state journey", async ({
+  page,
+}) => {
+  await installTauriIpcHarness(page, {
+    view: "sessions",
+    sessions: [],
+    cursorIndexStatus: {
+      state: "indexUnavailable",
+      reason: "metadata layout is not recognized",
+    },
+  });
+
+  await page.goto("/");
+  await selectCursor(page);
+
+  const warning = page.getByRole("alert");
+  await expect(warning).toContainText("Cursor 会话索引不可用");
+  await expect(warning).toContainText("metadata layout is not recognized");
+  await expect(page.getByText("未发现会话", { exact: true })).toHaveCount(0);
+});
+
 test("US-002 resumes a ready Cursor session only through the dedicated IPC", async ({
   page,
 }) => {

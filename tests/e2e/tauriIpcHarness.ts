@@ -34,6 +34,10 @@ type CursorResumeContext =
   | { workspaceState: "ready"; workspace: string }
   | { workspaceState: "workspaceRequired" };
 
+type CursorIndexStatus =
+  | { state: "indexReady" }
+  | { state: "indexUnavailable"; reason: string };
+
 export interface RecordedInvoke {
   command: string;
   payloadKeys: string[];
@@ -45,6 +49,7 @@ export interface TauriIpcHarnessOptions {
   listViewMode?: "flat" | "grouped";
   sessions?: SessionFixture[];
   cursorStatus?: CursorOfficialStatus;
+  cursorIndexStatus?: CursorIndexStatus;
   resumeContext?: CursorResumeContext;
   pickedDirectories?: Array<string | null>;
   canonicalWorkspaces?: Record<string, string>;
@@ -68,6 +73,9 @@ export async function installTauriIpcHarness(
     listViewMode: options.listViewMode ?? "flat",
     sessions: options.sessions ?? [],
     cursorStatus: options.cursorStatus ?? defaultCursorStatus,
+    cursorIndexStatus: options.cursorIndexStatus ?? {
+      state: "indexReady" as const,
+    },
     resumeContext: options.resumeContext ?? {
       workspaceState: "ready" as const,
       workspace: "/work/acme/default",
@@ -118,7 +126,7 @@ export async function installTauriIpcHarness(
       },
       sessions: fixture.sessions,
       cursorStatus: { ...fixture.cursorStatus },
-      cursorIndexStatus: { state: "indexReady" },
+      cursorIndexStatus: { ...fixture.cursorIndexStatus },
       resumeContext: fixture.resumeContext,
       pickedDirectories: [...fixture.pickedDirectories],
       canonicalWorkspaces: { ...fixture.canonicalWorkspaces },

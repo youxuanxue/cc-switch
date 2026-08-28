@@ -476,6 +476,52 @@ describe("SessionManagerPage", () => {
     ).toBeInTheDocument();
   });
 
+  it("US-001 shows Cursor index diagnostics in the Cursor-filter empty state", async () => {
+    cursorApiMocks.getSessionIndexStatus.mockResolvedValue({
+      state: "indexUnavailable",
+      reason: "metadata layout is not recognized",
+    });
+    setSessionFixtures([], {});
+
+    renderPage("cursor");
+
+    const warning = await screen.findByRole("alert");
+    expect(warning).toHaveTextContent("Cursor 会话索引不可用");
+    expect(warning).toHaveTextContent("metadata layout is not recognized");
+    expect(screen.queryByText("未发现会话")).not.toBeInTheDocument();
+  });
+
+  it("US-001 refreshes both Cursor sessions and index diagnostics", async () => {
+    const user = userEvent.setup();
+    const listSessions = vi.spyOn(sessionsApi, "list");
+    cursorApiMocks.getSessionIndexStatus.mockResolvedValue({
+      state: "indexUnavailable",
+      reason: "metadata layout is not recognized",
+    });
+    setSessionFixtures([], {});
+
+    try {
+      renderPage("cursor");
+
+      await screen.findByRole("alert");
+      await waitFor(() => expect(listSessions).toHaveBeenCalledTimes(1));
+      expect(cursorApiMocks.getSessionIndexStatus).toHaveBeenCalledTimes(1);
+
+      const refreshButton = Array.from(screen.getAllByRole("button")).find(
+        (button) => button.querySelector(".lucide-refresh-cw"),
+      );
+      expect(refreshButton).toBeDefined();
+      await user.click(refreshButton!);
+
+      await waitFor(() => expect(listSessions).toHaveBeenCalledTimes(2));
+      await waitFor(() =>
+        expect(cursorApiMocks.getSessionIndexStatus).toHaveBeenCalledTimes(2),
+      );
+    } finally {
+      listSessions.mockRestore();
+    }
+  });
+
   it("US-002/US-004 renders Cursor resume without transcript or generic terminal plumbing", async () => {
     const user = userEvent.setup();
     const getMessages = vi.spyOn(sessionsApi, "getMessages");
@@ -525,6 +571,21 @@ describe("SessionManagerPage", () => {
       }),
     );
     expect(launchTerminal).not.toHaveBeenCalled();
+  });
+
+  it("US-002/US-004 never polls generic resume state for Cursor", async () => {
+    const getResumeState = vi.spyOn(sessionsApi, "getResumeState");
+
+    try {
+      renderPage("cursor");
+
+      expect(
+        await screen.findByRole("heading", { name: "Cursor Alpha" }),
+      ).toBeInTheDocument();
+      expect(getResumeState).not.toHaveBeenCalled();
+    } finally {
+      getResumeState.mockRestore();
+    }
   });
 
   it("US-004 hides Cursor item and group checkboxes in grouped batch mode", async () => {

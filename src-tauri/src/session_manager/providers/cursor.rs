@@ -50,6 +50,15 @@ struct CursorCandidate {
     normalized_metadata_path: String,
 }
 
+struct CursorMetadataLocation {
+    chat_id: String,
+    metadata_path: PathBuf,
+}
+
+struct CursorIndexLayout {
+    metadata_locations: Vec<CursorMetadataLocation>,
+}
+
 fn cursor_chats_root() -> PathBuf {
     crate::config::get_home_dir().join(".cursor").join("chats")
 }
@@ -75,7 +84,7 @@ fn index_unavailable(reason: impl AsRef<str>) -> String {
     ))
 }
 
-fn resolve_index_root(root: &Path) -> Result<PathBuf, String> {
+fn resolve_index_layout(root: &Path) -> Result<CursorIndexLayout, String> {
     let metadata = fs::metadata(root).map_err(|error| {
         if error.kind() == std::io::ErrorKind::NotFound {
             index_unavailable("root does not exist")
@@ -90,8 +99,51 @@ fn resolve_index_root(root: &Path) -> Result<PathBuf, String> {
     let canonical = root
         .canonicalize()
         .map_err(|error| index_unavailable(error.to_string()))?;
-    fs::read_dir(&canonical).map_err(|error| index_unavailable(error.to_string()))?;
-    Ok(canonical)
+    let entries = fs::read_dir(&canonical).map_err(|error| index_unavailable(error.to_string()))?;
+    let mut saw_root_entry = false;
+    let mut metadata_locations = Vec::new();
+
+    for bucket in entries {
+        saw_root_entry = true;
+        let Ok(bucket) = bucket else {
+            continue;
+        };
+        if !bucket.file_type().is_ok_and(|kind| kind.is_dir()) {
+            continue;
+        }
+        let Ok(chat_entries) = fs::read_dir(bucket.path()) else {
+            continue;
+        };
+
+        for chat in chat_entries {
+            let Ok(chat) = chat else {
+                continue;
+            };
+            if !chat.file_type().is_ok_and(|kind| kind.is_dir()) {
+                continue;
+            }
+            let Some(chat_id) = chat.file_name().to_str().map(str::to_owned) else {
+                continue;
+            };
+            if Uuid::parse_str(&chat_id).is_err() {
+                continue;
+            }
+            let metadata_path = chat.path().join("meta.json");
+            if !fs::symlink_metadata(&metadata_path).is_ok_and(|metadata| metadata.is_file()) {
+                continue;
+            }
+            metadata_locations.push(CursorMetadataLocation {
+                chat_id,
+                metadata_path,
+            });
+        }
+    }
+
+    if saw_root_entry && metadata_locations.is_empty() {
+        return Err(index_unavailable("layout is not recognized"));
+    }
+
+    Ok(CursorIndexLayout { metadata_locations })
 }
 
 fn parse_candidate(metadata_path: &Path, chat_id: &str) -> Option<CursorCandidate> {
@@ -127,46 +179,21 @@ fn candidate_wins(candidate: &CursorCandidate, current: &CursorCandidate) -> boo
 }
 
 fn scan_records_in(root: &Path) -> Result<Vec<CursorSessionRecord>, String> {
-    let root = resolve_index_root(root)?;
+    let layout = resolve_index_layout(root)?;
     let mut winners: HashMap<String, CursorCandidate> = HashMap::new();
 
-    for bucket in fs::read_dir(&root).map_err(|error| index_unavailable(error.to_string()))? {
-        let Ok(bucket) = bucket else {
-            continue;
-        };
-        if !bucket.file_type().is_ok_and(|kind| kind.is_dir()) {
-            continue;
-        }
-        let Ok(chat_entries) = fs::read_dir(bucket.path()) else {
+    for location in layout.metadata_locations {
+        let Some(candidate) = parse_candidate(&location.metadata_path, &location.chat_id) else {
             continue;
         };
 
-        for chat in chat_entries {
-            let Ok(chat) = chat else {
-                continue;
-            };
-            if !chat.file_type().is_ok_and(|kind| kind.is_dir()) {
-                continue;
+        match winners.entry(location.chat_id) {
+            std::collections::hash_map::Entry::Vacant(entry) => {
+                entry.insert(candidate);
             }
-            let Some(chat_id) = chat.file_name().to_str().map(str::to_owned) else {
-                continue;
-            };
-            if Uuid::parse_str(&chat_id).is_err() {
-                continue;
-            }
-            let metadata_path = chat.path().join("meta.json");
-            let Some(candidate) = parse_candidate(&metadata_path, &chat_id) else {
-                continue;
-            };
-
-            match winners.entry(chat_id) {
-                std::collections::hash_map::Entry::Vacant(entry) => {
+            std::collections::hash_map::Entry::Occupied(mut entry) => {
+                if candidate_wins(&candidate, entry.get()) {
                     entry.insert(candidate);
-                }
-                std::collections::hash_map::Entry::Occupied(mut entry) => {
-                    if candidate_wins(&candidate, entry.get()) {
-                        entry.insert(candidate);
-                    }
                 }
             }
         }
@@ -220,7 +247,7 @@ fn scan_sessions_or_empty_in(root: &Path) -> Vec<SessionMeta> {
 }
 
 fn index_status_in(root: &Path) -> CursorIndexStatus {
-    match resolve_index_root(root) {
+    match resolve_index_layout(root) {
         Ok(_) => CursorIndexStatus::IndexReady,
         Err(reason) => CursorIndexStatus::IndexUnavailable { reason },
     }
@@ -445,5 +472,19 @@ mod tests {
         std::fs::create_dir(&empty).unwrap();
         assert_eq!(index_status_in(&empty), CursorIndexStatus::IndexReady);
         assert!(scan_sessions_in(&empty).unwrap().is_empty());
+    }
+
+    #[test]
+    fn us001_reports_structurally_unrecognized_index_as_unavailable() {
+        let root = tempdir().unwrap();
+        let unexpected = root.path().join("workspace").join("not-a-chat-id");
+        std::fs::create_dir_all(&unexpected).unwrap();
+        std::fs::write(unexpected.join("unexpected.json"), b"{}").unwrap();
+
+        assert!(matches!(
+            index_status_in(root.path()),
+            CursorIndexStatus::IndexUnavailable { .. }
+        ));
+        assert!(scan_sessions_or_empty_in(root.path()).is_empty());
     }
 }

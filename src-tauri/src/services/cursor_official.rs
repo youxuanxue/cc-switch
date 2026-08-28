@@ -22,9 +22,11 @@ const CURSOR_COMMAND_TIMEOUT: Duration = Duration::from_secs(10);
 const CURSOR_DISCOVERY_TIMEOUT: Duration = Duration::from_secs(5);
 const CURSOR_CAPTURE_MAX_BYTES: usize = 64 * 1024;
 const CURSOR_VERSION_MAX_CHARS: usize = 120;
+const CURSOR_ACCOUNT_FIELD_MAX_CHARS: usize = 160;
 const CURSOR_ERROR_MAX_CHARS: usize = 240;
 const CURSOR_LAUNCHER_PREFIX: &str = "cc-switch-cursor-launcher-";
 const CURSOR_LAUNCHER_FILE_NAME: &str = "cursor-launcher.sh";
+const CURSOR_LAUNCHER_HEADER: &str = "#!/bin/sh\n# CC Switch Cursor launcher v1\n";
 const CURSOR_LAUNCHER_MAX_AGE: Duration = Duration::from_secs(24 * 60 * 60);
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -290,6 +292,42 @@ fn bound_chars(raw: &str, max_chars: usize) -> String {
     bounded
 }
 
+fn sanitize_cursor_display_field(
+    raw: &str,
+    known_secrets: &[String],
+    max_chars: usize,
+) -> Option<String> {
+    let compact = raw.split_whitespace().collect::<Vec<_>>().join(" ");
+    if compact.is_empty() {
+        return None;
+    }
+
+    Some(bound_chars(
+        &crate::redact_known_secrets_strict(&compact, known_secrets),
+        max_chars,
+    ))
+}
+
+fn sanitize_cursor_account(
+    account: CursorOfficialAccount,
+    known_secrets: &[String],
+) -> Option<CursorOfficialAccount> {
+    let account = CursorOfficialAccount {
+        email: account.email.and_then(|value| {
+            sanitize_cursor_display_field(&value, known_secrets, CURSOR_ACCOUNT_FIELD_MAX_CHARS)
+        }),
+        first_name: account.first_name.and_then(|value| {
+            sanitize_cursor_display_field(&value, known_secrets, CURSOR_ACCOUNT_FIELD_MAX_CHARS)
+        }),
+        last_name: account.last_name.and_then(|value| {
+            sanitize_cursor_display_field(&value, known_secrets, CURSOR_ACCOUNT_FIELD_MAX_CHARS)
+        }),
+    };
+
+    (account.email.is_some() || account.first_name.is_some() || account.last_name.is_some())
+        .then_some(account)
+}
+
 fn sanitize_cursor_error(raw: &str, known_secrets: &[String]) -> String {
     let compact = raw.split_whitespace().collect::<Vec<_>>().join(" ");
     let compact = if compact.is_empty() {
@@ -307,7 +345,7 @@ fn first_non_empty_line(raw: &str) -> Option<String> {
     raw.lines()
         .map(str::trim)
         .find(|line| !line.is_empty())
-        .map(|line| bound_chars(line, CURSOR_VERSION_MAX_CHARS))
+        .map(str::to_string)
 }
 
 fn output_error(output: &CursorCommandOutput) -> String {
@@ -332,15 +370,21 @@ fn status_shell(
     account: Option<CursorOfficialAccount>,
     error: Option<String>,
 ) -> CursorOfficialStatus {
+    let known_secrets = configured_user_api_key(settings)
+        .map(str::to_string)
+        .into_iter()
+        .collect::<Vec<_>>();
     CursorOfficialStatus {
         installed,
-        version,
+        version: version.and_then(|value| {
+            sanitize_cursor_display_field(&value, &known_secrets, CURSOR_VERSION_MAX_CHARS)
+        }),
         auth_mode: settings.auth_mode,
         has_user_api_key: configured_user_api_key(settings).is_some(),
         authenticated,
-        account,
+        account: account.and_then(|account| sanitize_cursor_account(account, &known_secrets)),
         state,
-        error,
+        error: error.map(|error| sanitize_cursor_error(&error, &known_secrets)),
     }
 }
 
@@ -530,14 +574,40 @@ fn canonical_metadata_workspace(raw: Option<&str>) -> Option<PathBuf> {
         .then_some(canonical)
 }
 
-fn canonical_workspace_override(raw: Option<&str>) -> Result<Option<PathBuf>, String> {
-    let Some(raw) = raw.map(str::trim).filter(|value| !value.is_empty()) else {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MissingWorkspaceOverridePolicy {
+    Reject,
+    WorkspaceRequired,
+}
+
+fn missing_workspace_override(
+    policy: MissingWorkspaceOverridePolicy,
+) -> Result<Option<PathBuf>, String> {
+    match policy {
+        MissingWorkspaceOverridePolicy::Reject => {
+            Err("Cursor workspace override must be an existing directory".to_string())
+        }
+        MissingWorkspaceOverridePolicy::WorkspaceRequired => Ok(None),
+    }
+}
+
+fn canonical_workspace_override(
+    raw: Option<&str>,
+    missing_policy: MissingWorkspaceOverridePolicy,
+) -> Result<Option<PathBuf>, String> {
+    let Some(raw) = raw else {
         return Ok(None);
     };
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return Err("Cursor workspace override must be an existing directory".to_string());
+    }
     let path = Path::new(raw);
     let metadata = match fs::metadata(path) {
         Ok(metadata) => metadata,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return missing_workspace_override(missing_policy);
+        }
         Err(error) => {
             return Err(format!(
                 "Failed to inspect Cursor workspace override: {error}"
@@ -549,7 +619,9 @@ fn canonical_workspace_override(raw: Option<&str>) -> Result<Option<PathBuf>, St
     }
     let canonical = match path.canonicalize() {
         Ok(canonical) => canonical,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return missing_workspace_override(missing_policy);
+        }
         Err(error) => {
             return Err(format!(
                 "Failed to canonicalize Cursor workspace override: {error}"
@@ -557,7 +629,7 @@ fn canonical_workspace_override(raw: Option<&str>) -> Result<Option<PathBuf>, St
         }
     };
     if !fs::metadata(&canonical).is_ok_and(|metadata| metadata.is_dir()) {
-        return Ok(None);
+        return missing_workspace_override(missing_policy);
     }
     Ok(Some(canonical))
 }
@@ -565,11 +637,12 @@ fn canonical_workspace_override(raw: Option<&str>) -> Result<Option<PathBuf>, St
 fn resolve_workspace(
     record: &CursorSessionRecord,
     workspace_override: Option<&str>,
+    missing_policy: MissingWorkspaceOverridePolicy,
 ) -> Result<Option<PathBuf>, String> {
     if let Some(workspace) = canonical_metadata_workspace(record.cwd.as_deref()) {
         return Ok(Some(workspace));
     }
-    canonical_workspace_override(workspace_override)
+    canonical_workspace_override(workspace_override, missing_policy)
 }
 
 fn workspace_string(workspace: &Path) -> Result<String, String> {
@@ -586,7 +659,11 @@ fn get_resume_context_with_lookup<L: CursorSessionLookup>(
 ) -> Result<CursorResumeContext, String> {
     validate_chat_id(session_id)?;
     let record = lookup.find_session(session_id)?;
-    match resolve_workspace(&record, workspace_override)? {
+    match resolve_workspace(
+        &record,
+        workspace_override,
+        MissingWorkspaceOverridePolicy::Reject,
+    )? {
         Some(workspace) => Ok(CursorResumeContext::Ready {
             workspace: workspace_string(&workspace)?,
         }),
@@ -660,7 +737,8 @@ fn render_launcher_script(
     spec: &CursorLauncherSpec,
     launcher_dir: &Path,
 ) -> Result<String, String> {
-    let mut script = String::from("#!/bin/sh\nset +e\n");
+    let mut script = String::from(CURSOR_LAUNCHER_HEADER);
+    script.push_str("set +e\n");
     let configured_key = spec
         .user_api_key
         .as_deref()
@@ -789,6 +867,67 @@ fn cleanup_prepared_launcher(launcher: &PreparedCursorLauncher) -> Result<(), St
     }
 }
 
+#[cfg(unix)]
+fn has_private_launcher_permissions(path: &Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+
+    fs::symlink_metadata(path).is_ok_and(|metadata| metadata.permissions().mode() & 0o777 == 0o700)
+}
+
+#[cfg(not(unix))]
+fn has_private_launcher_permissions(_path: &Path) -> bool {
+    true
+}
+
+fn owned_launcher_file_in(directory: &Path) -> Option<PathBuf> {
+    if !has_private_launcher_permissions(directory) {
+        return None;
+    }
+
+    let mut entries = fs::read_dir(directory).ok()?;
+    let entry = entries.next()?.ok()?;
+    if entries.next().is_some()
+        || entry.file_name() != CURSOR_LAUNCHER_FILE_NAME
+        || !entry.file_type().ok()?.is_file()
+        || !has_private_launcher_permissions(&entry.path())
+    {
+        return None;
+    }
+
+    let launcher_path = entry.path();
+    let mut launcher = fs::File::open(&launcher_path).ok()?;
+    let mut header = vec![0_u8; CURSOR_LAUNCHER_HEADER.len()];
+    launcher.read_exact(&mut header).ok()?;
+    (header == CURSOR_LAUNCHER_HEADER.as_bytes()).then_some(launcher_path)
+}
+
+fn remove_owned_launcher_directory(directory: &Path, launcher_path: &Path) -> Result<(), String> {
+    match fs::remove_file(launcher_path) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => {
+            return Err(format!(
+                "Failed to remove stale Cursor launcher file: {error}"
+            ));
+        }
+    }
+
+    match fs::remove_dir(directory) {
+        Ok(()) => Ok(()),
+        Err(error)
+            if matches!(
+                error.kind(),
+                std::io::ErrorKind::NotFound | std::io::ErrorKind::DirectoryNotEmpty
+            ) =>
+        {
+            Ok(())
+        }
+        Err(error) => Err(format!(
+            "Failed to remove stale Cursor launcher directory: {error}"
+        )),
+    }
+}
+
 fn cleanup_stale_launchers_in_at(launcher_root: &Path, now: SystemTime) -> Result<(), String> {
     let entries = fs::read_dir(launcher_root)
         .map_err(|error| format!("Failed to inspect Cursor launcher directory: {error}"))?;
@@ -811,9 +950,10 @@ fn cleanup_stale_launchers_in_at(launcher_root: &Path, now: SystemTime) -> Resul
             .duration_since(modified)
             .is_ok_and(|age| age > CURSOR_LAUNCHER_MAX_AGE);
         if is_expired {
-            fs::remove_dir_all(entry.path()).map_err(|error| {
-                format!("Failed to remove stale Cursor launcher directory: {error}")
-            })?;
+            let directory = entry.path();
+            if let Some(launcher_path) = owned_launcher_file_in(&directory) {
+                remove_owned_launcher_directory(&directory, &launcher_path)?;
+            }
         }
     }
     Ok(())
@@ -867,7 +1007,12 @@ fn launch_resume_with<L: CursorSessionLookup, R: CursorCommandRunner, T: CursorT
 ) -> Result<CursorLaunchResult, String> {
     validate_chat_id(session_id)?;
     let record = lookup.find_session(session_id)?;
-    let Some(workspace) = resolve_workspace(&record, workspace_override)? else {
+    let Some(workspace) = resolve_workspace(
+        &record,
+        workspace_override,
+        MissingWorkspaceOverridePolicy::WorkspaceRequired,
+    )?
+    else {
         return Ok(CursorLaunchResult::WorkspaceRequired);
     };
     workspace_string(&workspace)?;
@@ -1376,6 +1521,7 @@ mod tests {
         let resolved = resolve_workspace(
             &cursor_record(Some(&metadata_workspace)),
             Some(override_workspace.to_string_lossy().as_ref()),
+            MissingWorkspaceOverridePolicy::Reject,
         )
         .unwrap();
         assert_eq!(resolved.as_deref(), Some(canonical_metadata.as_path()));
@@ -1383,6 +1529,7 @@ mod tests {
         let resolved_override = resolve_workspace(
             &cursor_record(None),
             Some(override_workspace.to_string_lossy().as_ref()),
+            MissingWorkspaceOverridePolicy::Reject,
         )
         .unwrap()
         .expect("valid override should resolve");
@@ -1406,17 +1553,35 @@ mod tests {
         std::fs::write(&file, b"not a directory").unwrap();
         let missing = temp.path().join("missing-workspace");
 
-        assert_eq!(resolve_workspace(&cursor_record(None), None).unwrap(), None);
         assert_eq!(
             resolve_workspace(
                 &cursor_record(None),
-                Some(missing.to_string_lossy().as_ref()),
+                None,
+                MissingWorkspaceOverridePolicy::Reject,
             )
             .unwrap(),
             None
         );
-        let error = resolve_workspace(&cursor_record(None), Some(file.to_string_lossy().as_ref()))
-            .unwrap_err();
+        let missing_lookup = FakeSessionLookup::new(vec![cursor_record(None)]);
+        let missing_error = get_resume_context_with_lookup(
+            &missing_lookup,
+            CHAT_ID,
+            Some(missing.to_string_lossy().as_ref()),
+        )
+        .unwrap_err();
+        assert!(missing_error.contains("existing directory"));
+
+        let blank_lookup = FakeSessionLookup::new(vec![cursor_record(None)]);
+        let blank_error =
+            get_resume_context_with_lookup(&blank_lookup, CHAT_ID, Some("   ")).unwrap_err();
+        assert!(blank_error.contains("existing directory"));
+
+        let error = resolve_workspace(
+            &cursor_record(None),
+            Some(file.to_string_lossy().as_ref()),
+            MissingWorkspaceOverridePolicy::Reject,
+        )
+        .unwrap_err();
         assert!(error.contains("directory"));
     }
 
@@ -1559,16 +1724,20 @@ if [ "$1" = "login" ]; then exit "${CURSOR_TEST_LOGIN_EXIT:-0}"; fi
         use std::fs::FileTimes;
 
         let temp = tempfile::tempdir().unwrap();
-        let old_owned = temp.path().join(format!("{CURSOR_LAUNCHER_PREFIX}old"));
-        let fresh_owned = temp.path().join(format!("{CURSOR_LAUNCHER_PREFIX}fresh"));
+        let spec = CursorLauncherSpec {
+            executable: PathBuf::from("/opt/cursor/bin/agent"),
+            auth_mode: CursorOfficialAuthMode::Login,
+            user_api_key: None,
+            action: CursorLauncherAction::Login,
+        };
+        let old_owned = create_launcher_in(temp.path(), &spec).unwrap();
+        let fresh_owned = create_launcher_in(temp.path(), &spec).unwrap();
         let old_foreign = temp.path().join("foreign-launcher-old");
-        for directory in [&old_owned, &fresh_owned, &old_foreign] {
-            std::fs::create_dir(directory).unwrap();
-            std::fs::write(directory.join("payload"), b"fixture").unwrap();
-        }
+        std::fs::create_dir(&old_foreign).unwrap();
+        std::fs::write(old_foreign.join("payload"), b"fixture").unwrap();
         let now = SystemTime::now();
         let expired = now - CURSOR_LAUNCHER_MAX_AGE - Duration::from_secs(1);
-        std::fs::File::open(&old_owned)
+        std::fs::File::open(&old_owned.directory)
             .unwrap()
             .set_times(FileTimes::new().set_modified(expired))
             .unwrap();
@@ -1579,9 +1748,50 @@ if [ "$1" = "login" ]; then exit "${CURSOR_TEST_LOGIN_EXIT:-0}"; fi
 
         cleanup_stale_launchers_in_at(temp.path(), now).unwrap();
 
-        assert!(!old_owned.exists());
-        assert!(fresh_owned.exists());
+        assert!(!old_owned.directory.exists());
+        assert!(fresh_owned.directory.exists());
         assert!(old_foreign.exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn stale_cleanup_preserves_spoofed_or_extended_same_prefix_directories() {
+        use std::fs::FileTimes;
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp = tempfile::tempdir().unwrap();
+        let spec = CursorLauncherSpec {
+            executable: PathBuf::from("/opt/cursor/bin/agent"),
+            auth_mode: CursorOfficialAuthMode::Login,
+            user_api_key: None,
+            action: CursorLauncherAction::Login,
+        };
+        let extended_owned = create_launcher_in(temp.path(), &spec).unwrap();
+        let unknown_file = extended_owned.directory.join("keep-me.txt");
+        std::fs::write(&unknown_file, b"user-owned").unwrap();
+
+        let spoofed = temp.path().join(format!("{CURSOR_LAUNCHER_PREFIX}spoofed"));
+        std::fs::create_dir(&spoofed).unwrap();
+        let spoofed_launcher = spoofed.join(CURSOR_LAUNCHER_FILE_NAME);
+        std::fs::write(&spoofed_launcher, b"#!/bin/sh\nexit 0\n").unwrap();
+        std::fs::set_permissions(&spoofed, std::fs::Permissions::from_mode(0o700)).unwrap();
+        std::fs::set_permissions(&spoofed_launcher, std::fs::Permissions::from_mode(0o700))
+            .unwrap();
+
+        let now = SystemTime::now();
+        let expired = now - CURSOR_LAUNCHER_MAX_AGE - Duration::from_secs(1);
+        for directory in [&extended_owned.directory, &spoofed] {
+            std::fs::File::open(directory)
+                .unwrap()
+                .set_times(FileTimes::new().set_modified(expired))
+                .unwrap();
+        }
+
+        cleanup_stale_launchers_in_at(temp.path(), now).unwrap();
+
+        assert!(extended_owned.path.exists());
+        assert!(unknown_file.exists());
+        assert!(spoofed_launcher.exists());
     }
 
     #[cfg(unix)]
@@ -1590,11 +1800,10 @@ if [ "$1" = "login" ]; then exit "${CURSOR_TEST_LOGIN_EXIT:-0}"; fi
         let temp = tempfile::tempdir().unwrap();
         let workspace = temp.path().join("workspace");
         std::fs::create_dir_all(&workspace).unwrap();
-        let lookup = FakeSessionLookup::new(vec![
-            cursor_record(Some(&workspace)),
-            cursor_record(Some(&workspace)),
-        ]);
-        let ready = get_resume_context_with_lookup(&lookup, CHAT_ID, None).unwrap();
+        let lookup = FakeSessionLookup::new(vec![cursor_record(None), cursor_record(None)]);
+        let workspace_override = workspace.to_string_lossy().into_owned();
+        let ready =
+            get_resume_context_with_lookup(&lookup, CHAT_ID, Some(&workspace_override)).unwrap();
         assert!(matches!(ready, CursorResumeContext::Ready { .. }));
         std::fs::remove_dir(&workspace).unwrap();
 
@@ -1616,7 +1825,7 @@ if [ "$1" = "login" ]; then exit "${CURSOR_TEST_LOGIN_EXIT:-0}"; fi
             &CursorOfficialSettings::default(),
             temp.path(),
             CHAT_ID,
-            None,
+            Some(&workspace_override),
             false,
         )
         .unwrap();
@@ -1855,6 +2064,45 @@ if [ "$1" = "login" ]; then exit "${CURSOR_TEST_LOGIN_EXIT:-0}"; fi
         let serialized = serde_json::to_string(&status).unwrap();
         assert!(!serialized.contains(FIXTURE_KEY));
         assert!(!format!("{status:?}").contains(FIXTURE_KEY));
+    }
+
+    #[test]
+    fn us003_status_dto_sanitizes_every_command_derived_display_field() {
+        const MAX_ACCOUNT_FIELD_CHARS: usize = 160;
+
+        let long_name = format!("Ada\n{FIXTURE_KEY} {}", "x".repeat(300));
+        let status_json = serde_json::json!({
+            "isAuthenticated": true,
+            "userInfo": {
+                "email": format!("person+{FIXTURE_KEY}@example.com"),
+                "firstName": long_name,
+                "lastName": format!("Lovelace {FIXTURE_KEY}")
+            }
+        })
+        .to_string();
+        let version = format!("agent {FIXTURE_KEY} {}\n", "v".repeat(300));
+        let runner = FakeRunner::new(vec![success(&version), success(&status_json)]);
+        let settings = CursorOfficialSettings {
+            auth_mode: CursorOfficialAuthMode::UserApiKey,
+            user_api_key: Some(FIXTURE_KEY.to_string()),
+        };
+
+        let status = get_status_with_runner(&runner, &settings);
+
+        let serialized = serde_json::to_string(&status).unwrap();
+        assert!(!serialized.contains(FIXTURE_KEY));
+        assert!(status
+            .version
+            .as_deref()
+            .is_some_and(|value| value.chars().count() <= CURSOR_VERSION_MAX_CHARS + 3));
+        let account = status.account.expect("sanitized account display fields");
+        for value in [account.email, account.first_name, account.last_name]
+            .into_iter()
+            .flatten()
+        {
+            assert!(value.chars().count() <= MAX_ACCOUNT_FIELD_CHARS + 3);
+            assert!(!value.contains(['\n', '\r']));
+        }
     }
 
     #[cfg(unix)]

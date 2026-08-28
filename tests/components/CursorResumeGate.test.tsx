@@ -11,7 +11,6 @@ const apiMocks = vi.hoisted(() => ({
   getOfficialStatus: vi.fn(),
   updateOfficialAuth: vi.fn(),
   clearUserApiKey: vi.fn(),
-  getSessionIndexStatus: vi.fn(),
   getSessionResumeContext: vi.fn(),
   launchSession: vi.fn(),
   launchLogin: vi.fn(),
@@ -38,8 +37,6 @@ vi.mock("@/lib/api/cursor", () => ({
     updateOfficialAuth: (...args: unknown[]) =>
       apiMocks.updateOfficialAuth(...args),
     clearUserApiKey: (...args: unknown[]) => apiMocks.clearUserApiKey(...args),
-    getSessionIndexStatus: (...args: unknown[]) =>
-      apiMocks.getSessionIndexStatus(...args),
     getSessionResumeContext: (...args: unknown[]) =>
       apiMocks.getSessionResumeContext(...args),
     launchSession: (...args: unknown[]) => apiMocks.launchSession(...args),
@@ -146,9 +143,6 @@ describe("CursorResumeGate", () => {
             : readyStatus,
       );
     apiMocks.clearUserApiKey.mockReset().mockResolvedValue(needsApiKeyStatus);
-    apiMocks.getSessionIndexStatus
-      .mockReset()
-      .mockResolvedValue({ state: "indexReady" });
     apiMocks.getSessionResumeContext.mockReset().mockResolvedValue({
       workspaceState: "ready",
       workspace: "/mock/cursor/workspace",
@@ -381,22 +375,6 @@ describe("CursorResumeGate", () => {
     expect(
       screen.getByRole("button", { name: "登录并继续" }),
     ).toBeInTheDocument();
-  });
-
-  it("reports index unavailability separately without blocking a loaded session", async () => {
-    const user = userEvent.setup();
-    apiMocks.getSessionIndexStatus.mockResolvedValue({
-      state: "indexUnavailable",
-      reason: "metadata root unavailable",
-    });
-    renderGate();
-
-    const warning = await screen.findByRole("alert");
-    expect(warning).toHaveTextContent("Cursor 会话索引不可用");
-    expect(warning).toHaveTextContent("metadata root unavailable");
-
-    await user.click(screen.getByRole("button", { name: "继续会话" }));
-    expect(apiMocks.launchSession).toHaveBeenCalledTimes(1);
   });
 
   it("returns to workspace selection when launch-time validation expires", async () => {

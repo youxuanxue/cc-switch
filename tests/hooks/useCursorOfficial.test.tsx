@@ -183,4 +183,25 @@ describe("useCursorOfficial", () => {
       result.current.status,
     );
   });
+
+  it("enables Cursor index probing only when its consumer requests it", async () => {
+    const { wrapper } = createWrapper();
+    const { result, rerender } = renderHook(
+      ({ enabled }) => useCursorSessionIndex(enabled),
+      {
+        initialProps: { enabled: false },
+        wrapper,
+      },
+    );
+
+    expect(result.current.status).toBeUndefined();
+    expect(apiMocks.getSessionIndexStatus).not.toHaveBeenCalled();
+
+    rerender({ enabled: true });
+
+    await waitFor(() =>
+      expect(result.current.status).toEqual({ state: "indexReady" }),
+    );
+    expect(apiMocks.getSessionIndexStatus).toHaveBeenCalledTimes(1);
+  });
 });

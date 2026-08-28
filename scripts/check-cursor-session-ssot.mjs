@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 const SOURCE_EXTENSIONS = new Set([".js", ".jsx", ".ts", ".tsx"]);
 const FINDING_CODES = {
   auth: "CURSOR_AUTH_OWNER_BYPASS",
+  index: "CURSOR_INDEX_OWNER_BYPASS",
   resume: "CURSOR_RESUME_OWNER_BYPASS",
   deletion: "CURSOR_DELETE_OWNER_BYPASS",
   terminal: "CURSOR_GENERIC_TERMINAL_BYPASS",
@@ -143,10 +144,65 @@ requireImports(
 );
 requireImports(
   "src/components/sessions/SessionManagerPage.tsx",
+  ["useCursorSessionIndex"],
+  FINDING_CODES.index,
+  "Session Manager must own Cursor index diagnostics through the shared hook",
+);
+requireImports(
+  "src/components/sessions/SessionManagerPage.tsx",
   ["isSessionDeletable"],
   FINDING_CODES.deletion,
   "Session Manager delete decisions must use isSessionDeletable",
 );
+
+const sessionManagerPath = "src/components/sessions/SessionManagerPage.tsx";
+const sessionManagerSource = sources.get(sessionManagerPath);
+if (sessionManagerSource !== undefined) {
+  const cursorIndexCalls = [
+    ...sessionManagerSource.matchAll(/\buseCursorSessionIndex\s*\(/g),
+  ];
+  if (cursorIndexCalls.length === 0) {
+    addFinding(
+      FINDING_CODES.index,
+      sessionManagerPath,
+      "Session Manager must consume useCursorSessionIndex",
+    );
+  }
+  const cursorFilteredIndexQuery =
+    /^useCursorSessionIndex\s*\(\s*providerFilter\s*===\s*["']cursor["']\s*\)/;
+  for (const call of cursorIndexCalls) {
+    if (
+      !cursorFilteredIndexQuery.test(sessionManagerSource.slice(call.index))
+    ) {
+      addFinding(
+        FINDING_CODES.index,
+        sessionManagerPath,
+        "Session Manager Cursor index query must be enabled only by the Cursor filter",
+        lineNumber(sessionManagerSource, call.index),
+      );
+    }
+  }
+
+  const genericResumeCalls = [
+    ...sessionManagerSource.matchAll(/\buseSessionResumeStateQuery\s*\(/g),
+  ];
+  const cursorGuardedGenericResumeQuery =
+    /^useSessionResumeStateQuery\s*\(\s*isCursorSession\s*\?\s*undefined\s*:\s*(?:selectedSession|session)\?\.providerId/;
+  for (const call of genericResumeCalls) {
+    if (
+      !cursorGuardedGenericResumeQuery.test(
+        sessionManagerSource.slice(call.index),
+      )
+    ) {
+      addFinding(
+        FINDING_CODES.resume,
+        sessionManagerPath,
+        "Session Manager generic resume-state query must be disabled for Cursor",
+        lineNumber(sessionManagerSource, call.index),
+      );
+    }
+  }
+}
 
 const authOwnerFiles = new Set([
   "src/hooks/useCursorOfficial.ts",
@@ -155,6 +211,14 @@ const authOwnerFiles = new Set([
 const resumeOwnerFiles = new Set([
   "src/components/sessions/CursorResumeGate.tsx",
   "src/components/sessions/cursorResumeState.ts",
+  "src/lib/api/cursor.ts",
+]);
+const indexHookConsumerFiles = new Set([
+  "src/components/sessions/SessionManagerPage.tsx",
+  "src/hooks/useCursorSessionIndex.ts",
+]);
+const indexApiOwnerFiles = new Set([
+  "src/hooks/useCursorSessionIndex.ts",
   "src/lib/api/cursor.ts",
 ]);
 const deleteOwnerFile = "src/components/sessions/sessionCapabilities.ts";
@@ -166,10 +230,43 @@ const resumeApiPattern =
   /cursorApi\.(?:getSessionResumeContext|launchSession|launchLoginAndSession)\s*\(/g;
 const resumeInvokePattern =
   /invoke\s*\(\s*["'](?:get_cursor_session_resume_context|launch_cursor_session|launch_cursor_login_and_session)["']/g;
+const indexHookPattern = /\buseCursorSessionIndex\s*\(/g;
+const indexApiPattern = /cursorApi\.getSessionIndexStatus\s*\(/g;
+const indexInvokePattern =
+  /invoke\s*\(\s*["']get_cursor_session_index_status["']/g;
 const genericTerminalPattern =
   /sessionsApi\.launchTerminal\s*\(|invoke\s*\(\s*["']launch_session_terminal["']/g;
 
 for (const [file, source] of sources) {
+  if (!indexHookConsumerFiles.has(file)) {
+    indexHookPattern.lastIndex = 0;
+    const match = indexHookPattern.exec(source);
+    if (match) {
+      addFinding(
+        FINDING_CODES.index,
+        file,
+        "Cursor index diagnostics must be consumed only by SessionManagerPage",
+        lineNumber(source, match.index),
+      );
+    }
+  }
+
+  if (!indexApiOwnerFiles.has(file)) {
+    for (const pattern of [indexApiPattern, indexInvokePattern]) {
+      pattern.lastIndex = 0;
+      const match = pattern.exec(source);
+      if (match) {
+        addFinding(
+          FINDING_CODES.index,
+          file,
+          "Cursor index API bypasses useCursorSessionIndex",
+          lineNumber(source, match.index),
+        );
+        break;
+      }
+    }
+  }
+
   if (!authOwnerFiles.has(file)) {
     for (const pattern of [authApiPattern, authInvokePattern]) {
       pattern.lastIndex = 0;

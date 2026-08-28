@@ -38,6 +38,7 @@
 - src-tauri/src/settings.rs::tests::us003_private_settings_write_restricts_existing_file_to_0600
 - src-tauri/src/services/cursor_official.rs::tests::us003_official_env_isolates_login_and_user_api_key_modes
 - src-tauri/src/services/cursor_official.rs::tests::us003_status_dto_redacts_credentials_and_errors
+- src-tauri/src/services/cursor_official.rs::tests::us003_status_dto_sanitizes_every_command_derived_display_field
 - src-tauri/src/commands/cursor.rs::tests::us003_auth_update_rejects_unknown_mode_and_empty_key
 - tests/hooks/useCursorOfficial.test.tsx::US-003 shares Cursor auth state without returning the key
 - tests/components/CursorOfficialAuthControl.test.tsx::US-003 keeps Login primary and User API Key secondary
@@ -70,6 +71,8 @@ Run:
 - 2026-08-28 RED (locale and IPC fixtures): four locale contract cases failed with the missing Cursor key set; the Cursor IPC fixture test then failed because state setters and the `update_cursor_official_auth` MSW handler did not exist.
 - 2026-08-28 GREEN (locale and IPC fixtures): `pnpm exec vitest run tests/config/localeCoverage.test.ts tests/msw/cursorFixtures.test.ts tests/components/SessionManagerPage.test.tsx tests/components/SettingsDialog.test.tsx` passed 47 tests. Four locales now carry the complete Cursor runtime copy contract, and the stateful `cursorApi → invoke → MSW` fixture immediately redacts `userApiKey` in its recorded call while returning only `hasUserApiKey`. `pnpm typecheck`, targeted Prettier, and `git diff --check` exited 0.
 - 2026-08-28 GREEN (real renderer): Playwright opened Settings → Auth, kept Login primary and User API Key under “其他方式”, cleared the submitted input, displayed only the configured mask, and proved the browser IPC call log stores `[REDACTED]` rather than the submitted key body.
-- 2026-08-28 FINAL: the private CLI smoke reported Agent CLI version `2026.08.25-3e8eec8`, successful parse/exit status, only top-level and `userInfo` field names, and the presence of the `isAuthenticated` boolean; it emitted no account values or credentials. Full type, format, Vitest, Playwright, Cargo, approved-doc, diff, and preflight gates exited 0.
+- 2026-08-28 RED (review R-001): serialization still exposed the configured User API Key when CLI-derived version or account display fields echoed it.
+- 2026-08-28 GREEN (review R-001): the status DTO boundary now compacts whitespace, strictly redacts known secrets, drops blank account fields, and bounds version, account, and error display values. The 16-test Cursor Official service suite exited 0 with no fixture key in serialized output.
+- 2026-08-28 FINAL: the private CLI smoke reported Agent CLI version `2026.08.25-3e8eec8`, successful parse/exit status, only top-level and `userInfo` field names, and the presence of the `isAuthenticated` boolean; it emitted no account values or credentials. Vitest passed 1,073/1,073, Cargo passed 2,911 tests with 5 ignored, Playwright passed 5/5, and full type, format, approved-doc, diff, and preflight gates exited 0 before final review.
 
 - Status: Done

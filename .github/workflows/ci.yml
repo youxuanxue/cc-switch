@@ -44,6 +44,8 @@ jobs:
               - "vite.config.ts"
               - "vitest.config.ts"
               - "playwright.config.ts"
+              - "scripts/check-cursor-session-ssot.mjs"
+              - ".preflight/local-lint.conf"
               - "tailwind.config.cjs"
               - "postcss.config.cjs"
               - "components.json"

@@ -348,7 +348,6 @@
     "authCenter": {
       "title": "公式認証センター",
       "description": "各ツールの公式ログインとサブスクリプション認証を一元管理します。",
-      "beta": "Beta",
       "cursorDescription": "Cursor Agent CLI の公式ログインと User API Key を管理します。",
       "cursorReady": "準備完了",
       "cursorNeedsLogin": "ログインが必要",

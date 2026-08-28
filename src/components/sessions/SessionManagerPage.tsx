@@ -59,6 +59,7 @@ import {
 } from "@/components/ui/tooltip";
 import { extractErrorMessage } from "@/utils/errorUtils";
 import { isMac } from "@/lib/platform";
+import { useCursorSessionIndex } from "@/hooks/useCursorSessionIndex";
 import { ProviderIcon } from "@/components/ProviderIcon";
 import { SessionItem } from "./SessionItem";
 import { CursorResumeGate } from "./CursorResumeGate";
@@ -231,6 +232,7 @@ export function SessionManagerPage({ appId }: { appId: string }) {
   const [providerFilter, setProviderFilter] = useState<ProviderFilter>(
     appId as ProviderFilter,
   );
+  const cursorSessionIndex = useCursorSessionIndex(providerFilter === "cursor");
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [listViewMode, setListViewMode] = useState<SessionListViewMode>(
     readInitialSessionListViewMode,
@@ -344,6 +346,13 @@ export function SessionManagerPage({ appId }: { appId: string }) {
         });
 
   const isCursorSession = selectedSession?.providerId === "cursor";
+  const cursorIndexUnavailableReason =
+    providerFilter === "cursor" &&
+    cursorSessionIndex.status?.state === "indexUnavailable"
+      ? cursorSessionIndex.status.reason
+      : providerFilter === "cursor" && cursorSessionIndex.isError
+        ? extractErrorMessage(cursorSessionIndex.error)
+        : null;
 
   const { data: messages = [], isLoading: isLoadingMessages } =
     useSessionMessagesQuery(
@@ -351,9 +360,9 @@ export function SessionManagerPage({ appId }: { appId: string }) {
       isCursorSession ? undefined : selectedSession?.sourcePath,
     );
   const { data: resumeState } = useSessionResumeStateQuery(
-    selectedSession?.providerId,
-    selectedSession?.sessionId,
-    selectedSession?.sourcePath,
+    isCursorSession ? undefined : selectedSession?.providerId,
+    isCursorSession ? undefined : selectedSession?.sessionId,
+    isCursorSession ? undefined : selectedSession?.sourcePath,
   );
   const resumeCopy = getSessionResumeI18nKeys(resumeState?.appearance);
   const deleteSessionMutation = useDeleteSessionMutation();
@@ -1249,7 +1258,12 @@ export function SessionManagerPage({ appId }: { appId: string }) {
                               variant="ghost"
                               size="icon"
                               className="size-7"
-                              onClick={() => void refetch()}
+                              onClick={() => {
+                                void refetch();
+                                if (providerFilter === "cursor") {
+                                  void cursorSessionIndex.refresh();
+                                }
+                              }}
                             >
                               <RefreshCw className="size-3.5" />
                             </Button>
@@ -1332,17 +1346,38 @@ export function SessionManagerPage({ appId }: { appId: string }) {
               <CardContent className="flex-1 min-h-0 p-0">
                 <ScrollArea className="h-full">
                   <div className="p-2">
-                    {isLoading ? (
+                    {isLoading ||
+                    (providerFilter === "cursor" &&
+                      cursorSessionIndex.isLoading) ? (
                       <div className="flex items-center justify-center py-12">
                         <RefreshCw className="size-5 animate-spin text-muted-foreground" />
                       </div>
                     ) : filteredSessions.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center py-12 text-center">
-                        <MessageSquare className="size-8 text-muted-foreground/50 mb-2" />
-                        <p className="text-sm text-muted-foreground">
-                          {t("sessionManager.noSessions")}
-                        </p>
-                      </div>
+                      cursorIndexUnavailableReason ? (
+                        <div
+                          role="alert"
+                          className="mx-2 my-4 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-3 text-amber-800 dark:text-amber-200"
+                        >
+                          <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                          <div className="min-w-0 space-y-1">
+                            <p className="text-sm font-medium">
+                              {t("sessionManager.cursorIndexUnavailable", {
+                                defaultValue: "Cursor 会话索引不可用",
+                              })}
+                            </p>
+                            <p className="break-words text-xs">
+                              {cursorIndexUnavailableReason}
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center py-12 text-center">
+                          <MessageSquare className="size-8 text-muted-foreground/50 mb-2" />
+                          <p className="text-sm text-muted-foreground">
+                            {t("sessionManager.noSessions")}
+                          </p>
+                        </div>
+                      )
                     ) : listViewMode === "grouped" ? (
                       <div className="space-y-2">
                         {groupedSessions.map((providerGroup) => {
