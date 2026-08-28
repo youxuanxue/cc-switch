@@ -38,7 +38,7 @@ related_commits: []
 
 **第一次：先定在用 Agent，再确认工作台。不自动倒库。**
 
-1. 人先勾这台机器**在用哪些 Agent**（v1 接不住的不出现）。默认**全不勾**；探测到目录里有东西的只标「看见过」，不预勾。看见过 ≠ 在用。确认前不改链接。
+1. 人先勾这台机器**在用哪些 Agent**（v1 接不住的不出现）。默认**全不勾**；探测到目录里有东西的只标「看见过」，不预勾。看见过 ≠ 在用。确认前不改链接。**一个都不勾 = 控制面未开张**：不写 marker、不碰磁盘、不建空库；下次再来仍是第一次。
 2. 再出技能候选，两份不混：
 
 | 场景 | 候选从哪来 |
@@ -209,7 +209,7 @@ dev-rules **保留**项目 `.cursor/skills` 编辑入口；**删除**的是 home
 - 下一份实现不出现第二 writer、第二本启用账、技能 × Agent 开关。
 - 库成员是工作集唯一 SSOT；symlink 与 `skills-control.json` 是生成物。
 - 装/卸/入伙：全部在用 Agent 写齐才算成功。
-- 第一次先勾在用 Agent（默认全不勾，看见过不预勾），再确认工作台；有现场不混 `recommended`。
+- 第一次先勾在用 Agent（默认全不勾，看见过不预勾），再确认工作台；一个都不勾 = 未开张；有现场不混 `recommended`。
 - catalog 新增默认不进库。
 - foreign 不自动进库、不被删。
 - 在用 token 上 legacy writer 可被 doctor 证明已停写。
@@ -217,7 +217,7 @@ dev-rules **保留**项目 `.cursor/skills` 编辑入口；**删除**的是 home
 
 ## 验证（Core 实现 PR 承担）
 
-- **单元**：catalog 解析、库成员、在用名单、`claude-cursor` 布局、Pi 在用后跟库、整笔失败、foreign、先勾 Agent 再出候选、默认不预勾、空目录才用 `recommended`、catalog 新增不进库。
+- **单元**：catalog 解析、库成员、在用名单、`claude-cursor` 布局、Pi 在用后跟库、整笔失败、foreign、先勾 Agent 再出候选、默认不预勾、零勾选不算开张、空目录才用 `recommended`、catalog 新增不进库。
 - **集成**：先定在用再确认工作台；有现场只确认已用项；入伙对齐；装/卸中断后收敛；在用 Agent 失败则库不变。
 - **主机**：`doctor --json` 对当前在用名单 exit 0；屏幕上的库与 doctor 一致。
 
