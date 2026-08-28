@@ -632,8 +632,7 @@ function App() {
   }, [activeApp]);
 
   const currentViewRef = useRef(currentView);
-  const managementBusy =
-    mcpManagementBusy || promptNavigationBusy;
+  const managementBusy = mcpManagementBusy || promptNavigationBusy;
   const managementBusyRef = useRef(false);
   managementBusyRef.current = managementBusy;
 

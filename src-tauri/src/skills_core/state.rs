@@ -152,8 +152,8 @@ pub fn write_marker(state: &ControlState) -> Result<(), AppError> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| AppError::io(parent, e))?;
     }
-    let raw = serde_json::to_string_pretty(&marker)
-        .map_err(|e| AppError::JsonSerialize { source: e })?;
+    let raw =
+        serde_json::to_string_pretty(&marker).map_err(|e| AppError::JsonSerialize { source: e })?;
     std::fs::write(&path, raw).map_err(|e| AppError::io(&path, e))
 }
 

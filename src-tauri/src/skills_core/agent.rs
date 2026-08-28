@@ -107,9 +107,7 @@ pub fn is_dir_symlink_to(link: &Path, target: &Path) -> bool {
 pub fn sanitize_skill_name(raw: &str) -> Result<String, AppError> {
     let trimmed = raw.trim();
     if trimmed.is_empty() || trimmed.contains('/') || trimmed.contains('\\') {
-        return Err(AppError::InvalidInput(format!(
-            "非法技能名: {raw}"
-        )));
+        return Err(AppError::InvalidInput(format!("非法技能名: {raw}")));
     }
     let path = Path::new(trimmed);
     let mut components = path.components();

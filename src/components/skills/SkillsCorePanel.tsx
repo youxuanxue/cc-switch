@@ -1,4 +1,9 @@
-import React, { useCallback, useEffect, useImperativeHandle, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
@@ -55,19 +60,16 @@ const SkillsCorePanel = React.forwardRef<
     onInteractionBlockedChange?.(busy);
   }, [busy, onInteractionBlockedChange]);
 
-  const refreshPreview = useCallback(
-    async (agents: string[]) => {
-      if (agents.length === 0) {
-        setPreview(null);
-        setSelectedSkills([]);
-        return;
-      }
-      const next = await skillsCoreApi.previewOpen(agents);
-      setPreview(next);
+  const refreshPreview = useCallback(async (agents: string[]) => {
+    if (agents.length === 0) {
+      setPreview(null);
       setSelectedSkills([]);
-    },
-    [],
-  );
+      return;
+    }
+    const next = await skillsCoreApi.previewOpen(agents);
+    setPreview(next);
+    setSelectedSkills([]);
+  }, []);
 
   const run = useCallback(
     async (action: () => Promise<SkillsCoreDoctor | void>) => {
@@ -167,9 +169,14 @@ const SkillsCorePanel = React.forwardRef<
             )}
             {preview && preview.candidates.length > 0 && (
               <div className="space-y-2">
-                <p className="text-sm font-medium">{t("skills.core.candidates")}</p>
+                <p className="text-sm font-medium">
+                  {t("skills.core.candidates")}
+                </p>
                 {preview.candidates.map((cand) => (
-                  <label key={cand.name} className="flex items-center gap-2 text-sm">
+                  <label
+                    key={cand.name}
+                    className="flex items-center gap-2 text-sm"
+                  >
                     <Checkbox
                       checked={selectedSkills.includes(cand.name)}
                       onCheckedChange={(checked) =>
@@ -238,7 +245,9 @@ const SkillsCorePanel = React.forwardRef<
                     size="sm"
                     variant="outline"
                     disabled={busy}
-                    onClick={() => void run(() => skillsCoreApi.agentsAdd(token))}
+                    onClick={() =>
+                      void run(() => skillsCoreApi.agentsAdd(token))
+                    }
                   >
                     {t("skills.core.addAgent", { token })}
                   </Button>
@@ -266,7 +275,9 @@ const SkillsCorePanel = React.forwardRef<
                       <div className="font-medium">{skill.name}</div>
                       <div className="text-xs text-muted-foreground">
                         {skill.provenance}
-                        {skill.behind_catalog ? ` · ${t("skills.core.behind")}` : ""}
+                        {skill.behind_catalog
+                          ? ` · ${t("skills.core.behind")}`
+                          : ""}
                       </div>
                     </div>
                     <Button

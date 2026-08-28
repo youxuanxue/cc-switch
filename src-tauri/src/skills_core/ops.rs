@@ -19,10 +19,7 @@ use super::state::{
     SkillCandidate,
 };
 
-pub fn preview_first_open(
-    _db: &Database,
-    agents: &[String],
-) -> Result<FirstOpenPreview, AppError> {
+pub fn preview_first_open(_db: &Database, agents: &[String]) -> Result<FirstOpenPreview, AppError> {
     if agents.is_empty() {
         return Ok(FirstOpenPreview {
             candidates: Vec::new(),
@@ -60,12 +57,10 @@ pub fn open(db: &Database, agents: &[String], skills: &[String]) -> Result<(), A
     }
 
     let wanted: HashSet<&str> = skills.iter().map(String::as_str).collect();
-    if skills.iter().any(|name| {
-        !preview
-            .candidates
-            .iter()
-            .any(|c| c.name == *name)
-    }) {
+    if skills
+        .iter()
+        .any(|name| !preview.candidates.iter().any(|c| c.name == *name))
+    {
         return Err(AppError::InvalidInput(
             "open --skill 必须来自第一次候选".into(),
         ));
@@ -129,9 +124,9 @@ pub fn install(db: &Database, names: &[String]) -> Result<(), AppError> {
     let result = (|| {
         for name in names {
             let name = sanitize_skill_name(name)?;
-            let skill = catalog.get(&name).ok_or_else(|| {
-                AppError::InvalidInput(format!("货架没有技能 {name}"))
-            })?;
+            let skill = catalog
+                .get(&name)
+                .ok_or_else(|| AppError::InvalidInput(format!("货架没有技能 {name}")))?;
             let src = catalog.source_dir(skill)?;
             reject_local_draft_overwrite(&state, &name, &src)?;
             ingest_skill(&src, &name)?;
@@ -139,7 +134,7 @@ pub fn install(db: &Database, names: &[String]) -> Result<(), AppError> {
             upsert_library(
                 &mut state,
                 LibraryEntry {
-                    name: name,
+                    name,
                     provenance: "catalog-managed".into(),
                     content_hash: hash,
                     catalog_revision: Some(catalog.revision.clone()),
@@ -198,8 +193,7 @@ pub fn import_paths(db: &Database, paths: &[PathBuf]) -> Result<(), AppError> {
                 )));
             }
             let name = sanitize_skill_name(
-                path
-                    .file_name()
+                path.file_name()
                     .and_then(|s| s.to_str())
                     .ok_or_else(|| AppError::InvalidInput("导入路径无效".into()))?,
             )?;
@@ -249,9 +243,7 @@ pub fn agents_add(db: &Database, token: &str) -> Result<(), AppError> {
 pub fn agents_remove(db: &Database, token: &str) -> Result<(), AppError> {
     let mut state = require_open(db)?;
     let parsed = AgentToken::parse(token)?;
-    state
-        .in_use_agents
-        .retain(|a| a != parsed.as_str());
+    state.in_use_agents.retain(|a| a != parsed.as_str());
     if state.in_use_agents.is_empty() {
         let closed = ControlState::closed();
         save_state(db, &closed)?;
@@ -335,8 +327,11 @@ pub fn save_local_draft(db: &Database, name: &str, body: &str) -> Result<(), App
     let backup = fs::read(&skill_md).map_err(|e| AppError::io(&skill_md, e))?;
     let snapshot = snapshot_library(&state)?;
     let result = (|| {
-        fs::write(&skill_md, format!("---\nname: {name}\ndescription: {body}\n---\n{body}\n"))
-            .map_err(|e| AppError::io(&skill_md, e))?;
+        fs::write(
+            &skill_md,
+            format!("---\nname: {name}\ndescription: {body}\n---\n{body}\n"),
+        )
+        .map_err(|e| AppError::io(&skill_md, e))?;
         let hash = content_hash(&dir)?;
         if let Some(slot) = state.library.iter_mut().find(|s| s.name == name) {
             slot.content_hash = hash;

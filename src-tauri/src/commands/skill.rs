@@ -389,7 +389,10 @@ pub fn skills_core_import(
     paths: Vec<String>,
     app_state: State<'_, AppState>,
 ) -> Result<crate::skills_core::DoctorReport, String> {
-    let paths = paths.into_iter().map(std::path::PathBuf::from).collect::<Vec<_>>();
+    let paths = paths
+        .into_iter()
+        .map(std::path::PathBuf::from)
+        .collect::<Vec<_>>();
     crate::skills_core::import_paths(&app_state.db, &paths).map_err(|e| e.to_string())?;
     crate::skills_core::doctor(&app_state.db).map_err(|e| e.to_string())
 }

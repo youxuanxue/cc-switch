@@ -45,8 +45,13 @@ fn run_cli_inner(
             let check = args[1..].iter().any(|a| a == "--check");
             if check {
                 let report = sync(&db, true)?;
-                writeln!(stdout, "{}", serde_json::to_string_pretty(&report).map_err(|e| AppError::JsonSerialize { source: e })?)
-                    .map_err(|e| AppError::Message(e.to_string()))?;
+                writeln!(
+                    stdout,
+                    "{}",
+                    serde_json::to_string_pretty(&report)
+                        .map_err(|e| AppError::JsonSerialize { source: e })?
+                )
+                .map_err(|e| AppError::Message(e.to_string()))?;
                 Ok(0)
             } else {
                 sync(&db, false)?;
@@ -65,7 +70,10 @@ fn run_cli_inner(
         }
         "import" => {
             require_names(&args[1..], "import")?;
-            let paths = args[1..].iter().map(std::path::PathBuf::from).collect::<Vec<_>>();
+            let paths = args[1..]
+                .iter()
+                .map(std::path::PathBuf::from)
+                .collect::<Vec<_>>();
             import_paths(&db, &paths)?;
             Ok(0)
         }
@@ -111,8 +119,13 @@ fn run_cli_inner(
                 writeln!(stdout, "{}", doctor_json(&db)?)
                     .map_err(|e| AppError::Message(e.to_string()))?;
             } else {
-                writeln!(stdout, "open={} library={}", report.open, report.library.len())
-                    .map_err(|e| AppError::Message(e.to_string()))?;
+                writeln!(
+                    stdout,
+                    "open={} library={}",
+                    report.open,
+                    report.library.len()
+                )
+                .map_err(|e| AppError::Message(e.to_string()))?;
             }
             let unsafe_proj = report.open
                 && (!report.broken.is_empty()
@@ -145,24 +158,20 @@ fn parse_open_flags(args: &[String]) -> Result<(Vec<String>, Vec<String>), AppEr
     while i < args.len() {
         match args[i].as_str() {
             "--agent" => {
-                let value = args.get(i + 1).ok_or_else(|| {
-                    AppError::InvalidInput("open --agent 需要 token".into())
-                })?;
+                let value = args
+                    .get(i + 1)
+                    .ok_or_else(|| AppError::InvalidInput("open --agent 需要 token".into()))?;
                 agents.push(value.clone());
                 i += 2;
             }
             "--skill" => {
-                let value = args.get(i + 1).ok_or_else(|| {
-                    AppError::InvalidInput("open --skill 需要 name".into())
-                })?;
+                let value = args
+                    .get(i + 1)
+                    .ok_or_else(|| AppError::InvalidInput("open --skill 需要 name".into()))?;
                 skills.push(value.clone());
                 i += 2;
             }
-            other => {
-                return Err(AppError::InvalidInput(format!(
-                    "open 未知参数: {other}"
-                )))
-            }
+            other => return Err(AppError::InvalidInput(format!("open 未知参数: {other}"))),
         }
     }
     Ok((agents, skills))

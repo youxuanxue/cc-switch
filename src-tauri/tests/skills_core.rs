@@ -1,9 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use cc_switch_lib::{
-    skills_core, AppState, AppType, SkillService, DEFAULT_CATALOG_REPO,
-};
+use cc_switch_lib::{skills_core, AppState, AppType, SkillService, DEFAULT_CATALOG_REPO};
 
 #[path = "support.rs"]
 mod support;
@@ -214,23 +212,20 @@ fn first_open_same_name_different_hash_fails_closed() {
         "gemini-copy",
     );
 
-    let preview =
-        skills_core::preview_first_open(&db, &["codex".into(), "gemini".into()]).unwrap();
+    let preview = skills_core::preview_first_open(&db, &["codex".into(), "gemini".into()]).unwrap();
     assert!(!preview.conflicts.is_empty());
 
-    let err = skills_core::open(
-        &db,
-        &["codex".into(), "gemini".into()],
-        &["shared".into()],
-    )
-    .expect_err("conflict");
+    let err = skills_core::open(&db, &["codex".into(), "gemini".into()], &["shared".into()])
+        .expect_err("conflict");
     assert!(err.to_string().contains("冲突") || err.to_string().contains("conflict"));
     assert!(!skills_core::doctor(&db).unwrap().open);
     assert!(!marker_path(&home).exists());
-    assert!(!library_dir().join("shared").exists() || {
-        // leftover empty/partial must not be a ledger member
-        skills_core::doctor(&db).unwrap().library.is_empty()
-    });
+    assert!(
+        !library_dir().join("shared").exists() || {
+            // leftover empty/partial must not be a ledger member
+            skills_core::doctor(&db).unwrap().library.is_empty()
+        }
+    );
 }
 
 #[test]
@@ -289,14 +284,21 @@ fn close_shop_clears_ledger_keeps_links_and_blocks_agents_add() {
     let report = skills_core::doctor(&db).unwrap();
     assert!(!report.open);
     assert!(report.library.is_empty());
-    assert!(!marker_path(&home).exists() || {
-        let raw = fs::read_to_string(marker_path(&home)).unwrap_or_default();
-        raw.trim().is_empty()
-            || serde_json::from_str::<serde_json::Value>(&raw)
-                .ok()
-                .map(|v| v.get("in_use_agents").and_then(|a| a.as_array()).map(|a| a.is_empty()).unwrap_or(true))
-                .unwrap_or(true)
-    });
+    assert!(
+        !marker_path(&home).exists() || {
+            let raw = fs::read_to_string(marker_path(&home)).unwrap_or_default();
+            raw.trim().is_empty()
+                || serde_json::from_str::<serde_json::Value>(&raw)
+                    .ok()
+                    .map(|v| {
+                        v.get("in_use_agents")
+                            .and_then(|a| a.as_array())
+                            .map(|a| a.is_empty())
+                            .unwrap_or(true)
+                    })
+                    .unwrap_or(true)
+        }
+    );
     assert!(dest.exists(), "关张不拆链接");
 
     assert!(skills_core::agents_add(&db, "codex").is_err());
@@ -389,12 +391,7 @@ fn follow_on_sync_upgrades_and_rolls_back_as_one_batch() {
         "3".repeat(40).as_str(),
         &[("keep", true, "v1"), ("boom", true, "v1")],
     );
-    skills_core::open(
-        &db,
-        &["codex".into()],
-        &["keep".into(), "boom".into()],
-    )
-    .unwrap();
+    skills_core::open(&db, &["codex".into()], &["keep".into(), "boom".into()]).unwrap();
 
     write_catalog(
         &home,
@@ -428,7 +425,8 @@ fn local_draft_save_rolls_back_library_on_projection_failure() {
     fs::remove_dir_all(&dest).ok();
     fs::write(&dest, "blocked").unwrap();
 
-    let err = skills_core::save_local_draft(&db, "draft-skill", "changed-body").expect_err("blocked");
+    let err =
+        skills_core::save_local_draft(&db, "draft-skill", "changed-body").expect_err("blocked");
     assert!(!err.to_string().is_empty());
     let body = fs::read_to_string(library_dir().join("draft-skill").join("SKILL.md")).unwrap();
     assert!(body.contains("original"), "库内副本必须回滚");
@@ -525,9 +523,11 @@ fn cli_doctor_and_closed_install_exit_codes() {
         &mut stderr,
     );
     assert_eq!(code, 0, "{}", String::from_utf8_lossy(&stderr));
-    assert!(skills_core::doctor(&create_test_state().unwrap().db)
-        .unwrap()
-        .open);
+    assert!(
+        skills_core::doctor(&create_test_state().unwrap().db)
+            .unwrap()
+            .open
+    );
 }
 
 #[test]
