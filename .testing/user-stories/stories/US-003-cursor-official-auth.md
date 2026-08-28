@@ -62,6 +62,8 @@ Run:
 - 2026-08-28 RED (command boundary): `cargo test --manifest-path src-tauri/Cargo.toml commands::cursor::tests -- --nocapture` exited 101 because the narrow auth-mode/key validator did not exist; DTO serialization assertions were already bound to the approved structured states.
 - 2026-08-28 GREEN (command boundary): the same command passed 2 tests, `cargo check --manifest-path src-tauri/Cargo.toml` exited 0, and `cargo test --manifest-path src-tauri/Cargo.toml us003_ -- --nocapture` passed all 5 cross-boundary US-003 Rust tests. Eight registered commands now expose only Login/User API Key, redacted status/index/context, and dedicated launch actions.
 - 2026-08-28 command gate: Rust formatting, `git diff --check`, and external project preflight exited 0 with only the repository's known integration skips and approved-doc branch warning.
+- 2026-08-28 RED (renderer credential cache): the first hook implementation stored the submitted User API Key in TanStack MutationCache; the focused hook test failed after inspecting mutation variables and proved the renderer-level leak.
+- 2026-08-28 GREEN (renderer auth owner): `useCursorOfficial.updateAuth` now invokes the IPC boundary directly, stores only the redacted status in QueryCache, and keeps the key out of MutationCache. The 4 hook behavior tests plus `pnpm typecheck` passed.
 - Remaining auth service, command, renderer, and e2e evidence is recorded before this Story advances to Done.
 
 - Status: InTest

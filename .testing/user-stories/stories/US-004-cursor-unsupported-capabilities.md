@@ -55,6 +55,8 @@ Run:
 - Approval evidence: design status approved by user-chat-2026-08-28.
 - 2026-08-28 RED context: the Cursor provider test module was introduced with backend message/deletion rejection coverage while discovery interfaces were still absent; the combined focused suite exited 101 on those missing discovery interfaces.
 - 2026-08-28 GREEN (backend unsupported paths): `cargo test --manifest-path src-tauri/Cargo.toml session_manager:: -- --nocapture` passed 90 tests, including exact `Unsupported provider: cursor` rejection before message loading or deletion.
+- 2026-08-28 RED (capability contract): the full Vitest run kept 1,012 existing tests green and failed the new Cursor capability/resume suites only because their approved SSOT modules did not exist.
+- 2026-08-28 GREEN (capability contract): the focused capability and resume-state suites passed 3 tests with literal expectations for supported Login/User API Key/fixed resume, conditional local indexing, unsupported transcript/deletion, and non-macOS `platformUnavailable`; capability vocabulary remains an internal contract only.
 - Remaining unsupported-capability, renderer, contract-check, and e2e evidence is recorded before this Story advances to Done.
 
 - Status: InTest

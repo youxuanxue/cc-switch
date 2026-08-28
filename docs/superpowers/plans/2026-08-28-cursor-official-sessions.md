@@ -443,7 +443,7 @@ git commit -m "feat(cursor): expose official session commands"
 - Produces `useCursorSessionIndex()` as the sole index-status query owner.
 - Produces `deriveCursorResumeState(input) -> platformUnavailable | cliMissing | workspaceRequired | needsLogin | needsApiKey | ready`.
 
-- [ ] **Step 1: Write failing capability and resume-priority tests**
+- [x] **Step 1: Write failing capability and resume-priority tests**
 
 Use table-driven literals for every capability and every priority collision, including platform+CLI+workspace+auth all unavailable resolving to `platformUnavailable`.
 
@@ -459,17 +459,17 @@ expect(
 ).toBe("platformUnavailable");
 ```
 
-- [ ] **Step 2: Run tests and verify RED**
+- [x] **Step 2: Run tests and verify RED**
 
 Run: `pnpm test:unit -- tests/config/cursorCapabilities.test.ts tests/components/cursorResumeState.test.ts`
 
 Expected: FAIL because modules do not exist.
 
-- [ ] **Step 3: Implement API, capability registry, pure resume derivation, and hooks**
+- [x] **Step 3: Implement API, capability registry, pure resume derivation, and hooks**
 
 Keep secrets only in `cursorApi.updateOfficialAuth({ authMode, userApiKey })`; status DTO exposes only `hasUserApiKey`. Use query keys `['cursor-official-status']` and `['cursor-session-index']`. On mutation success, replace/invalidate the shared status query rather than maintaining component-local copies.
 
-- [ ] **Step 4: Write and run hook behavior tests**
+- [x] **Step 4: Write and run hook behavior tests**
 
 Assert status sharing, replacement without key echo, clear, refresh, and login calls. Mock only the IPC API boundary; assert hook-visible state and cache outcomes.
 
@@ -477,7 +477,7 @@ Run: `pnpm test:unit -- tests/hooks/useCursorOfficial.test.tsx`
 
 Expected: PASS after implementation.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/config/cursorCapabilities.ts src/lib/api/cursor.ts src/lib/api/index.ts src/hooks/useCursorOfficial.ts src/hooks/useCursorSessionIndex.ts src/components/sessions/cursorResumeState.ts tests/config/cursorCapabilities.test.ts tests/hooks/useCursorOfficial.test.tsx tests/components/cursorResumeState.test.ts
