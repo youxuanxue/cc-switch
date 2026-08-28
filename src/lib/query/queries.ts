@@ -11,6 +11,7 @@ import {
   sessionsApi,
   type AppId,
 } from "@/lib/api";
+import type { SessionResumeState } from "@/lib/api/sessions";
 import type {
   Provider,
   Settings,
@@ -321,5 +322,26 @@ export const useSessionMessagesQuery = (
     queryFn: async () => sessionsApi.getMessages(providerId!, sourcePath!),
     enabled: Boolean(providerId && sourcePath),
     staleTime: 30 * 1000,
+  });
+};
+
+export const sessionResumeStateKey = (
+  providerId?: string,
+  sessionId?: string,
+  sourcePath?: string,
+) => ["sessionResumeState", providerId, sessionId, sourcePath] as const;
+
+export const useSessionResumeStateQuery = (
+  providerId?: string,
+  sessionId?: string,
+  sourcePath?: string,
+) => {
+  return useQuery<SessionResumeState>({
+    queryKey: sessionResumeStateKey(providerId, sessionId, sourcePath),
+    queryFn: async () =>
+      sessionsApi.getResumeState(providerId!, sessionId!, sourcePath),
+    enabled: Boolean(providerId && sessionId),
+    staleTime: 2 * 1000,
+    refetchInterval: 4 * 1000,
   });
 };

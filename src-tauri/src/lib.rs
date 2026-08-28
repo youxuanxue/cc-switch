@@ -1618,6 +1618,7 @@ pub fn run() {
             commands::delete_session,
             commands::delete_sessions,
             commands::launch_session_terminal,
+            commands::get_session_resume_state,
             // Cursor Official auth and session recovery
             commands::get_cursor_official_status,
             commands::update_cursor_official_auth,

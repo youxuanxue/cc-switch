@@ -250,3 +250,26 @@ export const highlightText = (text: string, query: string): ReactNode => {
       : part,
   );
 };
+
+export type SessionResumeAppearance = "resume" | "return" | "returnToCodeG";
+
+export function getSessionResumeI18nKeys(
+  appearance: SessionResumeAppearance | undefined,
+): { labelKey: string; tooltipKey: string } {
+  if (appearance === "return") {
+    return {
+      labelKey: "sessionManager.returnToSession",
+      tooltipKey: "sessionManager.returnToSessionTooltip",
+    };
+  }
+  if (appearance === "returnToCodeG") {
+    return {
+      labelKey: "sessionManager.returnToCodeG",
+      tooltipKey: "sessionManager.returnToCodeGTooltip",
+    };
+  }
+  return {
+    labelKey: "sessionManager.resume",
+    tooltipKey: "sessionManager.resumeTooltip",
+  };
+}

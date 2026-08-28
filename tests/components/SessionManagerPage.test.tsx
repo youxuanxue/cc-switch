@@ -12,6 +12,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SessionManagerPage } from "@/components/sessions/SessionManagerPage";
 import { piApi } from "@/lib/api/pi";
 import { sessionsApi } from "@/lib/api/sessions";
+import * as platform from "@/lib/platform";
 import type { SessionMessage, SessionMeta } from "@/types";
 import { setSessionFixtures } from "../msw/state";
 
@@ -917,5 +918,139 @@ describe("SessionManagerPage", () => {
     ).toBeInTheDocument();
     expect(toastErrorMock).not.toHaveBeenCalled();
     expect(toastSuccessMock).toHaveBeenCalled();
+  });
+
+  it("renames the button to 回到会话 when the terminal session is already live", async () => {
+    vi.spyOn(platform, "isMac").mockReturnValue(true);
+    vi.spyOn(sessionsApi, "getResumeState").mockResolvedValue({
+      appearance: "return",
+    });
+
+    renderPage();
+    await waitFor(() =>
+      expect(
+        screen.getByRole("heading", { name: "Alpha Session" }),
+      ).toBeInTheDocument(),
+    );
+
+    expect(
+      await screen.findByRole("button", {
+        name: /sessionManager.returnToSession/i,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /sessionManager.resume$/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("renames the button to 回到 CodeG when CodeG holds the writer", async () => {
+    vi.spyOn(platform, "isMac").mockReturnValue(true);
+    vi.spyOn(sessionsApi, "getResumeState").mockResolvedValue({
+      appearance: "returnToCodeG",
+    });
+
+    renderPage();
+    await waitFor(() =>
+      expect(
+        screen.getByRole("heading", { name: "Alpha Session" }),
+      ).toBeInTheDocument(),
+    );
+
+    expect(
+      await screen.findByRole("button", {
+        name: /sessionManager.returnToCodeG/i,
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("focuses the already-open terminal instead of launching a second resume", async () => {
+    vi.spyOn(platform, "isMac").mockReturnValue(true);
+    const launch = vi.spyOn(sessionsApi, "launchTerminal").mockResolvedValue({
+      action: "focused",
+      app: "iTerm",
+    });
+
+    renderPage();
+    await waitFor(() =>
+      expect(
+        screen.getByRole("heading", { name: "Alpha Session" }),
+      ).toBeInTheDocument(),
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /sessionManager.resume$/i }),
+    );
+
+    await waitFor(() => {
+      expect(launch).toHaveBeenCalledWith({
+        command: "codex resume codex-session-1",
+        cwd: "/mock/codex",
+        sessionId: "codex-session-1",
+        providerId: "codex",
+        sourcePath: "/mock/codex/session-1.jsonl",
+      });
+      expect(toastSuccessMock).toHaveBeenCalledWith(
+        "已切换到已打开的会话窗口（iTerm）",
+      );
+    });
+    expect(toastErrorMock).not.toHaveBeenCalled();
+    launch.mockRestore();
+  });
+
+  it("uses the same resume decision path for Claude sessions", async () => {
+    vi.spyOn(platform, "isMac").mockReturnValue(true);
+    const launch = vi.spyOn(sessionsApi, "launchTerminal").mockResolvedValue({
+      action: "focused",
+      app: "iTerm",
+    });
+
+    renderPage("claude");
+    await waitFor(() =>
+      expect(
+        screen.getByRole("heading", { name: "Claude Session" }),
+      ).toBeInTheDocument(),
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /sessionManager.resume$/i }),
+    );
+
+    await waitFor(() => {
+      expect(launch).toHaveBeenCalledWith({
+        command: "claude --resume claude-session-1",
+        cwd: "/mock/claude",
+        sessionId: "claude-session-1",
+        providerId: "claude",
+        sourcePath: "/mock/claude/session-1.jsonl",
+      });
+    });
+    launch.mockRestore();
+  });
+
+  it("does not launch another resume when a non-terminal client holds the writer", async () => {
+    vi.spyOn(platform, "isMac").mockReturnValue(true);
+    const launch = vi.spyOn(sessionsApi, "launchTerminal").mockResolvedValue({
+      action: "occupied",
+      holder: "CodeG",
+    });
+
+    renderPage();
+    await waitFor(() =>
+      expect(
+        screen.getByRole("heading", { name: "Alpha Session" }),
+      ).toBeInTheDocument(),
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /sessionManager.resume$/i }),
+    );
+
+    await waitFor(() => {
+      expect(toastErrorMock).toHaveBeenCalledWith(
+        "该会话已在 CodeG 中打开，请先回到那个窗口",
+      );
+    });
+    expect(toastSuccessMock).not.toHaveBeenCalled();
+    launch.mockRestore();
   });
 });

@@ -25,8 +25,10 @@ import {
 } from "lucide-react";
 import {
   piKeys,
+  sessionResumeStateKey,
   useDeleteSessionMutation,
   useSessionMessagesQuery,
+  useSessionResumeStateQuery,
   useSessionsQuery,
 } from "@/lib/query";
 import { piApi, sessionsApi } from "@/lib/api";
@@ -73,6 +75,7 @@ import {
   getProviderLabel,
   getSessionDirectoryGroupKey,
   getSessionKey,
+  getSessionResumeI18nKeys,
   groupSessionsByProviderAndDirectory,
   type SessionDirectoryGroup,
   type SessionProviderGroup,
@@ -347,6 +350,12 @@ export function SessionManagerPage({ appId }: { appId: string }) {
       isCursorSession ? undefined : selectedSession?.providerId,
       isCursorSession ? undefined : selectedSession?.sourcePath,
     );
+  const { data: resumeState } = useSessionResumeStateQuery(
+    selectedSession?.providerId,
+    selectedSession?.sessionId,
+    selectedSession?.sourcePath,
+  );
+  const resumeCopy = getSessionResumeI18nKeys(resumeState?.appearance);
   const deleteSessionMutation = useDeleteSessionMutation();
   const isDeleting = deleteSessionMutation.isPending || isBatchDeleting;
 
@@ -449,11 +458,41 @@ export function SessionManagerPage({ appId }: { appId: string }) {
     }
 
     try {
-      await sessionsApi.launchTerminal({
+      const result = await sessionsApi.launchTerminal({
         command: selectedSession.resumeCommand,
         cwd: selectedSession.projectDir ?? undefined,
+        sessionId: selectedSession.sessionId,
+        providerId: selectedSession.providerId,
+        sourcePath: selectedSession.sourcePath,
       });
-      toast.success(t("sessionManager.terminalLaunched"));
+      if (result?.action === "focused") {
+        toast.success(
+          t("sessionManager.resumeFocused", {
+            defaultValue: "已切换到已打开的会话窗口（{{app}}）",
+            app: result.app,
+          }),
+        );
+      } else if (result?.action === "occupied") {
+        toast.error(
+          t("sessionManager.resumeOccupied", {
+            defaultValue: "该会话已在 {{holder}} 中打开，请先回到那个窗口",
+            holder: result.holder,
+          }),
+        );
+      } else {
+        toast.success(
+          t("sessionManager.terminalLaunched", {
+            defaultValue: "终端已启动",
+          }),
+        );
+      }
+      await queryClient.invalidateQueries({
+        queryKey: sessionResumeStateKey(
+          selectedSession.providerId,
+          selectedSession.sessionId,
+          selectedSession.sourcePath,
+        ),
+      });
     } catch (error) {
       const fallback = selectedSession.resumeCommand;
       await handleCopy(fallback, t("sessionManager.resumeFallbackCopied"));
@@ -1610,17 +1649,13 @@ export function SessionManagerPage({ appId }: { appId: string }) {
                               >
                                 <Play className="size-3.5" />
                                 <span className="hidden sm:inline">
-                                  {t("sessionManager.resume", {
-                                    defaultValue: "恢复会话",
-                                  })}
+                                  {t(resumeCopy.labelKey)}
                                 </span>
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent>
                               {selectedSession.resumeCommand
-                                ? t("sessionManager.resumeTooltip", {
-                                    defaultValue: "在终端中恢复此会话",
-                                  })
+                                ? t(resumeCopy.tooltipKey)
                                 : t("sessionManager.noResumeCommand", {
                                     defaultValue: "此会话无法恢复",
                                   })}

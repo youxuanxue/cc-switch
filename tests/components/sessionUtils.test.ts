@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   extractCodexPromptPreview,
   formatSessionMessagePreview,
+  getSessionResumeI18nKeys,
   groupSessionsByProviderAndDirectory,
   shouldHideCodexMessageFromToc,
 } from "@/components/sessions/utils";
@@ -275,5 +276,23 @@ describe("session utils", () => {
         sourcePath: "/tmp/must-not-delete.jsonl",
       }),
     ).toBe(false);
+  });
+
+  it("maps resume appearance to the sessionManager i18n keys", () => {
+    expect(getSessionResumeI18nKeys("resume")).toEqual({
+      labelKey: "sessionManager.resume",
+      tooltipKey: "sessionManager.resumeTooltip",
+    });
+    expect(getSessionResumeI18nKeys("return")).toEqual({
+      labelKey: "sessionManager.returnToSession",
+      tooltipKey: "sessionManager.returnToSessionTooltip",
+    });
+    expect(getSessionResumeI18nKeys("returnToCodeG")).toEqual({
+      labelKey: "sessionManager.returnToCodeG",
+      tooltipKey: "sessionManager.returnToCodeGTooltip",
+    });
+    expect(getSessionResumeI18nKeys(undefined).labelKey).toBe(
+      "sessionManager.resume",
+    );
   });
 });
