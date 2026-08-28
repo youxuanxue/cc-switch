@@ -56,6 +56,9 @@ Run:
 - 2026-08-28 RED: `cargo test --manifest-path src-tauri/Cargo.toml us003_ -- --nocapture` exited 101 because the approved Cursor settings types, field, redaction helper, update helpers, and private path writer did not exist.
 - 2026-08-28 RED (security self-review): `cargo test --manifest-path src-tauri/Cargo.toml cursor_official_debug_output_never_contains_the_key -- --nocapture` failed because derived Debug exposed the fixture key.
 - 2026-08-28 GREEN (settings slice): `cargo test --manifest-path src-tauri/Cargo.toml settings:: -- --nocapture` passed 18 tests without warnings, including generic DTO/Debug redaction, preservation semantics, and new/replacement Unix mode 0600 assertions.
+- 2026-08-28 RED (CLI service): `cargo test --manifest-path src-tauri/Cargo.toml services::cursor_official::tests -- --nocapture` exited 101 because the runner, official environment, status parser, runtime DTO, and sanitization interfaces did not exist.
+- 2026-08-28 RED (runtime hardening): the same suite then exposed blank legacy Key handling and a descendant process surviving output timeout.
+- 2026-08-28 GREEN (CLI service): the same command passed 9 tests without warnings, covering command order, bounded execution, official-only environment, safe status schema, remediation states, and credential redaction.
 - Remaining auth service, command, renderer, and e2e evidence is recorded before this Story advances to Done.
 
 - Status: InTest

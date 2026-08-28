@@ -251,7 +251,7 @@ git commit -m "feat(cursor): index agent sessions"
 - Produces: `get_status() -> CursorOfficialStatus`.
 - Produces testable pure helpers `official_env(auth_mode, key)`, `parse_status_json`, `sanitize_cursor_error`, and command construction through a runner abstraction.
 
-- [ ] **Step 1: Write failing service tests**
+- [x] **Step 1: Write failing service tests**
 
 Use a fake command runner to prove `--version` then `status --format json` order, Login removal of inherited `CURSOR_API_KEY`, User API Key injection through env only, removal of all five non-official endpoint variables, status schema parsing, malformed JSON handling, error redaction/truncation, and DTO serialization without the literal secret.
 
@@ -265,13 +265,13 @@ fn user_api_key_is_env_only_and_official_endpoints_are_removed() {
 }
 ```
 
-- [ ] **Step 2: Run service tests and verify RED**
+- [x] **Step 2: Run service tests and verify RED**
 
 Run: `cargo test --manifest-path src-tauri/Cargo.toml services::cursor_official::tests -- --nocapture`
 
 Expected: compile failure because the service does not exist.
 
-- [ ] **Step 3: Implement command discovery, bounded probing, parsing, and redaction**
+- [x] **Step 3: Implement command discovery, bounded probing, parsing, and redaction**
 
 Resolve the executable without trusting the project working directory: inspect the effective PATH and, on POSIX, fall back to the user's login shell `command -v agent`; canonicalize the selected executable. Run version/status with closed stdin and bounded capture. Apply this exact cleanup set:
 
@@ -287,13 +287,13 @@ const OFFICIAL_ENV_REMOVALS: [&str; 5] = [
 
 Login also removes `CURSOR_API_KEY`; User API Key sets it only through `Command::env`. Return only `email`, `firstName`, and `lastName` as optional display fields; omit access/refresh token booleans and IDs from the renderer DTO.
 
-- [ ] **Step 4: Run service tests and verify GREEN**
+- [x] **Step 4: Run service tests and verify GREEN**
 
 Run: `cargo test --manifest-path src-tauri/Cargo.toml services::cursor_official::tests -- --nocapture`
 
 Expected: PASS and no captured diagnostic string contains the fixture key.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src-tauri/src/services/cursor_official.rs src-tauri/src/services/mod.rs
