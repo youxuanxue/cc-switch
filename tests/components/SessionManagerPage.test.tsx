@@ -1170,6 +1170,35 @@ describe("SessionManagerPage", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("shows the real worktree path in the project tooltip when only a wts workspace exists", async () => {
+    const worktreeDir =
+      "/Users/feng/Codes/cc-switch-wt-cursor-official-sessions";
+    setSessionFixtures(
+      [
+        {
+          providerId: "codex",
+          sessionId: "codex-wt-only",
+          title: "Worktree Only",
+          projectDir: worktreeDir,
+          lastActiveAt: 30,
+          sourcePath: "/tmp/codex-wt-only.jsonl",
+          resumeCommand: "codex resume codex-wt-only",
+        },
+      ],
+      {},
+    );
+
+    renderPage("all");
+    await waitForHeading("Worktree Only");
+
+    await userEvent.hover(screen.getByText("cc-switch"));
+
+    await waitFor(() => {
+      expect(screen.getByRole("tooltip")).toHaveTextContent(worktreeDir);
+    });
+    expect(screen.getByRole("tooltip").textContent?.trim()).toBe(worktreeDir);
+  });
+
   it("selects only deletable sessions when checking a mixed-agent project group", async () => {
     setSessionFixtures(
       [

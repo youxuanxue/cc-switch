@@ -1670,7 +1670,7 @@ export function SessionManagerPage({ appId }: { appId: string }) {
                                         className="max-w-xs"
                                       >
                                         {projectGroup.workspaceDirs.length >
-                                        1 ? (
+                                        0 ? (
                                           <div className="space-y-1">
                                             {projectGroup.workspaceDirs.map(
                                               (workspaceDir) => (
