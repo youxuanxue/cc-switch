@@ -277,8 +277,14 @@ test("US-005 reads Cursor conversation history through the shared session chrome
       `agent --workspace /work/acme/ready --resume ${READY_SESSION_ID}`,
     ),
   ).toBeVisible();
-  await expect(page.getByText("continue the cursor task")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "continue the cursor task" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("continue the cursor task", { exact: true }),
+  ).toHaveCount(2);
   await expect(page.getByText("working on it")).toBeVisible();
+  await expect(page.getByText("OS Version: darwin")).toHaveCount(0);
   await expect(page.getByRole("button", { name: /删除会话/ })).toHaveCount(0);
 
   await page.getByRole("button", { name: "恢复会话", exact: true }).click();
