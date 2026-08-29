@@ -212,8 +212,8 @@ fn is_executable_file(path: &std::path::Path) -> bool {
 }
 
 fn build_iterm_script(escaped_command: &str) -> String {
-    // Insets match the current iTerm window that clears the menu bar:
-    // left 53, top 33, flush to the right and bottom edges.
+    // Top inset clears the menu bar. Do not copy one machine's window x/y —
+    // a left inset like 53 is that window's origin, not a portable dock/menu gap.
     format!(
         r#"tell application "Finder"
     set screenBounds to bounds of window of desktop
@@ -222,7 +222,7 @@ tell application "iTerm"
     activate
     create window with default profile
     set {{x1, y1, x2, y2}} to screenBounds
-    set bounds of current window to {{x1 + 53, y1 + 33, x2, y2}}
+    set bounds of current window to {{x1, y1 + 33, x2, y2}}
     tell current session of current window
         write text "{escaped_command}"
     end tell
@@ -520,7 +520,7 @@ mod tests {
 
         assert!(script.contains(r#"tell application "Finder""#));
         assert!(script.contains("bounds of window of desktop"));
-        assert!(script.contains("set bounds of current window to {x1 + 53, y1 + 33, x2, y2}"));
+        assert!(script.contains("set bounds of current window to {x1, y1 + 33, x2, y2}"));
         assert!(script.contains(r#"write text "codex resume abc""#));
         assert!(!script.contains("set fullscreen"));
     }
