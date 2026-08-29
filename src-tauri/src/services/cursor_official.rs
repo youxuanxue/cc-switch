@@ -970,6 +970,9 @@ fn resolve_launch_executable<R: CursorCommandRunner>(
     runner: &R,
     known_secrets: &[String],
 ) -> Result<PathBuf, String> {
+    #[cfg(target_os = "windows")]
+    let _ = known_secrets;
+
     match runner.resolve_agent() {
         Ok(executable) => Ok(executable),
         Err(CursorResolveError::NotFound) => Err("Cursor Agent CLI is not installed".to_string()),
