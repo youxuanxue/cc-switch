@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
+import { toast } from "sonner";
 import {
   SkillsPage,
   getSkillsPageHeaderActions,
@@ -136,7 +137,7 @@ describe("SkillsPage - skills.sh install (regression)", () => {
     searchCache.clear();
   });
 
-  it("installs the second skill when two results share the same directory", async () => {
+  it("does not treat discovery install as catalog install", async () => {
     const first = makeSkillsShSkill({
       key: "agent-browser:owner-a:repo-a",
       name: "Agent Browser A",
@@ -188,14 +189,12 @@ describe("SkillsPage - skills.sh install (regression)", () => {
     expect(installButton).not.toBeNull();
     await user.click(installButton);
 
-    // Verify the SECOND skill was passed to the install mutation, not the first
     await waitFor(() => {
-      expect(installMutateAsyncMock).toHaveBeenCalledTimes(1);
+      expect(toast.info).toHaveBeenCalledWith(
+        "skills.core.installFromCatalogOnly",
+      );
     });
-    const callArgs = installMutateAsyncMock.mock.calls[0][0];
-    expect(callArgs.skill.repoOwner).toBe("owner-b");
-    expect(callArgs.skill.repoName).toBe("repo-b");
-    expect(callArgs.skill.name).toBe("Agent Browser B");
+    expect(installMutateAsyncMock).not.toHaveBeenCalled();
   });
 
   it("keeps skills.sh results when submitting the same query again", async () => {

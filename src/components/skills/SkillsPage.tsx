@@ -28,7 +28,6 @@ import { RepoManagerPanel } from "./RepoManagerPanel";
 import {
   useDiscoverableSkills,
   useInstalledSkills,
-  useInstallSkill,
   useSkillRepos,
   useAddSkillRepo,
   useRemoveSkillRepo,
@@ -40,7 +39,6 @@ import type {
   SkillRepo,
   SkillsShDiscoverableSkill,
 } from "@/lib/api/skills";
-import { formatSkillError } from "@/lib/errors/skillErrorParser";
 
 export type SkillsPageSource = "repos" | "skillssh";
 
@@ -91,7 +89,7 @@ const SKILLSSH_PAGE_SIZE = 20;
  * 用于浏览和安装来自仓库或 skills.sh 的 Skills
  */
 export const SkillsPage = forwardRef<SkillsPageHandle, SkillsPageProps>(
-  ({ initialApp = "claude", onSourceChange }, ref) => {
+  ({ initialApp: _initialApp = "claude", onSourceChange }, ref) => {
     const { t } = useTranslation();
     const [repoManagerOpen, setRepoManagerOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
@@ -108,9 +106,6 @@ export const SkillsPage = forwardRef<SkillsPageHandle, SkillsPageProps>(
     const [accumulatedResults, setAccumulatedResults] = useState<
       SkillsShDiscoverableSkill[]
     >([]);
-
-    // currentApp 用于安装时的默认应用
-    const currentApp = initialApp;
 
     // Queries
     const {
@@ -152,7 +147,6 @@ export const SkillsPage = forwardRef<SkillsPageHandle, SkillsPageProps>(
     };
 
     // Mutations
-    const installMutation = useInstallSkill();
     const addRepoMutation = useAddSkillRepo();
     const removeRepoMutation = useRemoveSkillRepo();
 
@@ -233,45 +227,8 @@ export const SkillsPage = forwardRef<SkillsPageHandle, SkillsPageProps>(
       readmeUrl: s.readmeUrl,
     });
 
-    const handleInstall = async (key: string) => {
-      let skill: DiscoverableSkill | undefined;
-
-      if (searchSource === "skillssh") {
-        const found = accumulatedResults.find((s) => s.key === key);
-        if (found) {
-          skill = toDiscoverableSkill(found);
-        }
-      } else {
-        skill = discoverableSkills?.find((s) => s.key === key);
-      }
-
-      if (!skill) {
-        toast.error(t("skills.notFound"));
-        return;
-      }
-
-      try {
-        await installMutation.mutateAsync({
-          skill,
-          currentApp,
-        });
-        toast.success(t("skills.installSuccess", { name: skill.name }), {
-          closeButton: true,
-        });
-      } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : String(error);
-        const { title, description } = formatSkillError(
-          errorMessage,
-          t,
-          "skills.installFailed",
-        );
-        toast.error(title, {
-          description,
-          duration: 10000,
-        });
-        console.error("Install skill failed:", error);
-      }
+    const handleInstall = async (_key: string) => {
+      toast.info(t("skills.core.installFromCatalogOnly"));
     };
 
     const handleUninstall = async (_directory: string) => {

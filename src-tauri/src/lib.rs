@@ -33,6 +33,7 @@ mod proxy;
 mod services;
 mod session_manager;
 mod settings;
+pub mod skills_core;
 mod store;
 
 mod tray;
@@ -68,6 +69,7 @@ pub use services::{
     SkillService, SpeedtestService,
 };
 pub use settings::{update_settings, AppSettings};
+pub use skills_core::DEFAULT_CATALOG_REPO;
 pub use store::AppState;
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
@@ -1539,6 +1541,18 @@ pub fn run() {
             commands::update_skill,
             commands::migrate_skill_storage,
             commands::search_skills_sh,
+            commands::skills_core_preview_open,
+            commands::skills_core_open,
+            commands::skills_core_doctor,
+            commands::skills_core_install,
+            commands::skills_core_uninstall,
+            commands::skills_core_import,
+            commands::skills_core_sync,
+            commands::skills_core_upgrade,
+            commands::skills_core_follow_catalog,
+            commands::skills_core_agents_add,
+            commands::skills_core_agents_remove,
+            commands::skills_core_save_local_draft,
             // Skill management (legacy API compatibility)
             commands::get_skills,
             commands::get_skills_for_app,

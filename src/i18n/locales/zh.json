@@ -2650,6 +2650,28 @@
       "successSingle": "技能 {{name}} 已安装",
       "successMultiple": "成功安装 {{count}} 个技能",
       "noSkillsFound": "ZIP 文件中未找到技能（需包含 SKILL.md 文件）"
+    },
+    "core": {
+      "loading": "正在读取技能控制面…",
+      "firstOpenTitle": "第一次：先勾在用 Agent",
+      "firstOpenHint": "默认全不勾。看见过的目录不会预勾。一个都不勾 = 未开张。",
+      "open": "开张并确认工作台",
+      "candidates": "候选技能",
+      "conflict": "同名内容不一致，整笔停：{{names}}",
+      "inUse": "在用 Agent",
+      "followCatalog": "自动跟上货架",
+      "remove": "出门",
+      "addAgent": "入伙 {{token}}",
+      "library": "工作台",
+      "libraryEmpty": "库是空的。从货架安装，或导入本机技能。",
+      "behind": "货架有新版",
+      "installPlaceholder": "货架技能名，空格或逗号分隔",
+      "doctor": "诊断",
+      "aligned": "投影对齐",
+      "foreign": "外来物",
+      "broken": "断链",
+      "sync": "同步",
+      "installFromCatalogOnly": "请在主面板从货架安装，不要把发现页仓库名当成 catalog install"
     }
   },
   "deeplink": {

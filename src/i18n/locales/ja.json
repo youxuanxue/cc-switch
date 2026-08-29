@@ -2650,6 +2650,28 @@
       "successSingle": "スキル {{name}} をインストールしました",
       "successMultiple": "{{count}} 件のスキルをインストールしました",
       "noSkillsFound": "ZIP ファイルにスキルが見つかりません（SKILL.md が必要です）"
+    },
+    "core": {
+      "loading": "スキル制御面を読み込み中…",
+      "firstOpenTitle": "初回：利用中の Agent を選ぶ",
+      "firstOpenHint": "初期状態はすべて未選択です。検出済みディレクトリは自動選択しません。未選択のままでは開店しません。",
+      "open": "開店して作業台を確定",
+      "candidates": "候補スキル",
+      "conflict": "同名で内容が不一致のため一括停止：{{names}}",
+      "inUse": "利用中の Agent",
+      "followCatalog": "カタログに自動追従",
+      "remove": "退出",
+      "addAgent": "{{token}} を追加",
+      "library": "作業台",
+      "libraryEmpty": "ライブラリは空です。カタログからインストールするか、ローカルスキルを取り込みます。",
+      "behind": "カタログに新版あり",
+      "installPlaceholder": "カタログのスキル名（空白またはカンマ区切り）",
+      "doctor": "診断",
+      "aligned": "投影の整合",
+      "foreign": "外来物",
+      "broken": "壊れたリンク",
+      "sync": "同期",
+      "installFromCatalogOnly": "メインパネルのカタログからインストールしてください。発見ページの名前は catalog install ではありません。"
     }
   },
   "deeplink": {
