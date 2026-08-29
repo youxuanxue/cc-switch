@@ -66,6 +66,8 @@ pub struct LibraryEntry {
 pub struct SkillCandidate {
     pub name: String,
     pub provenance: String,
+    #[serde(default)]
+    pub description: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

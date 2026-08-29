@@ -143,6 +143,7 @@ fn empty_machine_recommended_is_catalog_managed() {
         vec!["rec-one"]
     );
     assert_eq!(preview.candidates[0].provenance, "catalog-managed");
+    assert_eq!(preview.candidates[0].description, "rec");
 
     skills_core::open(&db, &["codex".into()], &["rec-one".into()]).unwrap();
     let report = skills_core::doctor(&db).unwrap();
@@ -175,6 +176,7 @@ fn field_skill_is_local_draft_and_not_promoted() {
     let preview = skills_core::preview_first_open(&db, &["codex".into()]).unwrap();
     assert_eq!(preview.candidates.len(), 1);
     assert_eq!(preview.candidates[0].provenance, "local-draft");
+    assert_eq!(preview.candidates[0].description, "same-hash-body");
     assert!(!preview
         .candidates
         .iter()
@@ -195,6 +197,34 @@ fn leftover_library_is_not_a_candidate_and_does_not_block_recommended() {
     let preview = skills_core::preview_first_open(&db, &["codex".into()]).unwrap();
     assert!(!preview.candidates.iter().any(|c| c.name == "old-lib"));
     assert!(preview.candidates.iter().any(|c| c.name == "rec-one"));
+}
+
+#[test]
+fn codeg_store_symlink_is_not_a_first_open_candidate() {
+    let (_guard, home, state) = setup();
+    let db = &*state.db;
+    write_catalog(&home, "f".repeat(40).as_str(), &[("rec-one", true, "rec")]);
+    let codeg = home.join(".codeg").join("skills").join("tdd");
+    write_skill(&codeg, "tdd", "codeg-owned");
+    symlink_dir(
+        &codeg,
+        &home.join(".pi").join("agent").join("skills").join("tdd"),
+    );
+
+    let preview = skills_core::preview_first_open(&db, &["pi".into()]).unwrap();
+    assert!(
+        !preview.candidates.iter().any(|c| c.name == "tdd"),
+        "CodeG store projections must not pollute first-open"
+    );
+    assert_eq!(
+        preview
+            .candidates
+            .iter()
+            .map(|c| c.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["rec-one"]
+    );
+    assert_eq!(preview.candidates[0].provenance, "catalog-managed");
 }
 
 #[test]

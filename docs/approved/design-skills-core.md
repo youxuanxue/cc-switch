@@ -88,7 +88,8 @@ related_commits: ["12e13692097c79970a6547c7f4a20bb9ff935522", "ff0d8a5dd30b8dd05
 - 不按 Agent 各开各的；不做技能 × Agent 启用矩阵。
 - 不把 `~/.agents/skills` 建成全局 active registry。
 - 不做 agent-side router、session attestation、immutable 多版本 Store。
-- 不做 Project Skill 统一管理（项目内 `.cursor/skills` 保持现有规则）。
+- 不做 Project Skill 统一管理（项目内 `.cursor/skills` 保持现有规则）。第一次只确认公共工作台；项目专用技能等 CC Switch 有项目概念后再做。
+- 第一次候选不把指向 `~/.codeg/skills` 的现场当已用项（CodeG 还不是在用 Agent，那些链接是另一套账）。
 - 不在 agent-skills 扩 install / sync CLI。
 - 不把 skills.sh / 硬编码 GitHub 仓库升格为货架或工作台；只保留现有发现入口并冻结。
 - 不把 Claude Desktop / OpenClaw 列为在用。

@@ -67,6 +67,7 @@ export interface SkillsCoreDoctor {
 export interface SkillsCoreCandidate {
   name: string;
   provenance: string;
+  description?: string;
 }
 
 export interface SkillsCoreConflict {

@@ -21,6 +21,7 @@ import {
   type SkillsCoreDoctor,
   type SkillsCorePreview,
 } from "@/lib/api/skillsCore";
+import { skillDecisionCopy } from "@/lib/skillsCoreDecision";
 
 export interface SkillsCorePanelHandle {
   openDiscovery: () => void;
@@ -149,6 +150,9 @@ const SkillsCorePanel = React.forwardRef<
             <p className="text-sm text-muted-foreground">
               {t("skills.core.firstOpenHint")}
             </p>
+            <p className="text-sm text-muted-foreground">
+              {t("skills.core.candidatesHint")}
+            </p>
             <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
               {SKILLS_CORE_AGENTS.map((token) => (
                 <label key={token} className="flex items-start gap-2 text-sm">
@@ -178,26 +182,56 @@ const SkillsCorePanel = React.forwardRef<
                 <p className="text-sm font-medium">
                   {t("skills.core.candidates")}
                 </p>
-                {preview.candidates.map((cand) => (
-                  <label
-                    key={cand.name}
-                    className="flex items-center gap-2 text-sm"
-                  >
-                    <Checkbox
-                      checked={selectedSkills.includes(cand.name)}
-                      onCheckedChange={(checked) =>
-                        setSelectedSkills((cur) =>
-                          checked
-                            ? [...cur, cand.name]
-                            : cur.filter((n) => n !== cand.name),
-                        )
-                      }
-                      disabled={busy || preview.conflicts.length > 0}
-                    />
-                    <span>{cand.name}</span>
-                    <Badge variant="secondary">{cand.provenance}</Badge>
-                  </label>
-                ))}
+                {preview.candidates.map((cand) => {
+                  const decision = skillDecisionCopy(
+                    cand.name,
+                    cand.description,
+                    t,
+                  );
+                  return (
+                    <label
+                      key={cand.name}
+                      className="flex items-start gap-2 rounded-md border p-3 text-sm"
+                    >
+                      <Checkbox
+                        className="mt-0.5"
+                        checked={selectedSkills.includes(cand.name)}
+                        onCheckedChange={(checked) =>
+                          setSelectedSkills((cur) =>
+                            checked
+                              ? [...cur, cand.name]
+                              : cur.filter((n) => n !== cand.name),
+                          )
+                        }
+                        disabled={busy || preview.conflicts.length > 0}
+                      />
+                      <div className="min-w-0 space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-medium">{cand.name}</span>
+                          <Badge variant="secondary">{cand.provenance}</Badge>
+                        </div>
+                        <p>
+                          <span className="text-muted-foreground">
+                            {t("skills.core.decisionJob")}：
+                          </span>
+                          {decision.job}
+                        </p>
+                        <p>
+                          <span className="text-muted-foreground">
+                            {t("skills.core.decisionWhenNot")}：
+                          </span>
+                          {decision.whenNot}
+                        </p>
+                        <p>
+                          <span className="text-muted-foreground">
+                            {t("skills.core.decisionConsequence")}：
+                          </span>
+                          {decision.consequence}
+                        </p>
+                      </div>
+                    </label>
+                  );
+                })}
               </div>
             )}
             <Button

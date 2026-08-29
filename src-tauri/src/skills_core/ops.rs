@@ -429,9 +429,11 @@ fn build_first_open_preview(
             let Ok(name) = sanitize_skill_name(&skill.name) else {
                 continue;
             };
+            let src = catalog.source_dir(skill).ok();
             candidates.push(SkillCandidate {
                 name,
                 provenance: "catalog-managed".into(),
+                description: src.as_deref().map(skill_description).unwrap_or_default(),
             });
         }
         return Ok(FirstOpenPreview {
@@ -446,9 +448,11 @@ fn build_first_open_preview(
             conflicts.push(NameConflict { name: name.clone() });
             continue;
         }
+        let src = hashes.first().map(|(p, _)| p.as_path());
         candidates.push(SkillCandidate {
             name: name.clone(),
             provenance: "local-draft".into(),
+            description: src.map(skill_description).unwrap_or_default(),
         });
     }
     Ok(FirstOpenPreview {
@@ -472,6 +476,9 @@ fn scan_field_skills(
                 if !path.join("SKILL.md").is_file() {
                     continue;
                 }
+                if is_codeg_store_skill(&path) {
+                    continue;
+                }
                 let raw_name = path
                     .file_name()
                     .and_then(|s| s.to_str())
@@ -485,6 +492,51 @@ fn scan_field_skills(
         }
     }
     Ok(found)
+}
+
+fn is_codeg_store_skill(path: &Path) -> bool {
+    let store = crate::config::get_home_dir().join(".codeg").join("skills");
+    if let Ok(real) = fs::canonicalize(path) {
+        if real.starts_with(&store) {
+            return true;
+        }
+    }
+    match fs::read_link(path) {
+        Ok(link) => {
+            let resolved = if link.is_absolute() {
+                link
+            } else {
+                path.parent()
+                    .map(|parent| parent.join(&link))
+                    .unwrap_or(link)
+            };
+            resolved.starts_with(&store)
+        }
+        Err(_) => false,
+    }
+}
+
+fn skill_description(dir: &Path) -> String {
+    let skill_md = dir.join("SKILL.md");
+    let Ok(content) = fs::read_to_string(&skill_md) else {
+        return String::new();
+    };
+    let content = content.trim_start_matches('\u{feff}');
+    let parts: Vec<&str> = content.splitn(3, "---").collect();
+    if parts.len() < 3 {
+        return String::new();
+    }
+    for line in parts[1].lines() {
+        let line = line.trim();
+        let Some(rest) = line.strip_prefix("description:") else {
+            continue;
+        };
+        let value = rest.trim().trim_matches('"').trim_matches('\'');
+        if !value.is_empty() {
+            return value.to_string();
+        }
+    }
+    String::new()
 }
 
 fn scan_roots(token: AgentToken) -> Result<Vec<PathBuf>, AppError> {
