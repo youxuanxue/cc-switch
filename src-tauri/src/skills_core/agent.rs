@@ -90,6 +90,20 @@ pub fn claude_skills_root() -> Result<PathBuf, AppError> {
     SkillService::get_app_skills_dir(&AppType::Claude).map_err(|e| AppError::Message(e.to_string()))
 }
 
+/// Remove a directory symlink without touching its target.
+/// Windows directory junctions / `symlink_dir` links must use `remove_dir`;
+/// `remove_file` returns Access Denied (OS error 5).
+pub fn remove_dir_symlink(path: &Path) -> Result<(), AppError> {
+    #[cfg(unix)]
+    {
+        fs::remove_file(path).map_err(|e| AppError::io(path, e))
+    }
+    #[cfg(windows)]
+    {
+        fs::remove_dir(path).map_err(|e| AppError::io(path, e))
+    }
+}
+
 pub fn is_dir_symlink_to(link: &Path, target: &Path) -> bool {
     let meta = match fs::symlink_metadata(link) {
         Ok(m) => m,

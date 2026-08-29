@@ -9,8 +9,8 @@ use crate::error::AppError;
 use crate::services::skill::SkillService;
 
 use super::agent::{
-    claude_skills_root, cursor_skills_dir, is_dir_symlink_to, parse_agents, sanitize_skill_name,
-    AgentToken,
+    claude_skills_root, cursor_skills_dir, is_dir_symlink_to, parse_agents, remove_dir_symlink,
+    sanitize_skill_name, AgentToken,
 };
 use super::catalog::{load_catalog, LoadedCatalog};
 use super::state::{
@@ -609,7 +609,7 @@ fn project_claude_cursor(state: &ControlState) -> Result<(), AppError> {
     if claude.exists() {
         let meta = fs::symlink_metadata(&claude).map_err(|e| AppError::io(&claude, e))?;
         if meta.file_type().is_symlink() {
-            fs::remove_file(&claude).map_err(|e| AppError::io(&claude, e))?;
+            remove_dir_symlink(&claude)?;
         } else if meta.is_dir() {
             let owned: HashSet<_> = state.library.iter().map(|s| s.name.as_str()).collect();
             for entry in fs::read_dir(&claude).map_err(|e| AppError::io(&claude, e))? {
@@ -645,7 +645,7 @@ fn remove_projections_for_skill(state: &ControlState, name: &str) -> Result<(), 
         if dest.symlink_metadata().is_ok() {
             let meta = fs::symlink_metadata(&dest).map_err(|e| AppError::io(&dest, e))?;
             if meta.file_type().is_symlink() {
-                fs::remove_file(&dest).map_err(|e| AppError::io(&dest, e))?;
+                remove_dir_symlink(&dest)?;
             }
         }
     }
@@ -927,7 +927,7 @@ fn replace_with_symlink(dest: &Path, src: &Path) -> Result<(), AppError> {
     if dest.exists() || dest.symlink_metadata().is_ok() {
         let meta = fs::symlink_metadata(dest).map_err(|e| AppError::io(dest, e))?;
         if meta.file_type().is_symlink() {
-            fs::remove_file(dest).map_err(|e| AppError::io(dest, e))?;
+            remove_dir_symlink(dest)?;
         } else if meta.is_dir() {
             let dest_hash = content_hash(dest)?;
             let src_hash = content_hash(src)?;

@@ -455,6 +455,24 @@ fn catalog_new_entries_do_not_enter_library_on_sync() {
 }
 
 #[test]
+fn sync_replaces_existing_projection_symlink() {
+    // Windows: replacing a directory symlink with remove_file is Access Denied.
+    let (_guard, home, state) = setup();
+    let db = &*state.db;
+    write_catalog(&home, "5".repeat(40).as_str(), &[("rec-one", true, "rec")]);
+    skills_core::open(&db, &["codex".into()], &["rec-one".into()]).unwrap();
+    let dest = home.join(".codex").join("skills").join("rec-one");
+    assert!(dest.symlink_metadata().unwrap().file_type().is_symlink());
+
+    skills_core::sync(&db, false).unwrap();
+    assert!(dest.symlink_metadata().unwrap().file_type().is_symlink());
+    assert_eq!(
+        fs::canonicalize(&dest).unwrap(),
+        fs::canonicalize(library_dir().join("rec-one")).unwrap()
+    );
+}
+
+#[test]
 fn doctor_json_fields_are_stable() {
     let (_guard, home, state) = setup();
     let db = &*state.db;
