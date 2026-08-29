@@ -1,13 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import {
-  AlertTriangle,
-  FolderOpen,
-  Loader2,
-  Play,
-  RefreshCw,
-} from "lucide-react";
+import { AlertTriangle, FolderOpen, Loader2, RefreshCw } from "lucide-react";
 import { CursorOfficialAuthControl } from "@/components/cursor/CursorOfficialAuthControl";
 import { Button } from "@/components/ui/button";
 import { useCursorOfficial } from "@/hooks/useCursorOfficial";
@@ -18,8 +12,16 @@ import type { SessionMeta } from "@/types";
 import { extractErrorMessage } from "@/utils/errorUtils";
 import { deriveCursorResumeState } from "./cursorResumeState";
 
+export interface CursorResumePrimaryAction {
+  label: string;
+  disabled: boolean;
+  onClick: () => void;
+}
+
 interface CursorResumeGateProps {
   session: SessionMeta;
+  onPrimaryActionChange?: (action: CursorResumePrimaryAction | null) => void;
+  onResumeCommandChange?: (command: string | null) => void;
 }
 
 interface SessionWorkspaceOverride {
@@ -33,7 +35,11 @@ interface LaunchVariables {
   withLogin: boolean;
 }
 
-export function CursorResumeGate({ session }: CursorResumeGateProps) {
+export function CursorResumeGate({
+  session,
+  onPrimaryActionChange,
+  onResumeCommandChange,
+}: CursorResumeGateProps) {
   const { t } = useTranslation();
   const official = useCursorOfficial();
   const [workspaceOverrideState, setWorkspaceOverrideState] =
@@ -172,164 +178,130 @@ export function CursorResumeGate({ session }: CursorResumeGateProps) {
     ? extractErrorMessage(official.error)
     : null;
 
+  const primaryLabel =
+    resumeState === "ready"
+      ? t("sessionManager.resume", { defaultValue: "恢复会话" })
+      : null;
+  const primaryClickRef = useRef<() => void>(() => {});
+  primaryClickRef.current = () => {
+    if (resumeState === "ready") {
+      launch(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!onPrimaryActionChange) return;
+    if (!primaryLabel) {
+      onPrimaryActionChange(null);
+      return () => onPrimaryActionChange(null);
+    }
+    onPrimaryActionChange({
+      label: primaryLabel,
+      disabled: launchMutation.isPending,
+      onClick: () => primaryClickRef.current(),
+    });
+    return () => onPrimaryActionChange(null);
+  }, [launchMutation.isPending, onPrimaryActionChange, primaryLabel]);
+
+  useEffect(() => {
+    if (!onResumeCommandChange) return;
+    onResumeCommandChange(fixedCommand);
+    return () => onResumeCommandChange(null);
+  }, [fixedCommand, onResumeCommandChange]);
+
+  const blocking =
+    Boolean(statusError || contextError || actionError) ||
+    resumeState === "platformUnavailable" ||
+    resumeState === "cliMissing" ||
+    resumeState === "workspaceRequired" ||
+    resumeState === "needsLogin" ||
+    resumeState === "needsApiKey";
+
+  if (!blocking) {
+    return null;
+  }
+
   return (
-    <div className="h-full overflow-y-auto p-4">
-      <div className="mx-auto max-w-2xl space-y-4">
-        <div className="space-y-4 rounded-lg border border-border/60 bg-background/50 p-4">
-          <div className="space-y-1">
-            <h3 className="text-sm font-semibold">
-              {t("sessionManager.cursorContinueTitle", {
-                defaultValue: "继续 Cursor 会话",
-              })}
-            </h3>
-            <p className="text-xs text-muted-foreground">
-              {t("sessionManager.cursorContinueDescription", {
-                defaultValue: "在原项目目录中继续这段 Cursor Agent 会话。",
-              })}
-            </p>
-          </div>
-
-          {resumeState === "platformUnavailable" ? (
-            <div className="rounded-md bg-muted/50 px-3 py-3 text-sm text-muted-foreground">
-              {t("sessionManager.cursorPlatformUnavailable", {
-                defaultValue: "当前仅支持在 macOS 恢复 Cursor 会话。",
-              })}
-            </div>
-          ) : resumeState === "cliMissing" ? (
-            <div className="rounded-md bg-muted/50 px-3 py-3 text-sm text-muted-foreground">
-              {t("sessionManager.cursorCliMissing", {
-                defaultValue:
-                  "未找到 Cursor Agent CLI。请先在 Cursor 中安装 Agent CLI。",
-              })}
-            </div>
-          ) : statusError ? (
-            <div className="space-y-3 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-3 text-sm text-destructive">
-              <p>{statusError}</p>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => void official.refresh()}
-              >
-                <RefreshCw className="size-4" />
-                {t("sessionManager.cursorRetryStatus", {
-                  defaultValue: "重新检查状态",
-                })}
-              </Button>
-            </div>
-          ) : contextError ? (
-            <div className="space-y-3 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-3 text-sm text-destructive">
-              <p>{contextError}</p>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => void resumeContext.refetch()}
-              >
-                <RefreshCw className="size-4" />
-                {t("sessionManager.cursorRetryContext", {
-                  defaultValue: "重新检查目录",
-                })}
-              </Button>
-            </div>
-          ) : resumeState === "workspaceRequired" ? (
-            <Button
-              type="button"
-              onClick={() => void handleChooseWorkspace()}
-              disabled={launchMutation.isPending}
-            >
-              {launchMutation.isPending ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <FolderOpen className="size-4" />
-              )}
-              {t("sessionManager.cursorChooseDirectoryAndContinue", {
-                defaultValue: "选择目录并继续",
-              })}
-            </Button>
-          ) : resumeState === "needsLogin" || resumeState === "needsApiKey" ? (
-            <CursorOfficialAuthControl
-              variant="compact"
-              onLogin={() => launch(true)}
-              onApiKeyReady={() => launch(false)}
-            />
-          ) : resumeState === "ready" ? (
-            <Button
-              type="button"
-              onClick={() => void launch(false)}
-              disabled={launchMutation.isPending}
-            >
-              {launchMutation.isPending ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Play className="size-4" />
-              )}
-              {t("sessionManager.cursorContinue", {
-                defaultValue: "继续会话",
-              })}
-            </Button>
-          ) : (
-            <div className="flex items-center gap-2 py-2 text-sm text-muted-foreground">
-              <Loader2 className="size-4 animate-spin" />
-              {t("sessionManager.cursorCheckingResume", {
-                defaultValue: "正在检查恢复条件…",
-              })}
-            </div>
-          )}
-
-          {actionError ? (
-            <div
-              role="alert"
-              className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-            >
-              <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-              <span className="min-w-0 flex-1 break-words">{actionError}</span>
-            </div>
-          ) : null}
-
-          <details className="border-t border-border/50 pt-3 text-xs text-muted-foreground">
-            <summary className="cursor-pointer select-none">
-              {t("sessionManager.cursorTechnicalDetails", {
-                defaultValue: "技术详情",
-              })}
-            </summary>
-            <dl className="mt-3 grid gap-3">
-              <div>
-                <dt className="font-medium text-foreground">
-                  {t("sessionManager.cursorWorkspacePath", {
-                    defaultValue: "完整路径",
-                  })}
-                </dt>
-                <dd className="mt-1 break-all font-mono">
-                  {resolvedWorkspace ?? "—"}
-                </dd>
-              </div>
-              <div>
-                <dt className="font-medium text-foreground">Chat ID</dt>
-                <dd className="mt-1 break-all font-mono">
-                  {session.sessionId}
-                </dd>
-              </div>
-              <div>
-                <dt className="font-medium text-foreground">
-                  {t("sessionManager.cursorFixedCommand", {
-                    defaultValue: "固定恢复命令",
-                  })}
-                </dt>
-                <dd className="mt-1 break-all font-mono">{fixedCommand}</dd>
-              </div>
-              {official.status?.version ? (
-                <div>
-                  <dt className="font-medium text-foreground">CLI</dt>
-                  <dd className="mt-1 break-all font-mono">
-                    {official.status.version}
-                  </dd>
-                </div>
-              ) : null}
-            </dl>
-          </details>
+    <div className="shrink-0 space-y-3 px-4 pb-1 min-w-0">
+      {resumeState === "platformUnavailable" ? (
+        <p className="text-sm text-muted-foreground">
+          {t("sessionManager.cursorPlatformUnavailable", {
+            defaultValue: "当前仅支持在 macOS 恢复 Cursor 会话。",
+          })}
+        </p>
+      ) : resumeState === "cliMissing" ? (
+        <p className="text-sm text-muted-foreground">
+          {t("sessionManager.cursorCliMissing", {
+            defaultValue:
+              "未找到 Cursor Agent CLI。请先在 Cursor 中安装 Agent CLI。",
+          })}
+        </p>
+      ) : statusError ? (
+        <div className="space-y-3 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-3 text-sm text-destructive">
+          <p>{statusError}</p>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => void official.refresh()}
+          >
+            <RefreshCw className="size-4" />
+            {t("sessionManager.cursorRetryStatus", {
+              defaultValue: "重新检查状态",
+            })}
+          </Button>
         </div>
-      </div>
+      ) : contextError ? (
+        <div className="space-y-3 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-3 text-sm text-destructive">
+          <p>{contextError}</p>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => void resumeContext.refetch()}
+          >
+            <RefreshCw className="size-4" />
+            {t("sessionManager.cursorRetryContext", {
+              defaultValue: "重新检查目录",
+            })}
+          </Button>
+        </div>
+      ) : resumeState === "workspaceRequired" ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => void handleChooseWorkspace()}
+            disabled={launchMutation.isPending}
+          >
+            {launchMutation.isPending ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <FolderOpen className="size-3.5" />
+            )}
+            {t("sessionManager.cursorChooseDirectoryAndContinue", {
+              defaultValue: "选择目录并继续",
+            })}
+          </Button>
+        </div>
+      ) : resumeState === "needsLogin" || resumeState === "needsApiKey" ? (
+        <CursorOfficialAuthControl
+          variant="compact"
+          onLogin={() => launch(true)}
+          onApiKeyReady={() => launch(false)}
+        />
+      ) : null}
+
+      {actionError ? (
+        <div
+          role="alert"
+          className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive"
+        >
+          <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+          <span className="min-w-0 flex-1 break-words">{actionError}</span>
+        </div>
+      ) : null}
     </div>
   );
 }

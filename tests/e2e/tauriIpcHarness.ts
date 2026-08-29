@@ -30,6 +30,12 @@ interface SessionFixture {
   resumeCommand?: string;
 }
 
+interface SessionMessageFixture {
+  role: string;
+  content: string;
+  ts?: number;
+}
+
 type CursorResumeContext =
   | { workspaceState: "ready"; workspace: string }
   | { workspaceState: "workspaceRequired" };
@@ -53,6 +59,7 @@ export interface TauriIpcHarnessOptions {
   resumeContext?: CursorResumeContext;
   pickedDirectories?: Array<string | null>;
   canonicalWorkspaces?: Record<string, string>;
+  sessionMessages?: Record<string, SessionMessageFixture[]>;
 }
 
 const defaultCursorStatus: CursorOfficialStatus = {
@@ -82,6 +89,7 @@ export async function installTauriIpcHarness(
     },
     pickedDirectories: options.pickedDirectories ?? [],
     canonicalWorkspaces: options.canonicalWorkspaces ?? {},
+    sessionMessages: options.sessionMessages ?? {},
   };
 
   await page.addInitScript((fixture) => {
@@ -130,6 +138,7 @@ export async function installTauriIpcHarness(
       resumeContext: fixture.resumeContext,
       pickedDirectories: [...fixture.pickedDirectories],
       canonicalWorkspaces: { ...fixture.canonicalWorkspaces },
+      sessionMessages: { ...fixture.sessionMessages },
       calls: [] as BrowserCall[],
     };
 
@@ -258,6 +267,11 @@ export async function installTauriIpcHarness(
           };
         case "list_sessions":
           return state.sessions.map((session) => ({ ...session }));
+        case "get_session_messages": {
+          const providerId = rawPayload.providerId as string;
+          const sourcePath = rawPayload.sourcePath as string;
+          return state.sessionMessages[`${providerId}:${sourcePath}`] ?? [];
+        }
         case "get_cursor_official_status":
           return { ...state.cursorStatus };
         case "update_cursor_official_auth": {

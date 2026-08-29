@@ -11,15 +11,14 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-
-interface TocItem {
-  index: number;
-  preview: string;
-  ts?: number;
-}
+import {
+  shouldRenderSessionTocDialog,
+  shouldRenderSessionTocSidebar,
+  type SessionTocItem,
+} from "./sessionChrome";
 
 interface SessionTocSidebarProps {
-  items: TocItem[];
+  items: SessionTocItem[];
   onItemClick: (index: number) => void;
 }
 
@@ -28,7 +27,7 @@ export function SessionTocSidebar({
   onItemClick,
 }: SessionTocSidebarProps) {
   const { t } = useTranslation();
-  if (items.length <= 2) return null;
+  if (!shouldRenderSessionTocSidebar(items)) return null;
 
   return (
     <div className="w-64 border-l shrink-0 hidden xl:block">
@@ -64,7 +63,7 @@ export function SessionTocSidebar({
 }
 
 interface SessionTocDialogProps {
-  items: TocItem[];
+  items: SessionTocItem[];
   onItemClick: (index: number) => void;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -77,7 +76,7 @@ export function SessionTocDialog({
   onOpenChange,
 }: SessionTocDialogProps) {
   const { t } = useTranslation();
-  if (items.length <= 2) return null;
+  if (!shouldRenderSessionTocDialog(items)) return null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

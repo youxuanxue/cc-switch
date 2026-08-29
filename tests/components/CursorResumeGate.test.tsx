@@ -1,9 +1,12 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { CursorResumeGate } from "@/components/sessions/CursorResumeGate";
+import {
+  CursorResumeGate,
+  type CursorResumePrimaryAction,
+} from "@/components/sessions/CursorResumeGate";
 import { sessionsApi } from "@/lib/api/sessions";
 import type { SessionMeta } from "@/types";
 
@@ -108,9 +111,35 @@ function createWrapper() {
   return { queryClient, Wrapper };
 }
 
+function CursorResumeHarness({ session }: { session: SessionMeta }) {
+  const [primaryAction, setPrimaryAction] =
+    useState<CursorResumePrimaryAction | null>(null);
+  const [resumeCommand, setResumeCommand] = useState<string | null>(null);
+
+  return (
+    <>
+      {primaryAction ? (
+        <button
+          type="button"
+          disabled={primaryAction.disabled}
+          onClick={primaryAction.onClick}
+        >
+          {primaryAction.label}
+        </button>
+      ) : null}
+      {resumeCommand ? <pre>{resumeCommand}</pre> : null}
+      <CursorResumeGate
+        session={session}
+        onPrimaryActionChange={setPrimaryAction}
+        onResumeCommandChange={setResumeCommand}
+      />
+    </>
+  );
+}
+
 function renderGate(initialSession: SessionMeta = session) {
   const { queryClient, Wrapper } = createWrapper();
-  const view = render(<CursorResumeGate session={initialSession} />, {
+  const view = render(<CursorResumeHarness session={initialSession} />, {
     wrapper: Wrapper,
   });
 
@@ -118,7 +147,7 @@ function renderGate(initialSession: SessionMeta = session) {
     queryClient,
     ...view,
     rerenderSession(nextSession: SessionMeta) {
-      view.rerender(<CursorResumeGate session={nextSession} />);
+      view.rerender(<CursorResumeHarness session={nextSession} />);
     },
   };
 }
@@ -154,12 +183,29 @@ describe("CursorResumeGate", () => {
       .mockResolvedValue({ state: "launched" });
   });
 
+  it("leaves conversation chrome to the shared session page", async () => {
+    renderGate();
+
+    expect(
+      await screen.findByText(
+        `agent --workspace /mock/cursor/workspace --resume ${session.sessionId}`,
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("技术详情")).not.toBeInTheDocument();
+    expect(screen.queryByText("对话记录")).not.toBeInTheDocument();
+    expect(screen.queryByText("该会话暂无可展示内容")).not.toBeInTheDocument();
+    expect(screen.queryByText("继续 Cursor 会话")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("在原项目目录中继续这段 Cursor Agent 会话。"),
+    ).not.toBeInTheDocument();
+  });
+
   it("US-002 resumes a ready session through dedicated Cursor IPC", async () => {
     const user = userEvent.setup();
     const launchTerminal = vi.spyOn(sessionsApi, "launchTerminal");
     renderGate();
 
-    await user.click(await screen.findByRole("button", { name: "继续会话" }));
+    await user.click(await screen.findByRole("button", { name: "恢复会话" }));
 
     await waitFor(() =>
       expect(apiMocks.launchSession).toHaveBeenCalledWith({
@@ -382,26 +428,21 @@ describe("CursorResumeGate", () => {
     apiMocks.launchSession.mockResolvedValue({ state: "workspaceRequired" });
     renderGate();
 
-    await user.click(await screen.findByRole("button", { name: "继续会话" }));
+    await user.click(await screen.findByRole("button", { name: "恢复会话" }));
 
     expect(
       await screen.findByRole("button", { name: "选择目录并继续" }),
     ).toBeInTheDocument();
   });
 
-  it("keeps full path, chat ID, and fixed command in collapsed technical details", async () => {
+  it("exposes the fixed resume command to the shared header chrome", async () => {
     renderGate();
 
-    const summary = await screen.findByText("技术详情");
-    const details = summary.closest("details");
-    expect(details).not.toBeNull();
-    expect(details).not.toHaveAttribute("open");
-    expect(within(details!).getByText("/mock/cursor/workspace")).toBeDefined();
-    expect(within(details!).getByText(session.sessionId)).toBeDefined();
     expect(
-      within(details!).getByText(
+      await screen.findByText(
         `agent --workspace /mock/cursor/workspace --resume ${session.sessionId}`,
       ),
-    ).toBeDefined();
+    ).toBeInTheDocument();
+    expect(screen.queryByText("技术详情")).not.toBeInTheDocument();
   });
 });

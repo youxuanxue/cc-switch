@@ -62,13 +62,14 @@ import { isMac } from "@/lib/platform";
 import { useCursorSessionIndex } from "@/hooks/useCursorSessionIndex";
 import { ProviderIcon } from "@/components/ProviderIcon";
 import { SessionItem } from "./SessionItem";
-import { CursorResumeGate } from "./CursorResumeGate";
+import {
+  CursorResumeGate,
+  type CursorResumePrimaryAction,
+} from "./CursorResumeGate";
 import { isSessionDeletable } from "./sessionCapabilities";
 import { SessionMessageItem } from "./SessionMessageItem";
 import { SessionTocDialog, SessionTocSidebar } from "./SessionToc";
 import {
-  extractCodexPromptPreview,
-  formatSessionMessagePreview,
   formatSessionTitle,
   formatTimestamp,
   getBaseName,
@@ -80,8 +81,8 @@ import {
   groupSessionsByProviderAndDirectory,
   type SessionDirectoryGroup,
   type SessionProviderGroup,
-  shouldHideCodexMessageFromToc,
 } from "./utils";
+import { buildSessionTocItems, toDisplayMessages } from "./sessionChrome";
 
 const SESSION_LIST_VIEW_MODE_STORAGE_KEY =
   "cc-switch.sessionManager.listViewMode";
@@ -229,6 +230,11 @@ export function SessionManagerPage({ appId }: { appId: string }) {
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   const [search, setSearch] = useState("");
+  const [cursorPrimaryAction, setCursorPrimaryAction] =
+    useState<CursorResumePrimaryAction | null>(null);
+  const [cursorResumeCommand, setCursorResumeCommand] = useState<string | null>(
+    null,
+  );
   const [providerFilter, setProviderFilter] = useState<ProviderFilter>(
     appId as ProviderFilter,
   );
@@ -346,6 +352,12 @@ export function SessionManagerPage({ appId }: { appId: string }) {
         });
 
   const isCursorSession = selectedSession?.providerId === "cursor";
+  const headerResumeCommand = selectedSession
+    ? isCursorSession
+      ? (cursorResumeCommand ??
+        `agent --workspace ${selectedSession.projectDir?.trim() || "<workspace>"} --resume ${selectedSession.sessionId}`)
+      : selectedSession.resumeCommand
+    : undefined;
   const cursorIndexUnavailableReason =
     providerFilter === "cursor" &&
     cursorSessionIndex.status?.state === "indexUnavailable"
@@ -356,8 +368,8 @@ export function SessionManagerPage({ appId }: { appId: string }) {
 
   const { data: messages = [], isLoading: isLoadingMessages } =
     useSessionMessagesQuery(
-      isCursorSession ? undefined : selectedSession?.providerId,
-      isCursorSession ? undefined : selectedSession?.sourcePath,
+      selectedSession?.providerId,
+      selectedSession?.sourcePath,
     );
   const { data: resumeState } = useSessionResumeStateQuery(
     isCursorSession ? undefined : selectedSession?.providerId,
@@ -367,9 +379,13 @@ export function SessionManagerPage({ appId }: { appId: string }) {
   const resumeCopy = getSessionResumeI18nKeys(resumeState?.appearance);
   const deleteSessionMutation = useDeleteSessionMutation();
   const isDeleting = deleteSessionMutation.isPending || isBatchDeleting;
+  const displayMessages = useMemo(
+    () => toDisplayMessages(messages, selectedSession?.providerId),
+    [messages, selectedSession?.providerId],
+  );
 
   const virtualizer = useVirtualizer({
-    count: messages.length,
+    count: displayMessages.length,
     getScrollElement: () => scrollContainerRef.current,
     estimateSize: () => 120,
     overscan: 5,
@@ -400,28 +416,10 @@ export function SessionManagerPage({ appId }: { appId: string }) {
     });
   }, [sessions]);
 
-  const isCodexSession = selectedSession?.providerId === "codex";
-
-  // 提取用户消息用于目录
-  const userMessagesToc = useMemo(() => {
-    return messages
-      .map((msg, index) => ({ msg, index }))
-      .filter(({ msg }) => {
-        if (msg.role.toLowerCase() !== "user") return false;
-        return !(isCodexSession && shouldHideCodexMessageFromToc(msg.content));
-      })
-      .map(({ msg, index }) => {
-        const previewContent = isCodexSession
-          ? extractCodexPromptPreview(msg.content)
-          : msg.content;
-
-        return {
-          index,
-          preview: formatSessionMessagePreview(previewContent),
-          ts: msg.ts,
-        };
-      });
-  }, [isCodexSession, messages]);
+  const userMessagesToc = useMemo(
+    () => buildSessionTocItems(displayMessages, selectedSession?.providerId),
+    [displayMessages, selectedSession?.providerId],
+  );
 
   const scrollToMessage = (index: number) => {
     virtualizer.scrollToIndex(index, { align: "center", behavior: "smooth" });
@@ -1596,47 +1594,39 @@ export function SessionManagerPage({ appId }: { appId: string }) {
                               )}
                             </span>
                           </div>
-                          {selectedSession.projectDir &&
-                            (isCursorSession ? (
-                              <div className="flex items-center gap-1">
-                                <FolderOpen className="size-3" />
-                                <span className="truncate max-w-[200px]">
-                                  {getBaseName(selectedSession.projectDir)}
-                                </span>
-                              </div>
-                            ) : (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      void handleCopy(
-                                        selectedSession.projectDir!,
-                                        t("sessionManager.projectDirCopied"),
-                                      )
-                                    }
-                                    className="flex items-center gap-1 hover:text-foreground transition-colors"
-                                  >
-                                    <FolderOpen className="size-3" />
-                                    <span className="truncate max-w-[200px]">
-                                      {getBaseName(selectedSession.projectDir)}
-                                    </span>
-                                  </button>
-                                </TooltipTrigger>
-                                <TooltipContent
-                                  side="bottom"
-                                  className="max-w-xs"
+                          {selectedSession.projectDir && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    void handleCopy(
+                                      selectedSession.projectDir!,
+                                      t("sessionManager.projectDirCopied"),
+                                    )
+                                  }
+                                  className="flex items-center gap-1 hover:text-foreground transition-colors"
                                 >
-                                  <p className="font-mono text-xs break-all">
-                                    {selectedSession.projectDir}
-                                  </p>
-                                  <p className="text-muted-foreground mt-1">
-                                    {t("sessionManager.clickToCopyPath")}
-                                  </p>
-                                </TooltipContent>
-                              </Tooltip>
-                            ))}
-                          {!isCursorSession && selectedSession.sourcePath && (
+                                  <FolderOpen className="size-3" />
+                                  <span className="truncate max-w-[200px]">
+                                    {getBaseName(selectedSession.projectDir)}
+                                  </span>
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent
+                                side="bottom"
+                                className="max-w-xs"
+                              >
+                                <p className="font-mono text-xs break-all">
+                                  {selectedSession.projectDir}
+                                </p>
+                                <p className="text-muted-foreground mt-1">
+                                  {t("sessionManager.clickToCopyPath")}
+                                </p>
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
+                          {selectedSession.sourcePath && (
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <button
@@ -1673,30 +1663,52 @@ export function SessionManagerPage({ appId }: { appId: string }) {
 
                       {/* 右侧：操作按钮组 */}
                       <div className="flex items-center gap-2 shrink-0">
-                        {!isCursorSession && isMac() && (
+                        {isMac() ? (
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <Button
                                 size="sm"
                                 className="gap-1.5"
-                                onClick={() => void handleResume()}
-                                disabled={!selectedSession.resumeCommand}
+                                onClick={() => {
+                                  if (isCursorSession) {
+                                    cursorPrimaryAction?.onClick();
+                                    return;
+                                  }
+                                  void handleResume();
+                                }}
+                                disabled={
+                                  isCursorSession
+                                    ? !cursorPrimaryAction ||
+                                      cursorPrimaryAction.disabled
+                                    : !selectedSession.resumeCommand
+                                }
                               >
                                 <Play className="size-3.5" />
                                 <span className="hidden sm:inline">
-                                  {t(resumeCopy.labelKey)}
+                                  {isCursorSession
+                                    ? (cursorPrimaryAction?.label ??
+                                      t("sessionManager.resume", {
+                                        defaultValue: "恢复会话",
+                                      }))
+                                    : t(resumeCopy.labelKey)}
                                 </span>
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent>
-                              {selectedSession.resumeCommand
-                                ? t(resumeCopy.tooltipKey)
-                                : t("sessionManager.noResumeCommand", {
-                                    defaultValue: "此会话无法恢复",
-                                  })}
+                              {isCursorSession
+                                ? cursorPrimaryAction
+                                  ? t("sessionManager.resumeTooltip")
+                                  : t("sessionManager.noResumeCommand", {
+                                      defaultValue: "此会话无法恢复",
+                                    })
+                                : selectedSession.resumeCommand
+                                  ? t(resumeCopy.tooltipKey)
+                                  : t("sessionManager.noResumeCommand", {
+                                      defaultValue: "此会话无法恢复",
+                                    })}
                             </TooltipContent>
                           </Tooltip>
-                        )}
+                        ) : null}
                         {isSessionDeletable(selectedSession) ? (
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -1732,10 +1744,10 @@ export function SessionManagerPage({ appId }: { appId: string }) {
                     </div>
 
                     {/* 恢复命令预览 */}
-                    {!isCursorSession && selectedSession.resumeCommand && (
+                    {headerResumeCommand ? (
                       <div className="mt-3 flex items-center gap-2">
                         <div className="flex-1 rounded-md bg-muted/60 px-3 py-1.5 font-mono text-xs text-muted-foreground truncate">
-                          {selectedSession.resumeCommand}
+                          {headerResumeCommand}
                         </div>
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -1745,7 +1757,7 @@ export function SessionManagerPage({ appId }: { appId: string }) {
                               className="size-7 shrink-0"
                               onClick={() =>
                                 void handleCopy(
-                                  selectedSession.resumeCommand!,
+                                  headerResumeCommand,
                                   t("sessionManager.resumeCommandCopied"),
                                 )
                               }
@@ -1760,101 +1772,102 @@ export function SessionManagerPage({ appId }: { appId: string }) {
                           </TooltipContent>
                         </Tooltip>
                       </div>
-                    )}
+                    ) : null}
                   </CardHeader>
 
-                  {isCursorSession ? (
-                    <CardContent className="flex-1 min-h-0 p-0">
-                      <CursorResumeGate session={selectedSession} />
-                    </CardContent>
-                  ) : (
-                    /* 消息列表区域 */
-                    <CardContent className="flex-1 min-h-0 p-0">
-                      <div className="flex h-full min-w-0">
-                        {/* 消息列表 */}
-                        <div className="flex-1 min-w-0 flex flex-col">
-                          <div className="px-4 pt-4 pb-2 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <MessageSquare className="size-4 text-muted-foreground" />
-                              <span className="text-sm font-medium">
-                                {t("sessionManager.conversationHistory", {
-                                  defaultValue: "对话记录",
-                                })}
-                              </span>
-                              <Badge variant="secondary" className="text-xs">
-                                {messages.length}
-                              </Badge>
-                            </div>
-                          </div>
-                          <div
-                            ref={scrollContainerRef}
-                            className="flex-1 overflow-y-auto px-4 pb-4 min-w-0"
-                          >
-                            {isLoadingMessages ? (
-                              <div className="flex items-center justify-center py-12">
-                                <RefreshCw className="size-5 animate-spin text-muted-foreground" />
-                              </div>
-                            ) : messages.length === 0 ? (
-                              <div className="flex flex-col items-center justify-center py-12 text-center">
-                                <MessageSquare className="size-8 text-muted-foreground/50 mb-2" />
-                                <p className="text-sm text-muted-foreground">
-                                  {t("sessionManager.emptySession")}
-                                </p>
-                              </div>
-                            ) : (
-                              <div
-                                style={{
-                                  height: virtualizer.getTotalSize(),
-                                  position: "relative",
-                                }}
-                              >
-                                {virtualizer
-                                  .getVirtualItems()
-                                  .map((virtualRow) => (
-                                    <div
-                                      key={virtualRow.key}
-                                      data-index={virtualRow.index}
-                                      ref={virtualizer.measureElement}
-                                      style={{
-                                        position: "absolute",
-                                        top: 0,
-                                        left: 0,
-                                        width: "100%",
-                                        transform: `translateY(${virtualRow.start}px)`,
-                                      }}
-                                    >
-                                      <SessionMessageItem
-                                        message={messages[virtualRow.index]}
-                                        isActive={
-                                          activeMessageIndex ===
-                                          virtualRow.index
-                                        }
-                                        searchQuery={search}
-                                        onCopy={handleMessageCopy}
-                                      />
-                                    </div>
-                                  ))}
-                              </div>
-                            )}
+                  <CardContent className="flex-1 min-h-0 p-0 flex flex-col">
+                    {isCursorSession ? (
+                      <CursorResumeGate
+                        session={selectedSession}
+                        onPrimaryActionChange={setCursorPrimaryAction}
+                        onResumeCommandChange={setCursorResumeCommand}
+                      />
+                    ) : null}
+                    <div className="flex min-h-0 flex-1 min-w-0">
+                      {/* 消息列表 */}
+                      <div className="flex-1 min-w-0 flex flex-col">
+                        <div className="px-4 pt-4 pb-2 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <MessageSquare className="size-4 text-muted-foreground" />
+                            <span className="text-sm font-medium">
+                              {t("sessionManager.conversationHistory", {
+                                defaultValue: "对话记录",
+                              })}
+                            </span>
+                            <Badge variant="secondary" className="text-xs">
+                              {displayMessages.length}
+                            </Badge>
                           </div>
                         </div>
-
-                        {/* 右侧目录 - 类似少数派 (大屏幕) */}
-                        <SessionTocSidebar
-                          items={userMessagesToc}
-                          onItemClick={scrollToMessage}
-                        />
+                        <div
+                          ref={scrollContainerRef}
+                          className="flex-1 overflow-y-auto px-4 pb-4 min-w-0"
+                        >
+                          {isLoadingMessages ? (
+                            <div className="flex items-center justify-center py-12">
+                              <RefreshCw className="size-5 animate-spin text-muted-foreground" />
+                            </div>
+                          ) : displayMessages.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-12 text-center">
+                              <MessageSquare className="size-8 text-muted-foreground/50 mb-2" />
+                              <p className="text-sm text-muted-foreground">
+                                {t("sessionManager.emptySession")}
+                              </p>
+                            </div>
+                          ) : (
+                            <div
+                              style={{
+                                height: virtualizer.getTotalSize(),
+                                position: "relative",
+                              }}
+                            >
+                              {virtualizer
+                                .getVirtualItems()
+                                .map((virtualRow) => (
+                                  <div
+                                    key={virtualRow.key}
+                                    data-index={virtualRow.index}
+                                    ref={virtualizer.measureElement}
+                                    style={{
+                                      position: "absolute",
+                                      top: 0,
+                                      left: 0,
+                                      width: "100%",
+                                      transform: `translateY(${virtualRow.start}px)`,
+                                    }}
+                                  >
+                                    <SessionMessageItem
+                                      message={
+                                        displayMessages[virtualRow.index]
+                                      }
+                                      isActive={
+                                        activeMessageIndex === virtualRow.index
+                                      }
+                                      searchQuery={search}
+                                      onCopy={handleMessageCopy}
+                                    />
+                                  </div>
+                                ))}
+                            </div>
+                          )}
+                        </div>
                       </div>
 
-                      {/* 浮动目录按钮 (小屏幕) */}
-                      <SessionTocDialog
+                      {/* 右侧目录 - 类似少数派 (大屏幕) */}
+                      <SessionTocSidebar
                         items={userMessagesToc}
                         onItemClick={scrollToMessage}
-                        open={tocDialogOpen}
-                        onOpenChange={setTocDialogOpen}
                       />
-                    </CardContent>
-                  )}
+                    </div>
+
+                    {/* 浮动目录按钮 (小屏幕) */}
+                    <SessionTocDialog
+                      items={userMessagesToc}
+                      onItemClick={scrollToMessage}
+                      open={tocDialogOpen}
+                      onOpenChange={setTocDialogOpen}
+                    />
+                  </CardContent>
                 </>
               )}
             </Card>

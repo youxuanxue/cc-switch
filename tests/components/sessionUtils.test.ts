@@ -4,7 +4,9 @@ import {
   formatSessionMessagePreview,
   getSessionResumeI18nKeys,
   groupSessionsByProviderAndDirectory,
+  extractCursorDisplayContent,
   shouldHideCodexMessageFromToc,
+  shouldHideCursorMessageFromToc,
 } from "@/components/sessions/utils";
 import { isSessionDeletable } from "@/components/sessions/sessionCapabilities";
 import type { SessionMeta } from "@/types";
@@ -92,6 +94,35 @@ describe("session utils", () => {
     const content = "Please explain the phrase My request for Codex.";
 
     expect(extractCodexPromptPreview(content)).toBe(content);
+  });
+
+  it("hides Cursor user_info envelopes from the TOC", () => {
+    expect(
+      shouldHideCursorMessageFromToc(
+        "<user_info>\nOS Version: darwin\n</user_info>",
+      ),
+    ).toBe(true);
+    expect(shouldHideCursorMessageFromToc("continue the cursor task")).toBe(
+      false,
+    );
+  });
+
+  it("extracts Cursor user_query and hides summary envelopes", () => {
+    expect(
+      extractCursorDisplayContent(
+        "<timestamp>Saturday Aug 29, 2026, 7:54 PM</timestamp>\n<user_query>把 Cursor 做成和其他会话一样能翻对话记录</user_query>",
+      ),
+    ).toBe("把 Cursor 做成和其他会话一样能翻对话记录");
+    expect(
+      shouldHideCursorMessageFromToc(
+        "<timestamp>Saturday Aug 29, 2026, 8:12 PM</timestamp>\n<user_query>Your conversation was summarized due to context constraints.</user_query>",
+      ),
+    ).toBe(true);
+    expect(
+      extractCursorDisplayContent(
+        "<user_info>\nOS Version: darwin\n</user_info>\n<git_status>\nM file\n</git_status>",
+      ),
+    ).toBe("");
   });
 
   it("hides Codex context messages without user prompts from the TOC", () => {

@@ -9,15 +9,15 @@
 - Risk Focus:
   - 逻辑错误: the capability registry must distinguish supported, conditional, and unsupported promises without confusing them with runtime state.
   - 行为回归: Cursor must not enter AppType/provider CRUD or cause existing provider controls to disappear; only Cursor-specific unsupported affordances are absent.
-  - 安全问题: Cursor message loading, transcript/source access, deletion, generic terminal commands, custom endpoints, TokenKey, Desktop BYOK, and agent-local paths must remain unreachable.
+  - 安全问题: Cursor deletion, generic terminal commands, custom endpoints, TokenKey, Desktop BYOK, and agent-local paths must remain unreachable. Transcript sourcePath must not authorize deletion.
   - 运行时问题: Windows/Linux may index sessions but must resolve resume to platformUnavailable; missing index and CLI states remain isolated diagnostics.
 
 ## Acceptance Criteria
 
-1. AC-001 (正向): Given the static Cursor capability registry, When product code queries it, Then Login, User API Key, and fixed session resume are supported, local indexing is conditional, and transcript preview plus deletion are unsupported.
+1. AC-001 (正向): Given the static Cursor capability registry, When product code queries it, Then Login, User API Key, fixed session resume, and transcript preview are supported, local indexing is conditional, and deletion is unsupported.
 2. AC-002 (正向): Given a Cursor session on any platform, When the session list renders, Then the Cursor filter and cwd grouping are available while runtime status—not capability vocabulary—is shown to the user.
-3. AC-003 (负向): Given a Cursor session, When item, group, selection, detail, and bulk actions render, Then every delete checkbox/action and every transcript/message-count/TOC shell is absent rather than disabled.
-4. AC-004 (负向): Given a direct backend request to load Cursor messages or delete a Cursor session, When dispatch runs, Then it returns Unsupported provider: cursor before any filesystem mutation.
+3. AC-003 (负向): Given a Cursor session, When item, group, selection, detail, and bulk actions render, Then every delete checkbox/action is absent rather than disabled, even if sourcePath points at store.db.
+4. AC-004 (负向): Given a direct backend request to delete a Cursor session, When dispatch runs, Then it returns Unsupported provider: cursor before any filesystem mutation.
 5. AC-005 (负向): Given Cursor-specific renderer code, When mechanical contracts run, Then direct auth duplication, local resume-state duplication, sourcePath-based Cursor deletion, and generic launch_session_terminal usage fail with stable finding codes.
 6. AC-006 (负向): Given configuration or UI surfaces, When Cursor support is inspected, Then Cursor is absent from AppType, APP_IDS, ProviderManager, Proxy, MCP, Prompt, Skills, SQLite, TokenKey, custom Base URL, Desktop BYOK, agent-local, and agent-cli-local flows.
 7. AC-007 (回归): Given existing non-Cursor sessions and Auth Center capabilities, When Cursor support is enabled, Then their provider switching, transcript, resume, deletion, and authentication behavior remains unchanged.
@@ -27,8 +27,8 @@
 
 - AC-001 fails if a support promise drifts or if runtime readiness is stored in the static registry.
 - AC-002 fails if capability words render or Cursor is incorrectly registered as a generic app/provider.
-- AC-003 fails if any destructive or transcript affordance remains visible for Cursor.
-- AC-004 fails if dispatch reaches a Cursor path or filesystem mutation before rejecting the provider.
+- AC-003 fails if any destructive delete affordance remains visible for Cursor.
+- AC-004 fails if delete dispatch reaches a Cursor path or filesystem mutation before rejecting the provider.
 - AC-005 fails if a page bypasses an auth, resume, or delete owner or uses generic terminal IPC.
 - AC-006 fails if an explicitly excluded integration surface gains Cursor entries.
 - AC-007 fails on any existing provider/auth behavior regression.
@@ -37,8 +37,8 @@
 ## Linked Tests
 
 - tests/config/cursorCapabilities.test.ts::US-004 declares the approved Cursor capability boundaries
-- src-tauri/src/session_manager/mod.rs::tests::us004_rejects_cursor_message_loading_and_deletion
-- tests/components/SessionManagerPage.test.tsx::US-002/US-004 renders Cursor resume without transcript or generic terminal plumbing
+- src-tauri/src/session_manager/mod.rs::tests::us004_rejects_cursor_deletion_even_when_transcript_exists
+- tests/components/SessionManagerPage.test.tsx::US-002/US-005 renders Cursor transcript through shared chrome without delete or generic terminal plumbing
 - tests/components/SessionManagerPage.test.tsx::US-004 exposes the Cursor filter while hiding unsupported delete actions
 - tests/components/SessionManagerPage.test.tsx::US-004 hides Cursor item and group checkboxes in grouped batch mode
 - tests/components/cursorResumeState.test.ts::US-004 blocks Cursor resume outside macOS without blocking indexing

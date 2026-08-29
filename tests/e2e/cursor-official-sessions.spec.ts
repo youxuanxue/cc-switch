@@ -50,6 +50,10 @@ test("US-001/US-004 groups Cursor sessions by cwd without exposing unsupported c
         resumeCommand: "codex resume codex-fixture",
       },
     ],
+    resumeContext: {
+      workspaceState: "ready",
+      workspace: "/work/acme/project-one",
+    },
   });
 
   await page.goto("/");
@@ -72,20 +76,22 @@ test("US-001/US-004 groups Cursor sessions by cwd without exposing unsupported c
     page.getByRole("button", { name: /Cursor Alpha/ }),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: /Cursor Beta/ })).toBeVisible();
+  await page.getByRole("button", { name: /Cursor Alpha/ }).click();
 
   await expect(page.getByRole("button", { name: /删除会话/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /批量管理/ })).toHaveCount(0);
   await expect(page.getByRole("checkbox")).toHaveCount(0);
-  await expect(page.getByText("对话记录")).toHaveCount(0);
+  await expect(page.getByText("对话记录")).toBeVisible();
   await expect(page.getByText(/消息数/)).toHaveCount(0);
   await expect(
     page.getByText(/supported|conditional|unsupported/i),
   ).toHaveCount(0);
-
-  const technicalDetails = page.locator("details").filter({
-    has: page.getByText("技术详情", { exact: true }),
-  });
-  await expect(technicalDetails).not.toHaveAttribute("open", "");
+  await expect(page.getByText("技术详情")).toHaveCount(0);
+  await expect(
+    page.getByText(
+      `agent --workspace /work/acme/project-one --resume ${READY_SESSION_ID}`,
+    ),
+  ).toBeVisible();
 
   const calls = await getRecordedInvokes(page);
   expect(calls.some((call) => call.command.startsWith("project"))).toBe(false);
@@ -133,7 +139,7 @@ test("US-002 resumes a ready Cursor session only through the dedicated IPC", asy
   await expect(
     page.getByRole("heading", { name: "Cursor Ready" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "继续会话", exact: true }).click();
+  await page.getByRole("button", { name: "恢复会话", exact: true }).click();
 
   await expect
     .poll(async () =>
@@ -220,6 +226,86 @@ test("US-002 keeps a canonical workspace through Login and continue", async ({
       (call) =>
         call.command === "launch_cursor_session" ||
         call.command === "launch_session_terminal",
+    ),
+  ).toBe(false);
+});
+
+test("US-005 reads Cursor conversation history through the shared session chrome", async ({
+  page,
+}) => {
+  const storePath = "/mock/cursor/chats/workspace/store.db";
+  await installTauriIpcHarness(page, {
+    view: "sessions",
+    sessions: [
+      {
+        providerId: "cursor",
+        sessionId: READY_SESSION_ID,
+        title: "Cursor Transcript",
+        projectDir: "/work/acme/ready",
+        lastActiveAt: 400,
+        sourcePath: storePath,
+      },
+    ],
+    resumeContext: {
+      workspaceState: "ready",
+      workspace: "/work/acme/ready",
+    },
+    sessionMessages: {
+      [`cursor:${storePath}`]: [
+        {
+          role: "user",
+          content: "<user_info>\nOS Version: darwin\n</user_info>",
+        },
+        {
+          role: "user",
+          content:
+            "<timestamp>Saturday Aug 29, 2026, 7:54 PM</timestamp>\n<user_query>continue the cursor task</user_query>",
+        },
+        { role: "assistant", content: "working on it" },
+      ],
+    },
+  });
+
+  await page.goto("/");
+  await selectCursor(page);
+  await expect(
+    page.getByRole("heading", { name: "Cursor Transcript" }),
+  ).toBeVisible();
+  await expect(page.getByText("对话记录")).toBeVisible();
+  await expect(
+    page.getByText(
+      `agent --workspace /work/acme/ready --resume ${READY_SESSION_ID}`,
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "continue the cursor task" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("continue the cursor task", { exact: true }),
+  ).toHaveCount(2);
+  await expect(page.getByText("working on it")).toBeVisible();
+  await expect(page.getByText("OS Version: darwin")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /删除会话/ })).toHaveCount(0);
+
+  await page.getByRole("button", { name: "恢复会话", exact: true }).click();
+  await expect
+    .poll(async () =>
+      (await getRecordedInvokes(page)).filter(
+        (call) => call.command === "launch_cursor_session",
+      ),
+    )
+    .toEqual([
+      {
+        command: "launch_cursor_session",
+        payloadKeys: ["sessionId", "workspaceOverride"],
+        payload: {
+          sessionId: READY_SESSION_ID,
+        },
+      },
+    ]);
+  expect(
+    (await getRecordedInvokes(page)).some(
+      (call) => call.command === "launch_session_terminal",
     ),
   ).toBe(false);
 });

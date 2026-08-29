@@ -19,7 +19,7 @@
 3. AC-003 (正向): Given workspace and authentication are both unresolved, When the user selects a valid workspace and completes Login or User API Key remediation, Then the same override and chat ID are used without asking for the directory again.
 4. AC-004 (负向): Given an invalid UUID, missing path, file path, non-canonicalizable override, renderer-supplied command, or renderer-supplied environment value, When resume is requested, Then the backend rejects it or returns workspaceRequired without starting a terminal.
 5. AC-005 (负向): Given the platform is unsupported, the CLI is missing, authentication is unresolved, or a launch-time workspace recheck fails, When the gate derives its action, Then the highest-priority safe remediation is shown and no lower-priority launch occurs.
-6. AC-006 (回归): Given a Cursor session is selected or the selected session changes, When details render, Then Cursor never calls get_session_messages or launch_session_terminal, technical details remain collapsed by default, and stale workspace overrides are cleared on session change.
+6. AC-006 (回归): Given a Cursor session is selected or the selected session changes, When details render, Then Cursor never calls launch_session_terminal, technical details remain collapsed by default, and stale workspace overrides are cleared on session change. Transcript loading is allowed only through store.db sourcePath.
 7. AC-007 (运行时): Given a private launcher is created, When it runs or terminal startup fails, Then it has mode 0700, removes itself before Cursor executes, reveals no key in terminal arguments/results/errors, and is cleaned immediately on launch failure.
 
 ## Assertions
@@ -29,7 +29,7 @@
 - AC-003 fails if authentication completion loses the selected workspace or resumes a different chat.
 - AC-004 fails if arbitrary renderer command/environment data reaches process construction or filesystem validation is skipped.
 - AC-005 fails if a lower-priority state masks platform, CLI, or workspace safety.
-- AC-006 fails if transcript plumbing runs for Cursor, details open by default, or a previous session's override survives selection change.
+- AC-006 fails if generic terminal plumbing runs for Cursor, details open by default, or a previous session's override survives selection change.
 - AC-007 fails if launcher permissions, deletion order, cleanup, or credential redaction regress.
 
 ## Linked Tests

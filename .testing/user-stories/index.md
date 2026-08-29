@@ -10,6 +10,7 @@
 | [US-002](stories/US-002-cursor-session-resume.md) | Resume a Cursor session safely in context | Done | Design sections 4, 8, 10, 11, 12.1–12.4, 13 |
 | [US-003](stories/US-003-cursor-official-auth.md) | Use Cursor Official authentication without leaking credentials | Done | Design sections 5, 6, 8.2, 10, 12.1–12.4, 13 |
 | [US-004](stories/US-004-cursor-unsupported-capabilities.md) | Keep unsupported Cursor capabilities absent and explicit | Done | Design sections 2, 3.2–3.3, 7.4, 9, 10, 12.1–12.3, 13 |
+| [US-005](stories/US-005-cursor-transcript-preview.md) | Preview Cursor conversation history without enabling deletion | Done | Design sections 3.3, 4.1, 7.3–7.4, 9, 12, 13 |
 
 ## Coverage map
 
@@ -18,7 +19,8 @@
 | Cursor sessions are indexed, deterministically deduplicated, and grouped directly by cwd | US-001 |
 | Existing sessions resume through a fixed backend-owned command with inline workspace remediation | US-002 |
 | Login and User API Key are supported through a private, official-only authentication boundary | US-003 |
-| No Project entity, generic Cursor provider app, transcript preview, deletion, TokenKey, custom endpoint, Desktop BYOK, or agent-local capability is introduced | US-004 |
+| Cursor conversation history is readable through the shared session chrome when store.db exists | US-005 |
+| No Project entity, generic Cursor provider app, deletion, TokenKey, custom endpoint, Desktop BYOK, or agent-local capability is introduced | US-004 |
 | Index failure is isolated from other providers and non-macOS resume is explicitly unavailable | US-001, US-002, US-004 |
 | User API Key never returns to the renderer or enters argv, logs, command previews, database backup, or sync artifacts | US-003 |
 | Shared auth, resume, and delete owners are protected by behavior tests and a mechanical contract check | US-002, US-003, US-004 |

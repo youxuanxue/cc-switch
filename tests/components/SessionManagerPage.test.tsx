@@ -68,8 +68,20 @@ vi.mock("sonner", () => ({
 }));
 
 vi.mock("@/components/sessions/SessionToc", () => ({
-  SessionTocSidebar: () => null,
-  SessionTocDialog: () => null,
+  SessionTocSidebar: ({ items }: { items: { preview: string }[] }) => (
+    <aside
+      data-testid="session-toc-sidebar"
+      data-item-count={String(items.length)}
+      data-previews={items.map((item) => item.preview).join("|")}
+    />
+  ),
+  SessionTocDialog: ({ items }: { items: { preview: string }[] }) =>
+    items.length > 0 ? (
+      <div
+        data-testid="session-toc-dialog"
+        data-item-count={String(items.length)}
+      />
+    ) : null,
 }));
 
 vi.mock("@/components/ConfirmDialog", () => ({
@@ -522,11 +534,11 @@ describe("SessionManagerPage", () => {
     }
   });
 
-  it("US-002/US-004 renders Cursor resume without transcript or generic terminal plumbing", async () => {
+  it("US-002/US-005 renders Cursor transcript through shared chrome without delete or generic terminal plumbing", async () => {
     const user = userEvent.setup();
     const getMessages = vi.spyOn(sessionsApi, "getMessages");
     const launchTerminal = vi.spyOn(sessionsApi, "launchTerminal");
-    const defensiveSourcePath = "/mock/cursor/must-not-read.jsonl";
+    const storePath = "/mock/cursor/chats/workspace/store.db";
     setSessionFixtures(
       [
         {
@@ -536,13 +548,24 @@ describe("SessionManagerPage", () => {
           projectDir: "/mock/cursor/cursor-workspace",
           createdAt: 0,
           lastActiveAt: 4,
-          sourcePath: defensiveSourcePath,
+          sourcePath: storePath,
           resumeCommand: "must-not-launch-through-generic-terminal",
         },
       ],
       {
-        [`cursor:${defensiveSourcePath}`]: [
-          { role: "user", content: "must not render", ts: 4 },
+        [`cursor:${storePath}`]: [
+          {
+            role: "user",
+            content: "<user_info>\nOS Version: darwin\n</user_info>",
+            ts: 1,
+          },
+          {
+            role: "user",
+            content:
+              "<timestamp>Saturday Aug 29, 2026, 7:54 PM</timestamp>\n<user_query>continue the cursor task</user_query>",
+            ts: 4,
+          },
+          { role: "assistant", content: "working on it", ts: 5 },
         ],
       },
     );
@@ -553,16 +576,30 @@ describe("SessionManagerPage", () => {
       await screen.findByRole("heading", { name: "Cursor Alpha" }),
     ).toBeInTheDocument();
     expect(
-      await screen.findByRole("button", { name: "继续会话" }),
+      await screen.findByRole("button", { name: "恢复会话" }),
     ).toBeInTheDocument();
-    expect(screen.queryByText("对话记录")).not.toBeInTheDocument();
-    expect(screen.queryByText("must not render")).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(getMessages).toHaveBeenCalledWith("cursor", storePath),
+    );
+    expect(screen.getByText("对话记录").parentElement).toHaveTextContent("2");
+    expect(
+      screen.queryByText("sessionManager.emptySession"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("继续 Cursor 会话")).not.toBeInTheDocument();
+    expect(screen.queryByText("技术详情")).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "agent --workspace /mock/cursor/cursor-workspace --resume 11111111-1111-4111-8111-111111111111",
+      ),
+    ).toBeInTheDocument();
     expect(
       screen.queryByText("must-not-launch-through-generic-terminal"),
     ).not.toBeInTheDocument();
-    expect(getMessages).not.toHaveBeenCalled();
+    expect(
+      screen.queryByRole("button", { name: /删除会话/ }),
+    ).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "继续会话" }));
+    await user.click(screen.getByRole("button", { name: "恢复会话" }));
 
     await waitFor(() =>
       expect(cursorApiMocks.launchSession).toHaveBeenCalledWith({
@@ -1056,6 +1093,26 @@ describe("SessionManagerPage", () => {
     });
     expect(toastErrorMock).not.toHaveBeenCalled();
     launch.mockRestore();
+  });
+
+  it("shows conversation TOC for Claude even with a single user turn", async () => {
+    renderPage("claude");
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("heading", { name: "Claude Session" }),
+      ).toBeInTheDocument(),
+    );
+
+    await waitFor(() => {
+      const sidebar = screen.getByTestId("session-toc-sidebar");
+      expect(sidebar).toHaveAttribute("data-item-count", "1");
+      expect(sidebar).toHaveAttribute("data-previews", "claude");
+    });
+    expect(screen.getByTestId("session-toc-dialog")).toHaveAttribute(
+      "data-item-count",
+      "1",
+    );
   });
 
   it("uses the same resume decision path for Claude sessions", async () => {

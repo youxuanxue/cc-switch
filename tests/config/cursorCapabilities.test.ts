@@ -9,7 +9,7 @@ describe("Cursor capability registry", () => {
       userApiKey: "supported",
       fixedSessionResume: "supported",
       localSessionIndex: "conditional",
-      transcriptPreview: "unsupported",
+      transcriptPreview: "supported",
       sessionDeletion: "unsupported",
     });
   });
