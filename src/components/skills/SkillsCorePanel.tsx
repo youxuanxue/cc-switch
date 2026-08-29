@@ -16,6 +16,7 @@ import { Switch } from "@/components/ui/switch";
 import { settingsApi } from "@/lib/api";
 import {
   SKILLS_CORE_AGENTS,
+  skillsCoreAgentLabel,
   skillsCoreApi,
   type SkillsCoreDoctor,
   type SkillsCorePreview,
@@ -150,13 +151,18 @@ const SkillsCorePanel = React.forwardRef<
             </p>
             <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
               {SKILLS_CORE_AGENTS.map((token) => (
-                <label key={token} className="flex items-center gap-2 text-sm">
+                <label key={token} className="flex items-start gap-2 text-sm">
                   <Checkbox
+                    className="mt-0.5"
                     checked={selectedAgents.includes(token)}
                     onCheckedChange={(checked) => toggleAgent(token, checked)}
                     disabled={busy}
                   />
-                  {token}
+                  <span>
+                    {t(`skills.core.agents.${token}`, {
+                      defaultValue: skillsCoreAgentLabel(token),
+                    })}
+                  </span>
                 </label>
               ))}
             </div>
@@ -222,7 +228,9 @@ const SkillsCorePanel = React.forwardRef<
               <div className="flex flex-wrap gap-2">
                 {doctor.in_use_agents.map((token) => (
                   <Badge key={token} variant="secondary" className="gap-2">
-                    {token}
+                    {t(`skills.core.agents.${token}`, {
+                      defaultValue: skillsCoreAgentLabel(token),
+                    })}
                     <button
                       type="button"
                       className="text-xs underline"
@@ -249,7 +257,11 @@ const SkillsCorePanel = React.forwardRef<
                       void run(() => skillsCoreApi.agentsAdd(token))
                     }
                   >
-                    {t("skills.core.addAgent", { token })}
+                    {t("skills.core.addAgent", {
+                      name: t(`skills.core.agents.${token}`, {
+                        defaultValue: skillsCoreAgentLabel(token),
+                      }),
+                    })}
                   </Button>
                 ))}
               </div>

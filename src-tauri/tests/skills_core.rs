@@ -228,8 +228,43 @@ fn first_open_same_name_different_hash_fails_closed() {
     );
 }
 
+fn symlink_dir(src: &Path, dest: &Path) {
+    if let Some(parent) = dest.parent() {
+        fs::create_dir_all(parent).expect("parent");
+    }
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(src, dest).expect("symlink dir");
+    #[cfg(windows)]
+    std::os::windows::fs::symlink_dir(src, dest).expect("symlink dir");
+}
+
+fn assert_per_skill_link(dest: &Path, lib: &Path) {
+    let meta = fs::symlink_metadata(dest).unwrap();
+    assert!(
+        meta.file_type().is_symlink(),
+        "{} must be a per-skill symlink",
+        dest.display()
+    );
+    assert_eq!(
+        read_link(dest).canonicalize().unwrap(),
+        lib.canonicalize().unwrap()
+    );
+}
+
+fn assert_not_dir_symlink(path: &Path) {
+    if !path.exists() {
+        return;
+    }
+    let meta = fs::symlink_metadata(path).unwrap();
+    assert!(
+        !meta.file_type().is_symlink(),
+        "{} must not be a whole-directory symlink",
+        path.display()
+    );
+}
+
 #[test]
-fn claude_cursor_projects_cursor_layout_not_claude_per_skill() {
+fn claude_and_cursor_are_independent_per_skill_projections() {
     let (_guard, home, state) = setup();
     let db = &*state.db;
     write_skill(
@@ -243,29 +278,103 @@ fn claude_cursor_projects_cursor_layout_not_claude_per_skill() {
         "cursor-side",
     );
 
-    let preview = skills_core::preview_first_open(&db, &["claude-cursor".into()]).unwrap();
+    let preview =
+        skills_core::preview_first_open(&db, &["claude".into(), "cursor".into()]).unwrap();
     assert_eq!(preview.candidates.len(), 1);
     assert_eq!(preview.candidates[0].name, "cc-skill");
 
-    skills_core::open(&db, &["claude-cursor".into()], &["cc-skill".into()]).unwrap();
+    skills_core::open(
+        &db,
+        &["claude".into(), "cursor".into()],
+        &["cc-skill".into()],
+    )
+    .unwrap();
 
-    let cursor_skill = home.join(".cursor").join("skills").join("cc-skill");
     let lib = library_dir().join("cc-skill");
-    assert_eq!(
-        read_link(&cursor_skill).canonicalize().unwrap(),
-        lib.canonicalize().unwrap()
-    );
-
+    assert_per_skill_link(&home.join(".cursor").join("skills").join("cc-skill"), &lib);
     let claude_root = SkillService::get_app_skills_dir(&AppType::Claude).unwrap();
-    let claude_meta = fs::symlink_metadata(&claude_root).unwrap();
+    assert_not_dir_symlink(&claude_root);
+    assert_per_skill_link(&claude_root.join("cc-skill"), &lib);
+    let report = skills_core::doctor(&db).unwrap();
+    assert_eq!(report.in_use_agents, vec!["claude", "cursor"]);
+}
+
+#[test]
+fn open_claude_does_not_write_cursor() {
+    let (_guard, home, state) = setup();
+    let db = &*state.db;
+    write_skill(
+        &home.join(".claude").join("skills").join("only-claude"),
+        "only-claude",
+        "claude-side",
+    );
+    skills_core::open(&db, &["claude".into()], &["only-claude".into()]).unwrap();
+    let lib = library_dir().join("only-claude");
+    let claude_root = SkillService::get_app_skills_dir(&AppType::Claude).unwrap();
+    assert_not_dir_symlink(&claude_root);
+    assert_per_skill_link(&claude_root.join("only-claude"), &lib);
+    assert!(!home
+        .join(".cursor")
+        .join("skills")
+        .join("only-claude")
+        .exists());
+}
+
+#[test]
+fn open_cursor_does_not_write_claude() {
+    let (_guard, home, state) = setup();
+    let db = &*state.db;
+    write_skill(
+        &home.join(".cursor").join("skills").join("only-cursor"),
+        "only-cursor",
+        "cursor-side",
+    );
+    skills_core::open(&db, &["cursor".into()], &["only-cursor".into()]).unwrap();
+    let lib = library_dir().join("only-cursor");
+    assert_per_skill_link(
+        &home.join(".cursor").join("skills").join("only-cursor"),
+        &lib,
+    );
+    let claude_root = SkillService::get_app_skills_dir(&AppType::Claude).unwrap();
+    assert!(!claude_root.join("only-cursor").exists());
+    assert_not_dir_symlink(&claude_root);
+}
+
+#[test]
+fn historical_claude_dir_symlink_is_uncoupled_when_opening_claude() {
+    let (_guard, home, state) = setup();
+    let db = &*state.db;
+    let cursor_root = home.join(".cursor").join("skills");
+    write_skill(&cursor_root.join("cc-skill"), "cc-skill", "legacy-shared");
+    let claude_root = SkillService::get_app_skills_dir(&AppType::Claude).unwrap();
+    if claude_root.exists() {
+        fs::remove_dir_all(&claude_root).unwrap();
+    }
+    symlink_dir(&cursor_root, &claude_root);
+    assert!(fs::symlink_metadata(&claude_root)
+        .unwrap()
+        .file_type()
+        .is_symlink());
+
+    skills_core::open(&db, &["claude".into()], &["cc-skill".into()]).unwrap();
+
+    assert_not_dir_symlink(&claude_root);
+    let lib = library_dir().join("cc-skill");
+    assert_per_skill_link(&claude_root.join("cc-skill"), &lib);
+    assert!(cursor_root.join("cc-skill").join("SKILL.md").is_file());
+    let cursor_meta = fs::symlink_metadata(cursor_root.join("cc-skill")).unwrap();
     assert!(
-        claude_meta.file_type().is_symlink(),
-        "claude skills root must be a directory symlink, not a per-skill write target"
+        !cursor_meta.file_type().is_symlink(),
+        "opening Claude must not rewrite Cursor"
     );
-    assert_eq!(
-        read_link(&claude_root).canonicalize().unwrap(),
-        home.join(".cursor").join("skills").canonicalize().unwrap()
-    );
+}
+
+#[test]
+fn rejected_claude_cursor_token() {
+    let (_guard, _home, state) = setup();
+    let db = &*state.db;
+    let err = skills_core::preview_first_open(&db, &["claude-cursor".into()]).unwrap_err();
+    assert!(err.to_string().contains("废止"));
 }
 
 #[test]
@@ -624,7 +733,7 @@ fn reopen_ingest_keeps_leftover_library_when_src_is_projection() {
 }
 
 #[test]
-fn claude_foreign_skill_is_not_deleted_on_open() {
+fn open_cursor_leaves_claude_foreign_untouched() {
     let (_guard, home, state) = setup();
     let db = &*state.db;
     write_skill(
@@ -637,13 +746,34 @@ fn claude_foreign_skill_is_not_deleted_on_open() {
         "foreign",
         "leave-me",
     );
-    let err = skills_core::open(&db, &["claude-cursor".into()], &["keep".into()])
-        .expect_err("foreign blocks layout replace");
-    assert!(err.to_string().contains("外来"));
+    skills_core::open(&db, &["cursor".into()], &["keep".into()]).unwrap();
     assert!(home
         .join(".claude")
         .join("skills")
         .join("foreign")
         .join("SKILL.md")
         .is_file());
+    assert_not_dir_symlink(&home.join(".claude").join("skills"));
+}
+
+#[test]
+fn open_claude_keeps_foreign_sibling() {
+    let (_guard, home, state) = setup();
+    let db = &*state.db;
+    write_skill(
+        &home.join(".claude").join("skills").join("keep"),
+        "keep",
+        "keep-body",
+    );
+    write_skill(
+        &home.join(".claude").join("skills").join("foreign"),
+        "foreign",
+        "leave-me",
+    );
+    skills_core::open(&db, &["claude".into()], &["keep".into()]).unwrap();
+    let lib = library_dir().join("keep");
+    let claude_root = SkillService::get_app_skills_dir(&AppType::Claude).unwrap();
+    assert_not_dir_symlink(&claude_root);
+    assert_per_skill_link(&claude_root.join("keep"), &lib);
+    assert!(claude_root.join("foreign").join("SKILL.md").is_file());
 }
