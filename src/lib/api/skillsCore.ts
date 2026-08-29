@@ -1,7 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 
 export const SKILLS_CORE_AGENTS = [
-  "claude-cursor",
+  "claude",
+  "cursor",
   "codex",
   "gemini",
   "grokbuild",
@@ -12,6 +13,23 @@ export const SKILLS_CORE_AGENTS = [
 ] as const;
 
 export type SkillsCoreAgent = (typeof SKILLS_CORE_AGENTS)[number];
+
+/** Fallback product names. CLI tokens stay as-is. */
+export const SKILLS_CORE_AGENT_LABELS: Record<SkillsCoreAgent, string> = {
+  claude: "Claude",
+  cursor: "Cursor",
+  codex: "Codex",
+  gemini: "Gemini",
+  grokbuild: "Grok Build",
+  opencode: "OpenCode",
+  hermes: "Hermes",
+  pi: "Pi",
+  antigravity: "Antigravity",
+};
+
+export function skillsCoreAgentLabel(token: string): string {
+  return SKILLS_CORE_AGENT_LABELS[token as SkillsCoreAgent] ?? token;
+}
 
 export interface SkillsCoreCatalogRef {
   repo: string;
