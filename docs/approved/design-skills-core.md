@@ -55,8 +55,8 @@ related_commits: []
 
 | 场景 | 候选从哪来 |
 | --- | --- |
-| 已勾的在用 Agent 目录里已有技能 | 只提这些目录里**已经在用的**；不把 catalog `recommended` 混进来 |
-| 已勾 `claude-cursor` | 扫 Cursor 侧 + 未耦合的 Claude 侧逐条；同名同 hash 一份，不同则停 |
+| 已勾的在用 Agent 目录里已有技能 | 只提这些目录里**已经在用的**；不把 catalog `recommended` 混进来。每个 token 只扫自己的投影根 |
+| 同时勾了 `claude` 与 `cursor`，同名同 hash | 算一份候选；两边各自投影到同一中央库 |
 | 已勾目录里同名内容不一致 | **整笔停**；标冲突，不替人挑 |
 | 已勾的在用 Agent 都是空的（空机器） | 只用 catalog `recommended` |
 | catalog 后来新增 | **不进库**，除非人再装 |
@@ -80,7 +80,7 @@ related_commits: []
 | 这台机器在用哪些 Agent | 同上 |
 | 货架换版是否自动跟上 | 同上（总闸，默认开） |
 | 已装副本与 hash | 中央库目录 |
-| runtime 路径 | adapter 表。现网默认以 `SkillService::get_app_skills_dir` 为 SSOT；`claude-cursor` 在用时以本节布局为准，不以 `get_app_skills_dir(Claude)` 为写入目标 |
+| runtime 路径 | adapter 表。现网默认以 `SkillService::get_app_skills_dir` 为 SSOT；`cursor` 为 `~/.cursor/skills/<name>`；`claude` 为 `get_app_skills_dir(Claude)` 下逐条投影 |
 | 磁盘是否与库一致 | `cc-switch skills doctor` |
 
 ## 不做什么（v1）
@@ -102,8 +102,8 @@ related_commits: []
 - 第一次同名内容不一致时不自动挑一份、不合并、不跳过该名继续装其余。
 - 未开张时不让 `install` / `import` / `sync` / `upgrade` / `follow-catalog` / `agents add` 真空成功。
 - 不开第二套开张入口（`init` / `bootstrap` 等）；只有 `open`。
-- 不把 `get_app_skills_dir(Claude)` 当作 `claude-cursor` 在用时的逐条写入目标。
-- 不把 `claude-cursor` 第一次候选拆成 Claude / Cursor 两个 Agent；不只扫其中一侧。
+- 不把 `claude-cursor` 当成在用单位或 `--agent` 别名；历史整目录 symlink 不是控制面模型。
+- 不把 Claude Code 与 Cursor 耦合成「勾一个同时管两边」。
 - 不把 marker 写成「只有 `sync` 才重写」。
 
 ## 现状与地基
@@ -114,7 +114,7 @@ related_commits: []
 
 现网 `enabled_*` 矩阵和「各 Agent 各开各的」UI **废止**，改为：库成员 + 在用 Agent 名单。
 
-缺口：catalog reader（只往货架读，不自动进库）、Cursor / Antigravity adapter、在用名单、ownership marker、headless CLI（含 `open`）、把 Claude 从逐 skill 写入改为 `claude-cursor` 布局。
+缺口：catalog reader（只往货架读，不自动进库）、Cursor / Antigravity adapter、在用名单、ownership marker、headless CLI（含 `open`）。历史 `~/.claude/skills → ~/.cursor/skills` 整目录 symlink 只在投影 Claude 时拆掉，不再作为写入模型。
 
 ## 核心模型
 
@@ -154,7 +154,8 @@ description 从来源 `SKILL.md` 派生；catalog 不维护第二份 metadata。
 
 | token | 现有 `AppType` | 角色 |
 | --- | --- | --- |
-| `claude-cursor` | `Claude` + 新身份 Cursor | 布局耦合，算一个在用单位 |
+| `claude` | `Claude` | Claude Code（不是 Desktop）；`get_app_skills_dir(Claude)` 下逐条 `~/.claude/skills/<name> → 库` |
+| `cursor` | 新身份 Cursor | `~/.cursor/skills/<name> → 库` |
 | `codex` | `Codex` | 可在用 |
 | `gemini` | `Gemini` | 可在用；`~/.gemini/skills`（不是 Antigravity） |
 | `grokbuild` | `GrokBuild` | 可在用 |
@@ -164,18 +165,18 @@ description 从来源 `SKILL.md` 派生；catalog 不维护第二份 metadata。
 | `antigravity` | 新身份 | 可在用 |
 | — | `ClaudeDesktop` / `OpenClaw` | v1 不用 |
 
-除 `claude-cursor` 外，现网路径以 `SkillService::get_app_skills_dir` 为 SSOT（单元测试固定）。`antigravity` 为 `~/.gemini/antigravity-cli/skills/<name>`。
+除 `cursor` / `antigravity` 外，现网路径以 `SkillService::get_app_skills_dir` 为 SSOT（单元测试固定）。`antigravity` 为 `~/.gemini/antigravity-cli/skills/<name>`。`claude` 就是 Claude Code 的逐条投影根，不再绕开它。
 
-**`claude-cursor` 布局**（在用时必须如此）。现网 `get_app_skills_dir(Claude)` 仍指向 `~/.claude/skills`（或其 settings override），**那不是投影写入目标**。废弃向该目录逐条写入：
+**Claude 与 Cursor 各自投影。** 勾选的是 Agent，不是历史耦合布局。两边都在用时各自写到同一中央库，互不耦合；只勾其中一个则只写那一侧。旧 token `claude-cursor` fail closed，提示改用 `claude` / `cursor`。
 
 ```text
-~/.cursor/skills/<name>  → 库/<name>
-~/.claude/skills         → ~/.cursor/skills
+~/.cursor/skills/<name>  → 库/<name>     （仅 cursor 在用）
+~/.claude/skills/<name>  → 库/<name>     （仅 claude 在用）
 ```
 
-第一次技能候选**只扫已勾为在用的** Agent 目录（及其中已有的中央库投影）。未勾的目录、货架、其它发现源不进候选。只生成名单，不自动进库。同名 hash 不同则标冲突，确认被拒，直到人处理。
+历史遗留：若 `~/.claude/skills` 已是指向 Cursor 的整目录 symlink，**在投影 Claude 时**拆掉该链接（只删链接，不删 Cursor 内容），建成真实目录再逐条投影。外来真实目录仍 fail closed。未勾 Claude 时不碰这条历史链接。
 
-`claude-cursor` 是一个在用单位，扫这两处，不拆成两个 Agent：`~/.cursor/skills`；以及 Claude 侧 skills 根（默认 `~/.claude/skills`，若 settings override 则用那个根）里**尚未**变成「整目录 → `~/.cursor/skills`」symlink 时的逐条技能。同名同 hash 算一份；不同则冲突。
+第一次技能候选**只扫已勾为在用的** Agent 各自投影根（及其中已有的中央库投影）。未勾的目录、货架、其它发现源不进候选。只生成名单，不自动进库。同名 hash 不同则标冲突，确认被拒，直到人处理。
 
 ### Ownership marker
 
@@ -189,7 +190,7 @@ description 从来源 `SKILL.md` 派生；catalog 不维护第二份 metadata。
     "repo": "https://github.com/youxuanxue/agent-skills.git",
     "revision": "<40-char-sha>"
   },
-  "in_use_agents": ["claude-cursor", "codex"],
+  "in_use_agents": ["claude", "cursor", "codex"],
   "follow_catalog": true
 }
 ```
@@ -266,7 +267,7 @@ dev-rules **保留**项目 `.cursor/skills` 编辑入口；**删除**的是 home
 
 1. **agent-skills** README writer 声明先合（[youxuanxue/agent-skills#66](https://github.com/youxuanxue/agent-skills/pull/66)）。货架门口不得还挂旧 writer。
 2. **本文件 merge。** 进 main 前 `approved_by` 必须是具体人名（R5），禁止先合再翻。
-3. **cc-switch Core**：catalog reader → 库成员 / 在用名单 → 本节全部 CLI（含 `open` / import / follow-catalog / upgrade，及未开张拒写）→ Cursor/Antigravity + `claude-cursor` 布局（不以 `get_app_skills_dir(Claude)` 为写入目标）→ UI（库 + 在用 Agent + 诊断，无矩阵开关）。
+3. **cc-switch Core**：catalog reader → 库成员 / 在用名单 → 本节全部 CLI（含 `open` / import / follow-catalog / upgrade，及未开张拒写）→ `claude` / `cursor` / Antigravity 各自逐条投影 → UI（库 + 在用 Agent + 诊断，无矩阵开关）。
 4. **dev-rules / Twin**：inactive contract（小 PR，绑定本文件）。
 5. **在用 Agent 逐个入伙** → **删除 legacy writer**。
 
@@ -279,7 +280,7 @@ dev-rules **保留**项目 `.cursor/skills` 编辑入口；**删除**的是 home
 - 装/卸/导入/自建/入伙：可一批一笔；进库不看来源，全部在用 Agent 写齐才算成功，半截不留。provenance 只有两种：货架 `install` = `catalog-managed`，其余 = `local-draft`。无 `bundled`。
 - 改 `local-draft` 存盘即再投影；写不齐则库内那份回滚，不留半截改。
 - 第一次先勾在用 Agent（默认全不勾，看见过不预勾），再 `open` 确认工作台；一个都不勾 = 未开张；去掉最后一个在用 = 关张（账清空，不拆链接，旧库目录不当候选；目录里还在的算现场）；有现场不混 `recommended`；同名内容不一致则整笔停，不替人挑。未开张时除 `open` 外写库命令拒绝；`agents add` 只在已开张时入伙。
-- `claude-cursor` 在用时按本节布局投影，不把 `get_app_skills_dir(Claude)` 当写入目标。第一次候选按本节扫 Cursor 侧 + 未耦合的 Claude 侧逐条，同名同 hash 算一份。
+- `claude` 与 `cursor` 是两个在用单位。各自扫自己的投影根、各自逐条写到中央库。历史整目录 symlink 只在投影 Claude 时拆掉。`claude-cursor` 不是合法 token。
 - 改在用名单或库成员的成功笔立刻重写 marker；关张清空。不靠事后 `sync` 才挂牌。
 - catalog 新增默认不进库。
 - 货架换版只有总闸「自动同步」（默认开）；关掉则钉死，显式 upgrade。不按技能设闸。自动跟上失败整笔回滚。
@@ -289,8 +290,8 @@ dev-rules **保留**项目 `.cursor/skills` 编辑入口；**删除**的是 home
 
 ## 验证（Core 实现 PR 承担）
 
-- **单元**：catalog 解析、库成员、在用名单、`claude-cursor` 布局且不写 `get_app_skills_dir(Claude)`、`claude-cursor` 第一次扫两侧且同名同 hash 合一、Pi 在用后跟库、整笔失败、foreign、先勾 Agent 再出候选、默认不预勾、零勾选不算开张、只有 `open` 能开张、`open` 成功即写 marker、未开张时 install/import/sync/upgrade/follow-catalog/agents add 拒绝、已开张再 `open` 拒绝、去掉最后一个为关张且清空 marker、关张不拆链接、关张后旧库目录不当候选且不挡住 `recommended`、空目录才用 `recommended`、catalog 新增不进库、follow_catalog 默认开、关掉则 sync 不换版、自动跟上失败整笔回滚、`local-draft` 进库即投影且不跟总闸、导入失败整批不动、改 `local-draft` 失败则库内回滚、第一次现场标 `local-draft` 且不对 hash 提升、空机器 `recommended` 标 `catalog-managed`、无 `bundled`、第一次同名 hash 不同则确认失败且库不动、`doctor --json` 含 `open`/`library`/`legacy_writers_stopped`。
-- **集成**：先定在用再 `open` 且 marker 已挂；有现场只确认已用项且进库为 `local-draft`；`claude-cursor` 两侧同名同 hash 不拆成两个 Agent；同名冲突整笔停；关张后 `agents add` 拒绝、只能再 `open`；入伙对齐；一批装/卸/导入中断后收敛且半截不留；在用 Agent 失败则库不变、marker 不变；改 `local-draft` 投影失败后库与 Agent 都回到存盘前；关张后再开张不把旧库名单当候选，目录里还在的链接仍按现场提。
+- **单元**：catalog 解析、库成员、在用名单、`claude`/`cursor` 各自逐条投影且 Claude 根不是整目录 symlink、只开一侧不写另一侧、历史 Claude→Cursor 整目录 symlink 在开 Claude 时被拆掉、旧 token `claude-cursor` 拒绝、Pi 在用后跟库、整笔失败、foreign、先勾 Agent 再出候选、默认不预勾、零勾选不算开张、只有 `open` 能开张、`open` 成功即写 marker、未开张时 install/import/sync/upgrade/follow-catalog/agents add 拒绝、已开张再 `open` 拒绝、去掉最后一个为关张且清空 marker、关张不拆链接、关张后旧库目录不当候选且不挡住 `recommended`、空目录才用 `recommended`、catalog 新增不进库、follow_catalog 默认开、关掉则 sync 不换版、自动跟上失败整笔回滚、`local-draft` 进库即投影且不跟总闸、导入失败整批不动、改 `local-draft` 失败则库内回滚、第一次现场标 `local-draft` 且不对 hash 提升、空机器 `recommended` 标 `catalog-managed`、无 `bundled`、第一次同名 hash 不同则确认失败且库不动、`doctor --json` 含 `open`/`library`/`legacy_writers_stopped`。
+- **集成**：先定在用再 `open` 且 marker 已挂；有现场只确认已用项且进库为 `local-draft`；同时勾 `claude`+`cursor` 且同名同 hash 各投影一份；同名冲突整笔停；关张后 `agents add` 拒绝、只能再 `open`；入伙对齐；一批装/卸/导入中断后收敛且半截不留；在用 Agent 失败则库不变、marker 不变；改 `local-draft` 投影失败后库与 Agent 都回到存盘前；关张后再开张不把旧库名单当候选，目录里还在的链接仍按现场提。
 - **主机**：`doctor --json` 对当前在用名单 exit 0，字段与本节契约一致；屏幕上的库与 doctor 一致。
 
 ---

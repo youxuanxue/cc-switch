@@ -8,10 +8,7 @@ use crate::database::Database;
 use crate::error::AppError;
 use crate::services::skill::SkillService;
 
-use super::agent::{
-    claude_skills_root, cursor_skills_dir, is_dir_symlink_to, parse_agents, remove_dir_symlink,
-    sanitize_skill_name, AgentToken,
-};
+use super::agent::{parse_agents, remove_dir_symlink, sanitize_skill_name, AgentToken};
 use super::catalog::{load_catalog, LoadedCatalog};
 use super::state::{
     clear_marker, load_state, require_open, save_state, write_marker, CatalogRef, ControlState,
@@ -491,18 +488,7 @@ fn scan_field_skills(
 }
 
 fn scan_roots(token: AgentToken) -> Result<Vec<PathBuf>, AppError> {
-    match token {
-        AgentToken::ClaudeCursor => {
-            let cursor = cursor_skills_dir();
-            let claude = claude_skills_root()?;
-            if is_dir_symlink_to(&claude, &cursor) {
-                Ok(vec![cursor])
-            } else {
-                Ok(vec![cursor, claude])
-            }
-        }
-        other => Ok(vec![other.projection_root()?]),
-    }
+    Ok(vec![token.projection_root()?])
 }
 
 fn resolve_open_source(
@@ -578,70 +564,30 @@ fn library_skill_dir(name: &str) -> Result<PathBuf, AppError> {
 fn project_all(state: &ControlState) -> Result<(), AppError> {
     for token_s in &state.in_use_agents {
         let token = AgentToken::parse(token_s)?;
-        match token {
-            AgentToken::ClaudeCursor => project_claude_cursor(state)?,
-            other => {
-                let root = other.projection_root()?;
-                fs::create_dir_all(&root).map_err(|e| AppError::io(&root, e))?;
-                for skill in &state.library {
-                    let dest = root.join(&skill.name);
-                    let src = library_skill_dir(&skill.name)?;
-                    replace_with_symlink(&dest, &src)?;
-                }
-            }
+        let root = token.projection_root()?;
+        ensure_real_projection_root(&root)?;
+        for skill in &state.library {
+            let dest = root.join(&skill.name);
+            let src = library_skill_dir(&skill.name)?;
+            replace_with_symlink(&dest, &src)?;
         }
     }
     Ok(())
 }
 
-fn project_claude_cursor(state: &ControlState) -> Result<(), AppError> {
-    let cursor = cursor_skills_dir();
-    fs::create_dir_all(&cursor).map_err(|e| AppError::io(&cursor, e))?;
-    for skill in &state.library {
-        let dest = cursor.join(&skill.name);
-        let src = library_skill_dir(&skill.name)?;
-        replace_with_symlink(&dest, &src)?;
-    }
-    let claude = claude_skills_root()?;
-    if is_dir_symlink_to(&claude, &cursor) {
-        return Ok(());
-    }
-    if claude.exists() {
-        let meta = fs::symlink_metadata(&claude).map_err(|e| AppError::io(&claude, e))?;
+fn ensure_real_projection_root(root: &Path) -> Result<(), AppError> {
+    if let Ok(meta) = fs::symlink_metadata(root) {
         if meta.file_type().is_symlink() {
-            remove_dir_symlink(&claude)?;
-        } else if meta.is_dir() {
-            let owned: HashSet<_> = state.library.iter().map(|s| s.name.as_str()).collect();
-            for entry in fs::read_dir(&claude).map_err(|e| AppError::io(&claude, e))? {
-                let entry = entry.map_err(|e| AppError::io(&claude, e))?;
-                let name = entry.file_name();
-                let name = name.to_string_lossy();
-                if !owned.contains(name.as_ref()) {
-                    return Err(AppError::InvalidInput(format!(
-                        "Claude skills 根含外来物，拒绝替换为 symlink: {name}"
-                    )));
-                }
-            }
-            fs::remove_dir_all(&claude).map_err(|e| AppError::io(&claude, e))?;
-        } else {
-            return Err(AppError::InvalidInput(format!(
-                "Claude skills 根被占用: {}",
-                claude.display()
-            )));
+            remove_dir_symlink(root)?;
         }
-    } else if let Some(parent) = claude.parent() {
-        fs::create_dir_all(parent).map_err(|e| AppError::io(parent, e))?;
     }
-    symlink_dir(&cursor, &claude)
+    fs::create_dir_all(root).map_err(|e| AppError::io(root, e))
 }
 
 fn remove_projections_for_skill(state: &ControlState, name: &str) -> Result<(), AppError> {
     for token_s in &state.in_use_agents {
         let token = AgentToken::parse(token_s)?;
-        let dest = match token {
-            AgentToken::ClaudeCursor => cursor_skills_dir().join(name),
-            other => other.projection_root()?.join(name),
-        };
+        let dest = token.projection_root()?.join(name);
         if dest.symlink_metadata().is_ok() {
             let meta = fs::symlink_metadata(&dest).map_err(|e| AppError::io(&dest, e))?;
             if meta.file_type().is_symlink() {
@@ -727,10 +673,7 @@ fn inspect_runtime(
     let lib_names: HashSet<_> = state.library.iter().map(|s| s.name.as_str()).collect();
     for token_s in &state.in_use_agents {
         let token = AgentToken::parse(token_s)?;
-        let roots = match token {
-            AgentToken::ClaudeCursor => vec![cursor_skills_dir()],
-            other => vec![other.projection_root()?],
-        };
+        let roots = vec![token.projection_root()?];
         let mut aligned = 0usize;
         let mut desc_chars = 0usize;
         let mut seen = HashSet::new();
