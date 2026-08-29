@@ -1,13 +1,13 @@
 import { useEffect, useRef } from "react";
 import { Github, ShieldCheck } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Badge } from "@/components/ui/badge";
 import { CodexIcon } from "@/components/BrandIcons";
 import { CopilotAuthSection } from "@/components/providers/forms/CopilotAuthSection";
 import { CodexOAuthSection } from "@/components/providers/forms/CodexOAuthSection";
 import type { ManagedAuthProvider } from "@/lib/api";
 import { XaiOAuthSection } from "@/components/providers/forms/XaiOAuthSection";
 import { ProviderIcon } from "@/components/ProviderIcon";
+import { CursorOfficialAuthSection } from "@/components/settings/CursorOfficialAuthSection";
 
 interface AuthCenterPanelProps {
   authScrollTarget?: ManagedAuthProvider | null;
@@ -46,28 +46,24 @@ export function AuthCenterPanel({ authScrollTarget }: AuthCenterPanelProps) {
   return (
     <div className="space-y-6">
       <section className="rounded-xl border border-border/60 bg-card/60 p-6">
-        <div className="flex items-start justify-between gap-4">
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <ShieldCheck className="h-5 w-5 text-primary" />
-              <h3 className="text-base font-semibold">
-                {t("settings.authCenter.title", {
-                  defaultValue: "OAuth 认证中心",
-                })}
-              </h3>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              {t("settings.authCenter.description", {
-                defaultValue:
-                  "在 Claude Code 中使用您的其他订阅，请注意合规风险。",
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-5 w-5 text-primary" />
+            <h3 className="text-base font-semibold">
+              {t("settings.authCenter.title", {
+                defaultValue: "官方认证中心",
               })}
-            </p>
+            </h3>
           </div>
-          <Badge variant="secondary">
-            {t("settings.authCenter.beta", { defaultValue: "Beta" })}
-          </Badge>
+          <p className="text-sm text-muted-foreground">
+            {t("settings.authCenter.description", {
+              defaultValue: "集中管理各工具的官方登录与订阅认证。",
+            })}
+          </p>
         </div>
       </section>
+
+      <CursorOfficialAuthSection />
 
       <section
         ref={copilotSectionRef}

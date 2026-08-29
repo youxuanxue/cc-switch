@@ -316,10 +316,28 @@ pub async fn set_auto_launch(enabled: bool) -> Result<bool, String> {
 mod tests {
     use super::merge_settings_for_save;
     use crate::settings::{
-        AppSettings, CodexOfficialHistoryUnifyMigration, CodexProviderTemplateMigration,
-        CodexThirdPartyHistoryProviderBucketMigration, LocalMigrations, S3SyncSettings,
+        settings_for_frontend, AppSettings, CodexOfficialHistoryUnifyMigration,
+        CodexProviderTemplateMigration, CodexThirdPartyHistoryProviderBucketMigration,
+        CursorOfficialAuthMode, CursorOfficialSettings, LocalMigrations, S3SyncSettings,
         WebDavSyncSettings,
     };
+
+    #[test]
+    fn us003_generic_settings_redacts_cursor_credentials() {
+        let existing = AppSettings {
+            cursor_official: Some(CursorOfficialSettings {
+                auth_mode: CursorOfficialAuthMode::UserApiKey,
+                user_api_key: Some("cursor-secret".to_string()),
+            }),
+            ..AppSettings::default()
+        };
+
+        let visible = settings_for_frontend(existing.clone());
+        assert!(visible.cursor_official.is_none());
+        let visible_json = serde_json::to_string(&visible).unwrap();
+        assert!(!visible_json.contains("cursor-secret"));
+        assert!(!visible_json.contains("cursorOfficial"));
+    }
 
     #[test]
     fn save_settings_should_preserve_existing_webdav_when_payload_omits_it() {

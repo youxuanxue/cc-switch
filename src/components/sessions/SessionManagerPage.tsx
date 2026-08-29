@@ -59,8 +59,11 @@ import {
 } from "@/components/ui/tooltip";
 import { extractErrorMessage } from "@/utils/errorUtils";
 import { isMac } from "@/lib/platform";
+import { useCursorSessionIndex } from "@/hooks/useCursorSessionIndex";
 import { ProviderIcon } from "@/components/ProviderIcon";
 import { SessionItem } from "./SessionItem";
+import { CursorResumeGate } from "./CursorResumeGate";
+import { isSessionDeletable } from "./sessionCapabilities";
 import { SessionMessageItem } from "./SessionMessageItem";
 import { SessionTocDialog, SessionTocSidebar } from "./SessionToc";
 import {
@@ -87,6 +90,7 @@ const SESSION_GROUP_EXPANSION_STORAGE_KEY =
 
 type ProviderFilter =
   | "all"
+  | "cursor"
   | "codex"
   | "grokbuild"
   | "claude"
@@ -218,12 +222,17 @@ export function SessionManagerPage({ appId }: { appId: string }) {
   );
   const [isBatchDeleting, setIsBatchDeleting] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
+  const exitSelectionMode = useCallback(() => {
+    setSelectionMode(false);
+    setSelectedSessionKeys(new Set());
+  }, []);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   const [search, setSearch] = useState("");
   const [providerFilter, setProviderFilter] = useState<ProviderFilter>(
     appId as ProviderFilter,
   );
+  const cursorSessionIndex = useCursorSessionIndex(providerFilter === "cursor");
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [listViewMode, setListViewMode] = useState<SessionListViewMode>(
     readInitialSessionListViewMode,
@@ -336,15 +345,24 @@ export function SessionManagerPage({ appId }: { appId: string }) {
           defaultValue: "列表",
         });
 
+  const isCursorSession = selectedSession?.providerId === "cursor";
+  const cursorIndexUnavailableReason =
+    providerFilter === "cursor" &&
+    cursorSessionIndex.status?.state === "indexUnavailable"
+      ? cursorSessionIndex.status.reason
+      : providerFilter === "cursor" && cursorSessionIndex.isError
+        ? extractErrorMessage(cursorSessionIndex.error)
+        : null;
+
   const { data: messages = [], isLoading: isLoadingMessages } =
     useSessionMessagesQuery(
-      selectedSession?.providerId,
-      selectedSession?.sourcePath,
+      isCursorSession ? undefined : selectedSession?.providerId,
+      isCursorSession ? undefined : selectedSession?.sourcePath,
     );
   const { data: resumeState } = useSessionResumeStateQuery(
-    selectedSession?.providerId,
-    selectedSession?.sessionId,
-    selectedSession?.sourcePath,
+    isCursorSession ? undefined : selectedSession?.providerId,
+    isCursorSession ? undefined : selectedSession?.sessionId,
+    isCursorSession ? undefined : selectedSession?.sourcePath,
   );
   const resumeCopy = getSessionResumeI18nKeys(resumeState?.appearance);
   const deleteSessionMutation = useDeleteSessionMutation();
@@ -496,7 +514,7 @@ export function SessionManagerPage({ appId }: { appId: string }) {
       return;
     }
 
-    const targets = deleteTargets.filter((session) => session.sourcePath);
+    const targets = deleteTargets.filter(isSessionDeletable);
     setDeleteTargets(null);
 
     if (targets.length === 0) {
@@ -597,8 +615,18 @@ export function SessionManagerPage({ appId }: { appId: string }) {
   };
 
   const deletableFilteredSessions = useMemo(
-    () => filteredSessions.filter((session) => Boolean(session.sourcePath)),
+    () => filteredSessions.filter(isSessionDeletable),
     [filteredSessions],
+  );
+
+  const hasDeletableSessionsForProvider = useMemo(
+    () =>
+      sessions.some(
+        (session) =>
+          (providerFilter === "all" || session.providerId === providerFilter) &&
+          isSessionDeletable(session),
+      ),
+    [providerFilter, sessions],
   );
 
   const selectedSessions = useMemo(
@@ -610,9 +638,15 @@ export function SessionManagerPage({ appId }: { appId: string }) {
   );
 
   const selectedDeletableSessions = useMemo(
-    () => selectedSessions.filter((session) => Boolean(session.sourcePath)),
+    () => selectedSessions.filter(isSessionDeletable),
     [selectedSessions],
   );
+
+  useEffect(() => {
+    if (selectionMode && !hasDeletableSessionsForProvider) {
+      exitSelectionMode();
+    }
+  }, [exitSelectionMode, hasDeletableSessionsForProvider, selectionMode]);
 
   useEffect(() => {
     if (!selectionMode) return;
@@ -646,9 +680,7 @@ export function SessionManagerPage({ appId }: { appId: string }) {
   const getGroupSelectionState = (
     groupSessions: SessionMeta[],
   ): GroupSelectionState => {
-    const selectableSessions = groupSessions.filter((session) =>
-      Boolean(session.sourcePath),
-    );
+    const selectableSessions = groupSessions.filter(isSessionDeletable);
     const selectedCount = selectableSessions.filter((session) =>
       selectedSessionKeys.has(getSessionKey(session)),
     ).length;
@@ -666,7 +698,7 @@ export function SessionManagerPage({ appId }: { appId: string }) {
   };
 
   const toggleSessionChecked = (session: SessionMeta, checked: boolean) => {
-    if (!session.sourcePath) return;
+    if (!isSessionDeletable(session)) return;
     const key = getSessionKey(session);
     setSelectedSessionKeys((current) => {
       const next = new Set(current);
@@ -683,9 +715,7 @@ export function SessionManagerPage({ appId }: { appId: string }) {
     groupSessions: SessionMeta[],
     checked: boolean,
   ) => {
-    const selectableSessions = groupSessions.filter((session) =>
-      Boolean(session.sourcePath),
-    );
+    const selectableSessions = groupSessions.filter(isSessionDeletable);
     if (selectableSessions.length === 0) return;
 
     setSelectedSessionKeys((current) => {
@@ -740,10 +770,9 @@ export function SessionManagerPage({ appId }: { appId: string }) {
         key={sessionKey}
         session={session}
         isSelected={isSelected}
-        selectionMode={selectionMode}
+        showSelectionControl={selectionMode && isSessionDeletable(session)}
         searchQuery={search}
         isChecked={selectedSessionKeys.has(sessionKey)}
-        isCheckDisabled={!session.sourcePath}
         onSelect={setSelectedKey}
         onToggleChecked={(checked) => toggleSessionChecked(session, checked)}
       />
@@ -756,7 +785,7 @@ export function SessionManagerPage({ appId }: { appId: string }) {
     variant: "secondary" | "outline",
   ) => (
     <Badge variant={variant} className="shrink-0 text-xs">
-      {selectionMode
+      {selectionMode && selectionState.selectableCount > 0
         ? `${selectionState.selectedCount}/${selectionState.selectableCount}`
         : totalCount}
     </Badge>
@@ -767,12 +796,11 @@ export function SessionManagerPage({ appId }: { appId: string }) {
     providerLabel: string,
     selectionState: GroupSelectionState,
   ) => {
-    if (!selectionMode) return null;
+    if (!selectionMode || selectionState.selectableCount === 0) return null;
 
     return (
       <Checkbox
         checked={selectionState.checked}
-        disabled={selectionState.selectableCount === 0}
         aria-label={t("sessionManager.selectProviderGroupForBatch", {
           defaultValue: "选择 {{provider}} 供应商分组内会话",
           provider: providerLabel,
@@ -792,12 +820,11 @@ export function SessionManagerPage({ appId }: { appId: string }) {
     directoryGroup: SessionDirectoryGroup,
     selectionState: GroupSelectionState,
   ) => {
-    if (!selectionMode) return null;
+    if (!selectionMode || selectionState.selectableCount === 0) return null;
 
     return (
       <Checkbox
         checked={selectionState.checked}
-        disabled={selectionState.selectableCount === 0}
         aria-label={t("sessionManager.selectDirectoryGroupForBatch", {
           defaultValue: "选择 {{directory}} 目录分组内会话",
           directory: directoryGroup.label,
@@ -832,11 +859,6 @@ export function SessionManagerPage({ appId }: { appId: string }) {
   const openBatchDeleteDialog = () => {
     if (selectedDeletableSessions.length === 0) return;
     setDeleteTargets(selectedDeletableSessions);
-  };
-
-  const exitSelectionMode = () => {
-    setSelectionMode(false);
-    setSelectedSessionKeys(new Set());
   };
 
   return (
@@ -1151,6 +1173,16 @@ export function SessionManagerPage({ appId }: { appId: string }) {
                                 </span>
                               </div>
                             </SelectItem>
+                            <SelectItem value="cursor">
+                              <div className="flex items-center gap-2">
+                                <ProviderIcon
+                                  icon={getProviderIconName("cursor")}
+                                  name="cursor"
+                                  size={14}
+                                />
+                                <span>Cursor</span>
+                              </div>
+                            </SelectItem>
                             <SelectItem value="codex">
                               <div className="flex items-center gap-2">
                                 <ProviderIcon
@@ -1226,7 +1258,12 @@ export function SessionManagerPage({ appId }: { appId: string }) {
                               variant="ghost"
                               size="icon"
                               className="size-7"
-                              onClick={() => void refetch()}
+                              onClick={() => {
+                                void refetch();
+                                if (providerFilter === "cursor") {
+                                  void cursorSessionIndex.refresh();
+                                }
+                              }}
                             >
                               <RefreshCw className="size-3.5" />
                             </Button>
@@ -1309,17 +1346,38 @@ export function SessionManagerPage({ appId }: { appId: string }) {
               <CardContent className="flex-1 min-h-0 p-0">
                 <ScrollArea className="h-full">
                   <div className="p-2">
-                    {isLoading ? (
+                    {isLoading ||
+                    (providerFilter === "cursor" &&
+                      cursorSessionIndex.isLoading) ? (
                       <div className="flex items-center justify-center py-12">
                         <RefreshCw className="size-5 animate-spin text-muted-foreground" />
                       </div>
                     ) : filteredSessions.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center py-12 text-center">
-                        <MessageSquare className="size-8 text-muted-foreground/50 mb-2" />
-                        <p className="text-sm text-muted-foreground">
-                          {t("sessionManager.noSessions")}
-                        </p>
-                      </div>
+                      cursorIndexUnavailableReason ? (
+                        <div
+                          role="alert"
+                          className="mx-2 my-4 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-3 text-amber-800 dark:text-amber-200"
+                        >
+                          <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                          <div className="min-w-0 space-y-1">
+                            <p className="text-sm font-medium">
+                              {t("sessionManager.cursorIndexUnavailable", {
+                                defaultValue: "Cursor 会话索引不可用",
+                              })}
+                            </p>
+                            <p className="break-words text-xs">
+                              {cursorIndexUnavailableReason}
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center py-12 text-center">
+                          <MessageSquare className="size-8 text-muted-foreground/50 mb-2" />
+                          <p className="text-sm text-muted-foreground">
+                            {t("sessionManager.noSessions")}
+                          </p>
+                        </div>
+                      )
                     ) : listViewMode === "grouped" ? (
                       <div className="space-y-2">
                         {groupedSessions.map((providerGroup) => {
@@ -1538,39 +1596,47 @@ export function SessionManagerPage({ appId }: { appId: string }) {
                               )}
                             </span>
                           </div>
-                          {selectedSession.projectDir && (
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    void handleCopy(
-                                      selectedSession.projectDir!,
-                                      t("sessionManager.projectDirCopied"),
-                                    )
-                                  }
-                                  className="flex items-center gap-1 hover:text-foreground transition-colors"
+                          {selectedSession.projectDir &&
+                            (isCursorSession ? (
+                              <div className="flex items-center gap-1">
+                                <FolderOpen className="size-3" />
+                                <span className="truncate max-w-[200px]">
+                                  {getBaseName(selectedSession.projectDir)}
+                                </span>
+                              </div>
+                            ) : (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      void handleCopy(
+                                        selectedSession.projectDir!,
+                                        t("sessionManager.projectDirCopied"),
+                                      )
+                                    }
+                                    className="flex items-center gap-1 hover:text-foreground transition-colors"
+                                  >
+                                    <FolderOpen className="size-3" />
+                                    <span className="truncate max-w-[200px]">
+                                      {getBaseName(selectedSession.projectDir)}
+                                    </span>
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent
+                                  side="bottom"
+                                  className="max-w-xs"
                                 >
-                                  <FolderOpen className="size-3" />
-                                  <span className="truncate max-w-[200px]">
-                                    {getBaseName(selectedSession.projectDir)}
-                                  </span>
-                                </button>
-                              </TooltipTrigger>
-                              <TooltipContent
-                                side="bottom"
-                                className="max-w-xs"
-                              >
-                                <p className="font-mono text-xs break-all">
-                                  {selectedSession.projectDir}
-                                </p>
-                                <p className="text-muted-foreground mt-1">
-                                  {t("sessionManager.clickToCopyPath")}
-                                </p>
-                              </TooltipContent>
-                            </Tooltip>
-                          )}
-                          {selectedSession.sourcePath && (
+                                  <p className="font-mono text-xs break-all">
+                                    {selectedSession.projectDir}
+                                  </p>
+                                  <p className="text-muted-foreground mt-1">
+                                    {t("sessionManager.clickToCopyPath")}
+                                  </p>
+                                </TooltipContent>
+                              </Tooltip>
+                            ))}
+                          {!isCursorSession && selectedSession.sourcePath && (
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <button
@@ -1607,7 +1673,7 @@ export function SessionManagerPage({ appId }: { appId: string }) {
 
                       {/* 右侧：操作按钮组 */}
                       <div className="flex items-center gap-2 shrink-0">
-                        {isMac() && (
+                        {!isCursorSession && isMac() && (
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <Button
@@ -1631,42 +1697,42 @@ export function SessionManagerPage({ appId }: { appId: string }) {
                             </TooltipContent>
                           </Tooltip>
                         )}
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              className="gap-1.5"
-                              onClick={() =>
-                                setDeleteTargets([selectedSession])
-                              }
-                              disabled={
-                                !selectedSession.sourcePath || isDeleting
-                              }
-                            >
-                              <Trash2 className="size-3.5" />
-                              <span className="hidden sm:inline">
-                                {isDeleting
-                                  ? t("sessionManager.deleting", {
-                                      defaultValue: "删除中...",
-                                    })
-                                  : t("sessionManager.delete", {
-                                      defaultValue: "删除会话",
-                                    })}
-                              </span>
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            {t("sessionManager.deleteTooltip", {
-                              defaultValue: "永久删除此本地会话记录",
-                            })}
-                          </TooltipContent>
-                        </Tooltip>
+                        {isSessionDeletable(selectedSession) ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                className="gap-1.5"
+                                onClick={() =>
+                                  setDeleteTargets([selectedSession])
+                                }
+                                disabled={isDeleting}
+                              >
+                                <Trash2 className="size-3.5" />
+                                <span className="hidden sm:inline">
+                                  {isDeleting
+                                    ? t("sessionManager.deleting", {
+                                        defaultValue: "删除中...",
+                                      })
+                                    : t("sessionManager.delete", {
+                                        defaultValue: "删除会话",
+                                      })}
+                                </span>
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              {t("sessionManager.deleteTooltip", {
+                                defaultValue: "永久删除此本地会话记录",
+                              })}
+                            </TooltipContent>
+                          </Tooltip>
+                        ) : null}
                       </div>
                     </div>
 
                     {/* 恢复命令预览 */}
-                    {selectedSession.resumeCommand && (
+                    {!isCursorSession && selectedSession.resumeCommand && (
                       <div className="mt-3 flex items-center gap-2">
                         <div className="flex-1 rounded-md bg-muted/60 px-3 py-1.5 font-mono text-xs text-muted-foreground truncate">
                           {selectedSession.resumeCommand}
@@ -1697,91 +1763,98 @@ export function SessionManagerPage({ appId }: { appId: string }) {
                     )}
                   </CardHeader>
 
-                  {/* 消息列表区域 */}
-                  <CardContent className="flex-1 min-h-0 p-0">
-                    <div className="flex h-full min-w-0">
-                      {/* 消息列表 */}
-                      <div className="flex-1 min-w-0 flex flex-col">
-                        <div className="px-4 pt-4 pb-2 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <MessageSquare className="size-4 text-muted-foreground" />
-                            <span className="text-sm font-medium">
-                              {t("sessionManager.conversationHistory", {
-                                defaultValue: "对话记录",
-                              })}
-                            </span>
-                            <Badge variant="secondary" className="text-xs">
-                              {messages.length}
-                            </Badge>
+                  {isCursorSession ? (
+                    <CardContent className="flex-1 min-h-0 p-0">
+                      <CursorResumeGate session={selectedSession} />
+                    </CardContent>
+                  ) : (
+                    /* 消息列表区域 */
+                    <CardContent className="flex-1 min-h-0 p-0">
+                      <div className="flex h-full min-w-0">
+                        {/* 消息列表 */}
+                        <div className="flex-1 min-w-0 flex flex-col">
+                          <div className="px-4 pt-4 pb-2 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <MessageSquare className="size-4 text-muted-foreground" />
+                              <span className="text-sm font-medium">
+                                {t("sessionManager.conversationHistory", {
+                                  defaultValue: "对话记录",
+                                })}
+                              </span>
+                              <Badge variant="secondary" className="text-xs">
+                                {messages.length}
+                              </Badge>
+                            </div>
+                          </div>
+                          <div
+                            ref={scrollContainerRef}
+                            className="flex-1 overflow-y-auto px-4 pb-4 min-w-0"
+                          >
+                            {isLoadingMessages ? (
+                              <div className="flex items-center justify-center py-12">
+                                <RefreshCw className="size-5 animate-spin text-muted-foreground" />
+                              </div>
+                            ) : messages.length === 0 ? (
+                              <div className="flex flex-col items-center justify-center py-12 text-center">
+                                <MessageSquare className="size-8 text-muted-foreground/50 mb-2" />
+                                <p className="text-sm text-muted-foreground">
+                                  {t("sessionManager.emptySession")}
+                                </p>
+                              </div>
+                            ) : (
+                              <div
+                                style={{
+                                  height: virtualizer.getTotalSize(),
+                                  position: "relative",
+                                }}
+                              >
+                                {virtualizer
+                                  .getVirtualItems()
+                                  .map((virtualRow) => (
+                                    <div
+                                      key={virtualRow.key}
+                                      data-index={virtualRow.index}
+                                      ref={virtualizer.measureElement}
+                                      style={{
+                                        position: "absolute",
+                                        top: 0,
+                                        left: 0,
+                                        width: "100%",
+                                        transform: `translateY(${virtualRow.start}px)`,
+                                      }}
+                                    >
+                                      <SessionMessageItem
+                                        message={messages[virtualRow.index]}
+                                        isActive={
+                                          activeMessageIndex ===
+                                          virtualRow.index
+                                        }
+                                        searchQuery={search}
+                                        onCopy={handleMessageCopy}
+                                      />
+                                    </div>
+                                  ))}
+                              </div>
+                            )}
                           </div>
                         </div>
-                        <div
-                          ref={scrollContainerRef}
-                          className="flex-1 overflow-y-auto px-4 pb-4 min-w-0"
-                        >
-                          {isLoadingMessages ? (
-                            <div className="flex items-center justify-center py-12">
-                              <RefreshCw className="size-5 animate-spin text-muted-foreground" />
-                            </div>
-                          ) : messages.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center py-12 text-center">
-                              <MessageSquare className="size-8 text-muted-foreground/50 mb-2" />
-                              <p className="text-sm text-muted-foreground">
-                                {t("sessionManager.emptySession")}
-                              </p>
-                            </div>
-                          ) : (
-                            <div
-                              style={{
-                                height: virtualizer.getTotalSize(),
-                                position: "relative",
-                              }}
-                            >
-                              {virtualizer
-                                .getVirtualItems()
-                                .map((virtualRow) => (
-                                  <div
-                                    key={virtualRow.key}
-                                    data-index={virtualRow.index}
-                                    ref={virtualizer.measureElement}
-                                    style={{
-                                      position: "absolute",
-                                      top: 0,
-                                      left: 0,
-                                      width: "100%",
-                                      transform: `translateY(${virtualRow.start}px)`,
-                                    }}
-                                  >
-                                    <SessionMessageItem
-                                      message={messages[virtualRow.index]}
-                                      isActive={
-                                        activeMessageIndex === virtualRow.index
-                                      }
-                                      searchQuery={search}
-                                      onCopy={handleMessageCopy}
-                                    />
-                                  </div>
-                                ))}
-                            </div>
-                          )}
-                        </div>
+
+                        {/* 右侧目录 - 类似少数派 (大屏幕) */}
+                        <SessionTocSidebar
+                          items={userMessagesToc}
+                          onItemClick={scrollToMessage}
+                        />
                       </div>
 
-                      {/* 右侧目录 - 类似少数派 (大屏幕) */}
-                      <SessionTocSidebar
+                      {/* 浮动目录按钮 (小屏幕) */}
+                      <SessionTocDialog
                         items={userMessagesToc}
                         onItemClick={scrollToMessage}
+                        open={tocDialogOpen}
+                        onOpenChange={setTocDialogOpen}
                       />
-                    </div>
-
-                    {/* 浮动目录按钮 (小屏幕) */}
-                    <SessionTocDialog
-                      items={userMessagesToc}
-                      onItemClick={scrollToMessage}
-                      open={tocDialogOpen}
-                      onOpenChange={setTocDialogOpen}
-                    />
-                  </CardContent>
+                    </CardContent>
+                  )}
                 </>
               )}
             </Card>

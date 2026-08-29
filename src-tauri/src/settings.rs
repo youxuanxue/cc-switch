@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{OnceLock, RwLock};
 
 use crate::app_config::AppType;
@@ -338,6 +338,36 @@ pub struct CodexOfficialHistoryUnifyMigration {
     pub codex_config_dir: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub enum CursorOfficialAuthMode {
+    #[default]
+    Login,
+    UserApiKey,
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct CursorOfficialSettings {
+    #[serde(default)]
+    pub auth_mode: CursorOfficialAuthMode,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user_api_key: Option<String>,
+}
+
+impl std::fmt::Debug for CursorOfficialSettings {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("CursorOfficialSettings")
+            .field("auth_mode", &self.auth_mode)
+            .field(
+                "user_api_key",
+                &self.user_api_key.as_ref().map(|_| "[REDACTED]"),
+            )
+            .finish()
+    }
+}
+
 /// 应用设置结构
 ///
 /// 存储设备级别设置，保存在本地 `~/.cc-switch/settings.json`，不随数据库同步。
@@ -433,6 +463,10 @@ pub struct AppSettings {
     pub hermes_config_dir: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pi_config_dir: Option<String>,
+
+    // ===== Cursor Official 本机认证设置 =====
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cursor_official: Option<CursorOfficialSettings>,
 
     // ===== 当前供应商 ID（设备级）=====
     /// 当前 Claude 供应商 ID（本地存储，优先于数据库 is_current）
@@ -550,6 +584,7 @@ impl Default for AppSettings {
             openclaw_config_dir: None,
             hermes_config_dir: None,
             pi_config_dir: None,
+            cursor_official: None,
             current_provider_claude: None,
             current_provider_claude_desktop: None,
             current_provider_codex: None,
@@ -660,6 +695,19 @@ impl AppSettings {
         }
     }
 
+    fn normalize_loaded(&mut self) {
+        self.normalize_paths();
+        if let Some(cursor) = &mut self.cursor_official {
+            if cursor
+                .user_api_key
+                .as_deref()
+                .is_some_and(|key| key.trim().is_empty())
+            {
+                cursor.user_api_key = None;
+            }
+        }
+    }
+
     fn load_from_file() -> Self {
         let Some(path) = Self::settings_path() else {
             return Self::default();
@@ -667,7 +715,7 @@ impl AppSettings {
         if let Ok(content) = fs::read_to_string(&path) {
             match serde_json::from_str::<AppSettings>(&content) {
                 Ok(mut settings) => {
-                    settings.normalize_paths();
+                    settings.normalize_loaded();
                     settings
                 }
                 Err(err) => {
@@ -686,41 +734,20 @@ impl AppSettings {
 }
 
 fn save_settings_file(settings: &AppSettings) -> Result<(), AppError> {
-    let mut normalized = settings.clone();
-    normalized.normalize_paths();
     let Some(path) = AppSettings::settings_path() else {
         return Err(AppError::Config("无法获取用户主目录".to_string()));
     };
 
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|e| AppError::io(parent, e))?;
-    }
+    save_settings_file_at(settings, &path)
+}
+
+fn save_settings_file_at(settings: &AppSettings, path: &Path) -> Result<(), AppError> {
+    let mut normalized = settings.clone();
+    normalized.normalize_paths();
 
     let json = serde_json::to_string_pretty(&normalized)
         .map_err(|e| AppError::JsonSerialize { source: e })?;
-    #[cfg(unix)]
-    {
-        use std::fs::OpenOptions;
-        use std::io::Write;
-        use std::os::unix::fs::OpenOptionsExt;
-
-        let mut file = OpenOptions::new()
-            .create(true)
-            .write(true)
-            .truncate(true)
-            .mode(0o600)
-            .open(&path)
-            .map_err(|e| AppError::io(&path, e))?;
-        file.write_all(json.as_bytes())
-            .map_err(|e| AppError::io(&path, e))?;
-    }
-
-    #[cfg(not(unix))]
-    {
-        fs::write(&path, json).map_err(|e| AppError::io(&path, e))?;
-    }
-
-    Ok(())
+    crate::config::atomic_write_private(path, json.as_bytes())
 }
 
 static SETTINGS_STORE: OnceLock<RwLock<AppSettings>> = OnceLock::new();
@@ -764,8 +791,7 @@ pub fn get_settings() -> AppSettings {
         .clone()
 }
 
-pub fn get_settings_for_frontend() -> AppSettings {
-    let mut settings = get_settings();
+pub(crate) fn settings_for_frontend(mut settings: AppSettings) -> AppSettings {
     if let Some(sync) = &mut settings.webdav_sync {
         sync.password.clear();
     }
@@ -773,17 +799,28 @@ pub fn get_settings_for_frontend() -> AppSettings {
         s3.secret_access_key.clear();
     }
     settings.webdav_backup = None;
+    settings.cursor_official = None;
     settings
+}
+
+pub fn get_settings_for_frontend() -> AppSettings {
+    settings_for_frontend(get_settings())
+}
+
+pub fn get_cursor_official_settings() -> CursorOfficialSettings {
+    get_settings().cursor_official.unwrap_or_default()
 }
 
 pub fn update_settings(mut new_settings: AppSettings) -> Result<(), AppError> {
     new_settings.normalize_paths();
-    save_settings_file(&new_settings)?;
-
     let mut guard = settings_store().write().unwrap_or_else(|e| {
         log::warn!("设置锁已毒化，使用恢复值: {e}");
         e.into_inner()
     });
+    // Cursor Official 凭据只能由专用窄接口修改。通用整对象保存即使基于旧快照，
+    // 也必须在最终提交的写锁内保留后端当前值，避免并发替换或显式清除被回放。
+    new_settings.cursor_official = guard.cursor_official.clone();
+    save_settings_file(&new_settings)?;
     *guard = new_settings;
     Ok(())
 }
@@ -792,16 +829,67 @@ fn mutate_settings<F>(mutator: F) -> Result<(), AppError>
 where
     F: FnOnce(&mut AppSettings),
 {
+    try_mutate_settings(|settings| {
+        mutator(settings);
+        Ok(())
+    })
+}
+
+fn try_mutate_settings<F>(mutator: F) -> Result<(), AppError>
+where
+    F: FnOnce(&mut AppSettings) -> Result<(), AppError>,
+{
     let mut guard = settings_store().write().unwrap_or_else(|e| {
         log::warn!("设置锁已毒化，使用恢复值: {e}");
         e.into_inner()
     });
     let mut next = guard.clone();
-    mutator(&mut next);
+    mutator(&mut next)?;
     next.normalize_paths();
     save_settings_file(&next)?;
     *guard = next;
     Ok(())
+}
+
+fn apply_cursor_official_update(
+    settings: &mut AppSettings,
+    auth_mode: CursorOfficialAuthMode,
+    user_api_key: Option<String>,
+) -> Result<(), AppError> {
+    if user_api_key
+        .as_deref()
+        .is_some_and(|key| key.trim().is_empty())
+    {
+        return Err(AppError::InvalidInput(
+            "Cursor User API Key 不能为空；如需移除请使用清除操作".to_string(),
+        ));
+    }
+
+    let cursor = settings
+        .cursor_official
+        .get_or_insert_with(CursorOfficialSettings::default);
+    cursor.auth_mode = auth_mode;
+    if let Some(key) = user_api_key {
+        cursor.user_api_key = Some(key);
+    }
+    Ok(())
+}
+
+fn clear_cursor_user_api_key_in(settings: &mut AppSettings) {
+    if let Some(cursor) = &mut settings.cursor_official {
+        cursor.user_api_key = None;
+    }
+}
+
+pub fn update_cursor_official_settings(
+    auth_mode: CursorOfficialAuthMode,
+    user_api_key: Option<String>,
+) -> Result<(), AppError> {
+    try_mutate_settings(|settings| apply_cursor_official_update(settings, auth_mode, user_api_key))
+}
+
+pub fn clear_cursor_user_api_key() -> Result<(), AppError> {
+    mutate_settings(clear_cursor_user_api_key_in)
 }
 
 pub fn is_codex_third_party_history_provider_bucket_migrated() -> bool {
@@ -1189,6 +1277,38 @@ mod tests {
     use super::*;
     use crate::app_config::AppType;
 
+    struct SettingsStateGuard {
+        previous_home: Option<std::ffi::OsString>,
+        previous_settings: AppSettings,
+    }
+
+    impl SettingsStateGuard {
+        fn isolated() -> (Self, tempfile::TempDir) {
+            let temp_dir = tempfile::tempdir().expect("create isolated settings home");
+            let previous_home = std::env::var_os("CC_SWITCH_TEST_HOME");
+            std::env::set_var("CC_SWITCH_TEST_HOME", temp_dir.path());
+            let previous_settings = get_settings();
+            (
+                Self {
+                    previous_home,
+                    previous_settings,
+                },
+                temp_dir,
+            )
+        }
+    }
+
+    impl Drop for SettingsStateGuard {
+        fn drop(&mut self) {
+            let previous = self.previous_settings.clone();
+            let _ = mutate_settings(move |settings| *settings = previous);
+            match self.previous_home.as_ref() {
+                Some(home) => std::env::set_var("CC_SWITCH_TEST_HOME", home),
+                None => std::env::remove_var("CC_SWITCH_TEST_HOME"),
+            }
+        }
+    }
+
     #[test]
     fn visible_apps_old_settings_default_claude_desktop_visible() {
         let visible: VisibleApps = serde_json::from_value(serde_json::json!({
@@ -1227,5 +1347,224 @@ mod tests {
             resolve_override_path(r"~\pi\agent"),
             home.join("pi").join("agent")
         );
+    }
+
+    #[test]
+    fn cursor_official_modes_use_public_camel_case_values_and_legacy_empty_keys_normalize() {
+        let mut settings: AppSettings = serde_json::from_value(serde_json::json!({
+            "cursorOfficial": {
+                "authMode": "userApiKey",
+                "userApiKey": "   "
+            }
+        }))
+        .expect("cursor official settings should deserialize");
+
+        settings.normalize_loaded();
+
+        let cursor = settings
+            .cursor_official
+            .expect("cursor official settings should remain present");
+        assert_eq!(cursor.auth_mode, CursorOfficialAuthMode::UserApiKey);
+        assert_eq!(cursor.user_api_key, None);
+        assert_eq!(
+            serde_json::to_value(CursorOfficialAuthMode::Login).unwrap(),
+            serde_json::json!("login")
+        );
+        assert_eq!(
+            serde_json::to_value(CursorOfficialAuthMode::UserApiKey).unwrap(),
+            serde_json::json!("userApiKey")
+        );
+    }
+
+    #[test]
+    fn cursor_official_update_preserves_omitted_key_and_clear_is_explicit() {
+        let mut settings = AppSettings {
+            cursor_official: Some(CursorOfficialSettings {
+                auth_mode: CursorOfficialAuthMode::UserApiKey,
+                user_api_key: Some("cursor-secret".to_string()),
+            }),
+            ..AppSettings::default()
+        };
+
+        apply_cursor_official_update(&mut settings, CursorOfficialAuthMode::Login, None)
+            .expect("mode switch should preserve an omitted key");
+        assert_eq!(
+            settings
+                .cursor_official
+                .as_ref()
+                .and_then(|cursor| cursor.user_api_key.as_deref()),
+            Some("cursor-secret")
+        );
+
+        clear_cursor_user_api_key_in(&mut settings);
+        assert_eq!(
+            settings
+                .cursor_official
+                .as_ref()
+                .and_then(|cursor| cursor.user_api_key.as_deref()),
+            None
+        );
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn us003_generic_settings_commit_preserves_newer_cursor_credentials() {
+        let (_guard, _temp_dir) = SettingsStateGuard::isolated();
+        mutate_settings(|settings| {
+            *settings = AppSettings {
+                cursor_official: Some(CursorOfficialSettings {
+                    auth_mode: CursorOfficialAuthMode::UserApiKey,
+                    user_api_key: Some("stale-key".to_string()),
+                }),
+                ..AppSettings::default()
+            };
+        })
+        .expect("seed stale generic settings snapshot");
+        let stale_generic_snapshot = get_settings();
+
+        update_cursor_official_settings(
+            CursorOfficialAuthMode::UserApiKey,
+            Some("newer-key".to_string()),
+        )
+        .expect("replace Cursor key through the dedicated path");
+        update_settings(stale_generic_snapshot).expect("commit stale generic settings snapshot");
+
+        let current = get_cursor_official_settings();
+        assert_eq!(current.auth_mode, CursorOfficialAuthMode::UserApiKey);
+        assert_eq!(current.user_api_key.as_deref(), Some("newer-key"));
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn us003_generic_settings_commit_does_not_restore_an_explicitly_cleared_cursor_key() {
+        let (_guard, _temp_dir) = SettingsStateGuard::isolated();
+        mutate_settings(|settings| {
+            *settings = AppSettings {
+                cursor_official: Some(CursorOfficialSettings {
+                    auth_mode: CursorOfficialAuthMode::UserApiKey,
+                    user_api_key: Some("stale-key".to_string()),
+                }),
+                ..AppSettings::default()
+            };
+        })
+        .expect("seed stale generic settings snapshot");
+        let stale_generic_snapshot = get_settings();
+
+        clear_cursor_user_api_key().expect("clear Cursor key through the dedicated path");
+        update_settings(stale_generic_snapshot).expect("commit stale generic settings snapshot");
+
+        assert_eq!(get_cursor_official_settings().user_api_key, None);
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn us003_sync_and_sql_export_exclude_cursor_official_credentials() {
+        const FIXTURE_KEY: &str = "cursor-sync-sentinel-secret";
+        let (_guard, _temp_dir) = SettingsStateGuard::isolated();
+        update_cursor_official_settings(
+            CursorOfficialAuthMode::UserApiKey,
+            Some(FIXTURE_KEY.to_string()),
+        )
+        .expect("plant fixture Cursor key in local settings");
+
+        let on_disk = get_cursor_official_settings();
+        assert_eq!(on_disk.user_api_key.as_deref(), Some(FIXTURE_KEY));
+
+        let db = crate::database::Database::memory().expect("memory database");
+        let sql = db.export_sql_string().expect("export SQL backup");
+        let sync_sql = db
+            .export_sql_string_for_sync()
+            .expect("export SQL for sync");
+        assert!(!sql.contains(FIXTURE_KEY));
+        assert!(!sql.contains("cursorOfficial"));
+        assert!(!sync_sql.contains(FIXTURE_KEY));
+        assert!(!sync_sql.contains("cursorOfficial"));
+
+        let snapshot = crate::services::sync_protocol::build_local_snapshot(&db)
+            .expect("build WebDAV/S3 snapshot");
+        let sql_text = String::from_utf8_lossy(&snapshot.db_sql);
+        let manifest_text = String::from_utf8_lossy(&snapshot.manifest_bytes);
+        let skills_text = String::from_utf8_lossy(&snapshot.skills_zip);
+        assert!(!sql_text.contains(FIXTURE_KEY));
+        assert!(!sql_text.contains("cursorOfficial"));
+        assert!(!manifest_text.contains(FIXTURE_KEY));
+        assert!(!manifest_text.contains("cursorOfficial"));
+        assert!(!skills_text.contains(FIXTURE_KEY));
+
+        let manifest: serde_json::Value =
+            serde_json::from_slice(&snapshot.manifest_bytes).expect("parse sync manifest");
+        let artifact_keys = manifest["artifacts"]
+            .as_object()
+            .expect("sync artifacts")
+            .keys()
+            .cloned()
+            .collect::<std::collections::BTreeSet<_>>();
+        assert_eq!(
+            artifact_keys,
+            ["db.sql", "skills.zip"]
+                .into_iter()
+                .map(str::to_string)
+                .collect()
+        );
+    }
+
+    #[test]
+    fn cursor_official_update_rejects_empty_replacement_key() {
+        let mut settings = AppSettings::default();
+
+        let error = apply_cursor_official_update(
+            &mut settings,
+            CursorOfficialAuthMode::UserApiKey,
+            Some(" \n ".to_string()),
+        )
+        .expect_err("empty replacement key must require explicit clear");
+
+        assert!(matches!(error, AppError::InvalidInput(_)));
+        assert!(settings.cursor_official.is_none());
+    }
+
+    #[test]
+    fn cursor_official_debug_output_never_contains_the_key() {
+        let settings = CursorOfficialSettings {
+            auth_mode: CursorOfficialAuthMode::UserApiKey,
+            user_api_key: Some("debug-secret".to_string()),
+        };
+
+        let debug = format!("{settings:?}");
+
+        assert!(!debug.contains("debug-secret"));
+        assert!(debug.contains("[REDACTED]"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn us003_private_settings_write_restricts_existing_file_to_0600() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("settings.json");
+        std::fs::write(&path, b"old settings").unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+
+        let settings = AppSettings {
+            cursor_official: Some(CursorOfficialSettings {
+                auth_mode: CursorOfficialAuthMode::UserApiKey,
+                user_api_key: Some("fixture-secret".to_string()),
+            }),
+            ..AppSettings::default()
+        };
+        save_settings_file_at(&settings, &path).expect("private settings write should succeed");
+
+        let metadata = std::fs::metadata(&path).unwrap();
+        assert_eq!(metadata.permissions().mode() & 0o777, 0o600);
+        let saved: AppSettings = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(saved.cursor_official, settings.cursor_official);
+
+        let new_path = dir.path().join("new-settings.json");
+        save_settings_file_at(&settings, &new_path).expect("new private settings write");
+        let new_metadata = std::fs::metadata(&new_path).unwrap();
+        assert_eq!(new_metadata.permissions().mode() & 0o777, 0o600);
+
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 2);
     }
 }

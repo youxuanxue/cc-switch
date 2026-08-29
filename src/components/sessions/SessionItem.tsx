@@ -21,9 +21,8 @@ import {
 interface SessionItemProps {
   session: SessionMeta;
   isSelected: boolean;
-  selectionMode: boolean;
+  showSelectionControl: boolean;
   isChecked: boolean;
-  isCheckDisabled?: boolean;
   searchQuery?: string;
   onSelect: (key: string) => void;
   onToggleChecked: (checked: boolean) => void;
@@ -32,9 +31,8 @@ interface SessionItemProps {
 export function SessionItem({
   session,
   isSelected,
-  selectionMode,
+  showSelectionControl,
   isChecked,
-  isCheckDisabled = false,
   searchQuery,
   onSelect,
   onToggleChecked,
@@ -53,11 +51,10 @@ export function SessionItem({
           : "hover:bg-muted/60 border border-transparent",
       )}
     >
-      {selectionMode && (
+      {showSelectionControl && (
         <div className="shrink-0 pt-0.5">
           <Checkbox
             checked={isChecked}
-            disabled={isCheckDisabled}
             aria-label={t("sessionManager.selectForBatch", {
               defaultValue: "选择会话",
             })}

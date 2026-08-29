@@ -1,5 +1,12 @@
 import type { AppId } from "@/lib/api/types";
 import type {
+  CursorLaunchResult,
+  CursorOfficialAuthMode,
+  CursorOfficialStatus,
+  CursorSessionIndexStatus,
+  CursorSessionResumeContext,
+} from "@/lib/api/cursor";
+import type {
   McpServer,
   Provider,
   SessionMessage,
@@ -15,6 +22,16 @@ type LiveProviderIdsByApp = Record<
   "opencode" | "openclaw" | "hermes",
   string[]
 >;
+type CursorLaunchCommand =
+  | "launch_cursor_session"
+  | "launch_cursor_login"
+  | "launch_cursor_login_and_session";
+
+export interface CursorIpcCall {
+  command: string;
+  payloadKeys: string[];
+  payload: Record<string, unknown>;
+}
 
 const createDefaultProviders = (): ProvidersByApp => ({
   claude: {
@@ -135,6 +152,24 @@ const createDefaultSessions = (): SessionMeta[] => {
   ];
 };
 
+const createDefaultCursorOfficialStatus = (): CursorOfficialStatus => ({
+  installed: true,
+  version: "agent fixture",
+  authMode: "login",
+  hasUserApiKey: false,
+  authenticated: true,
+  state: "ready",
+});
+
+const createDefaultCursorLaunchResults = (): Record<
+  CursorLaunchCommand,
+  CursorLaunchResult
+> => ({
+  launch_cursor_session: { state: "launched" },
+  launch_cursor_login: { state: "launched" },
+  launch_cursor_login_and_session: { state: "launched" },
+});
+
 const createDefaultSessionMessages = (): Record<string, SessionMessage[]> => ({
   [sessionMessageKey("codex", "/mock/codex/session-1.jsonl")]: [
     {
@@ -154,6 +189,16 @@ const createDefaultSessionMessages = (): Record<string, SessionMessage[]> => ({
 
 let sessionsState = createDefaultSessions();
 let sessionMessagesState = createDefaultSessionMessages();
+let cursorOfficialStatusState = createDefaultCursorOfficialStatus();
+let cursorSessionIndexStatusState: CursorSessionIndexStatus = {
+  state: "indexReady",
+};
+let cursorSessionResumeContextState: CursorSessionResumeContext = {
+  workspaceState: "ready",
+  workspace: "/mock/cursor/workspace",
+};
+let cursorLaunchResultsState = createDefaultCursorLaunchResults();
+let cursorIpcCallsState: CursorIpcCall[] = [];
 let mcpConfigs: McpConfigState = {
   claude: {
     sample: {
@@ -215,6 +260,14 @@ export const resetProviderState = () => {
   };
   sessionsState = createDefaultSessions();
   sessionMessagesState = createDefaultSessionMessages();
+  cursorOfficialStatusState = createDefaultCursorOfficialStatus();
+  cursorSessionIndexStatusState = { state: "indexReady" };
+  cursorSessionResumeContextState = {
+    workspaceState: "ready",
+    workspace: "/mock/cursor/workspace",
+  };
+  cursorLaunchResultsState = createDefaultCursorLaunchResults();
+  cursorIpcCallsState = [];
   settingsState = {
     showInTray: true,
     minimizeToTrayOnClose: true,
@@ -357,6 +410,112 @@ export const getAppConfigDirOverride = () => appConfigDirOverride;
 
 export const setAppConfigDirOverrideState = (value: string | null) => {
   appConfigDirOverride = value;
+};
+
+const sanitizeCursorPayload = (payload: Record<string, unknown>) =>
+  Object.fromEntries(
+    Object.entries(payload).map(([key, value]) => [
+      key,
+      key === "userApiKey" ? "[REDACTED]" : value,
+    ]),
+  );
+
+export const recordCursorIpcCall = (
+  command: string,
+  payload: Record<string, unknown> = {},
+) => {
+  cursorIpcCallsState.push({
+    command,
+    payloadKeys: Object.keys(payload).sort(),
+    payload: sanitizeCursorPayload(payload),
+  });
+};
+
+export const getCursorIpcCalls = () =>
+  deepClone(cursorIpcCallsState) as CursorIpcCall[];
+
+export const getCursorOfficialStatus = () =>
+  deepClone(cursorOfficialStatusState) as CursorOfficialStatus;
+
+export const setCursorOfficialStatus = (status: CursorOfficialStatus) => {
+  cursorOfficialStatusState = deepClone(status) as CursorOfficialStatus;
+};
+
+export const updateCursorOfficialAuthState = (
+  authMode: CursorOfficialAuthMode,
+  userApiKey?: string,
+) => {
+  if (authMode === "userApiKey") {
+    const hasUserApiKey =
+      Boolean(userApiKey?.trim()) || cursorOfficialStatusState.hasUserApiKey;
+    cursorOfficialStatusState = {
+      ...cursorOfficialStatusState,
+      authMode,
+      hasUserApiKey,
+      authenticated: hasUserApiKey,
+      state: hasUserApiKey ? "ready" : "needsApiKey",
+      error: undefined,
+    };
+  } else {
+    const authenticated =
+      cursorOfficialStatusState.authMode === "login" &&
+      cursorOfficialStatusState.authenticated;
+    cursorOfficialStatusState = {
+      ...cursorOfficialStatusState,
+      authMode,
+      authenticated,
+      state: authenticated ? "ready" : "needsLogin",
+      error: undefined,
+    };
+  }
+
+  return getCursorOfficialStatus();
+};
+
+export const clearCursorUserApiKeyState = () => {
+  cursorOfficialStatusState = {
+    ...cursorOfficialStatusState,
+    hasUserApiKey: false,
+    authenticated:
+      cursorOfficialStatusState.authMode === "userApiKey"
+        ? false
+        : cursorOfficialStatusState.authenticated,
+    state:
+      cursorOfficialStatusState.authMode === "userApiKey"
+        ? "needsApiKey"
+        : cursorOfficialStatusState.state,
+  };
+  return getCursorOfficialStatus();
+};
+
+export const getCursorSessionIndexStatus = () =>
+  deepClone(cursorSessionIndexStatusState) as CursorSessionIndexStatus;
+
+export const setCursorSessionIndexStatus = (
+  status: CursorSessionIndexStatus,
+) => {
+  cursorSessionIndexStatusState = deepClone(status) as CursorSessionIndexStatus;
+};
+
+export const getCursorSessionResumeContext = () =>
+  deepClone(cursorSessionResumeContextState) as CursorSessionResumeContext;
+
+export const setCursorSessionResumeContext = (
+  context: CursorSessionResumeContext,
+) => {
+  cursorSessionResumeContextState = deepClone(
+    context,
+  ) as CursorSessionResumeContext;
+};
+
+export const getCursorLaunchResult = (command: CursorLaunchCommand) =>
+  deepClone(cursorLaunchResultsState[command]) as CursorLaunchResult;
+
+export const setCursorLaunchResult = (
+  command: CursorLaunchCommand,
+  result: CursorLaunchResult,
+) => {
+  cursorLaunchResultsState[command] = deepClone(result) as CursorLaunchResult;
 };
 
 export const getMcpConfig = (appType: AppId) => {

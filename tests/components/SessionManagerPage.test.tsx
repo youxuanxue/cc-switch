@@ -16,6 +16,45 @@ import * as platform from "@/lib/platform";
 import type { SessionMessage, SessionMeta } from "@/types";
 import { setSessionFixtures } from "../msw/state";
 
+const cursorApiMocks = vi.hoisted(() => ({
+  getOfficialStatus: vi.fn(),
+  updateOfficialAuth: vi.fn(),
+  clearUserApiKey: vi.fn(),
+  getSessionIndexStatus: vi.fn(),
+  getSessionResumeContext: vi.fn(),
+  launchSession: vi.fn(),
+  launchLogin: vi.fn(),
+  launchLoginAndSession: vi.fn(),
+}));
+
+const platformMocks = vi.hoisted(() => ({
+  isMac: vi.fn(),
+}));
+
+vi.mock("@/lib/api/cursor", () => ({
+  cursorApi: {
+    getOfficialStatus: (...args: unknown[]) =>
+      cursorApiMocks.getOfficialStatus(...args),
+    updateOfficialAuth: (...args: unknown[]) =>
+      cursorApiMocks.updateOfficialAuth(...args),
+    clearUserApiKey: (...args: unknown[]) =>
+      cursorApiMocks.clearUserApiKey(...args),
+    getSessionIndexStatus: (...args: unknown[]) =>
+      cursorApiMocks.getSessionIndexStatus(...args),
+    getSessionResumeContext: (...args: unknown[]) =>
+      cursorApiMocks.getSessionResumeContext(...args),
+    launchSession: (...args: unknown[]) =>
+      cursorApiMocks.launchSession(...args),
+    launchLogin: (...args: unknown[]) => cursorApiMocks.launchLogin(...args),
+    launchLoginAndSession: (...args: unknown[]) =>
+      cursorApiMocks.launchLoginAndSession(...args),
+  },
+}));
+
+vi.mock("@/lib/platform", () => ({
+  isMac: () => platformMocks.isMac(),
+}));
+
 const toastSuccessMock = vi.fn();
 const toastErrorMock = vi.fn();
 const GROUP_EXPANSION_STORAGE_KEY =
@@ -158,6 +197,33 @@ describe("SessionManagerPage", () => {
     Element.prototype.scrollIntoView = vi.fn();
     window.localStorage.removeItem("cc-switch.sessionManager.listViewMode");
     window.localStorage.removeItem(GROUP_EXPANSION_STORAGE_KEY);
+    platformMocks.isMac.mockReset().mockReturnValue(true);
+    cursorApiMocks.getOfficialStatus.mockReset().mockResolvedValue({
+      installed: true,
+      version: "agent 1.0.0",
+      authMode: "login",
+      hasUserApiKey: false,
+      authenticated: true,
+      state: "ready",
+    });
+    cursorApiMocks.updateOfficialAuth.mockReset();
+    cursorApiMocks.clearUserApiKey.mockReset();
+    cursorApiMocks.getSessionIndexStatus
+      .mockReset()
+      .mockResolvedValue({ state: "indexReady" });
+    cursorApiMocks.getSessionResumeContext.mockReset().mockResolvedValue({
+      workspaceState: "ready",
+      workspace: "/mock/cursor/cursor-workspace",
+    });
+    cursorApiMocks.launchSession
+      .mockReset()
+      .mockResolvedValue({ state: "launched" });
+    cursorApiMocks.launchLogin
+      .mockReset()
+      .mockResolvedValue({ state: "launched" });
+    cursorApiMocks.launchLoginAndSession
+      .mockReset()
+      .mockResolvedValue({ state: "launched" });
 
     const sessions: SessionMeta[] = [
       {
@@ -203,6 +269,22 @@ describe("SessionManagerPage", () => {
         lastActiveAt: 5,
         sourcePath: "/mock/codex/session-3.jsonl",
         resumeCommand: "codex resume codex-session-3",
+      },
+      {
+        providerId: "cursor",
+        sessionId: "11111111-1111-4111-8111-111111111111",
+        title: "Cursor Alpha",
+        projectDir: "/mock/cursor/cursor-workspace",
+        createdAt: 0,
+        lastActiveAt: 4,
+      },
+      {
+        providerId: "cursor",
+        sessionId: "22222222-2222-4222-8222-222222222222",
+        title: "Cursor Beta",
+        projectDir: "/mock/cursor/cursor-workspace",
+        createdAt: 0,
+        lastActiveAt: 3,
       },
     ];
     const messages: Record<string, SessionMessage[]> = {
@@ -358,6 +440,208 @@ describe("SessionManagerPage", () => {
     await waitFor(() => expect(screen.queryByText("Alpha Session")).toBeNull());
 
     expect(screen.getByRole("button", { name: /退出批量管理/i })).toBeVisible();
+  });
+
+  it("US-004 exposes the Cursor filter while hiding unsupported delete actions", async () => {
+    renderPage("all");
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("heading", { name: "Claude Session" }),
+      ).toBeInTheDocument(),
+    );
+
+    await switchProviderFilter(/Cursor/i);
+
+    expect(
+      await screen.findByRole("heading", { name: "Cursor Alpha" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /删除会话/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /批量管理/i }),
+    ).not.toBeInTheDocument();
+
+    await switchProviderFilter(/Codex/i);
+
+    expect(
+      await screen.findByRole("heading", { name: "Alpha Session" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /删除会话/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /批量管理/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("US-001 shows Cursor index diagnostics in the Cursor-filter empty state", async () => {
+    cursorApiMocks.getSessionIndexStatus.mockResolvedValue({
+      state: "indexUnavailable",
+      reason: "metadata layout is not recognized",
+    });
+    setSessionFixtures([], {});
+
+    renderPage("cursor");
+
+    const warning = await screen.findByRole("alert");
+    expect(warning).toHaveTextContent("Cursor 会话索引不可用");
+    expect(warning).toHaveTextContent("metadata layout is not recognized");
+    expect(screen.queryByText("未发现会话")).not.toBeInTheDocument();
+  });
+
+  it("US-001 refreshes both Cursor sessions and index diagnostics", async () => {
+    const user = userEvent.setup();
+    const listSessions = vi.spyOn(sessionsApi, "list");
+    cursorApiMocks.getSessionIndexStatus.mockResolvedValue({
+      state: "indexUnavailable",
+      reason: "metadata layout is not recognized",
+    });
+    setSessionFixtures([], {});
+
+    try {
+      renderPage("cursor");
+
+      await screen.findByRole("alert");
+      await waitFor(() => expect(listSessions).toHaveBeenCalledTimes(1));
+      expect(cursorApiMocks.getSessionIndexStatus).toHaveBeenCalledTimes(1);
+
+      const refreshButton = Array.from(screen.getAllByRole("button")).find(
+        (button) => button.querySelector(".lucide-refresh-cw"),
+      );
+      expect(refreshButton).toBeDefined();
+      await user.click(refreshButton!);
+
+      await waitFor(() => expect(listSessions).toHaveBeenCalledTimes(2));
+      await waitFor(() =>
+        expect(cursorApiMocks.getSessionIndexStatus).toHaveBeenCalledTimes(2),
+      );
+    } finally {
+      listSessions.mockRestore();
+    }
+  });
+
+  it("US-002/US-004 renders Cursor resume without transcript or generic terminal plumbing", async () => {
+    const user = userEvent.setup();
+    const getMessages = vi.spyOn(sessionsApi, "getMessages");
+    const launchTerminal = vi.spyOn(sessionsApi, "launchTerminal");
+    const defensiveSourcePath = "/mock/cursor/must-not-read.jsonl";
+    setSessionFixtures(
+      [
+        {
+          providerId: "cursor",
+          sessionId: "11111111-1111-4111-8111-111111111111",
+          title: "Cursor Alpha",
+          projectDir: "/mock/cursor/cursor-workspace",
+          createdAt: 0,
+          lastActiveAt: 4,
+          sourcePath: defensiveSourcePath,
+          resumeCommand: "must-not-launch-through-generic-terminal",
+        },
+      ],
+      {
+        [`cursor:${defensiveSourcePath}`]: [
+          { role: "user", content: "must not render", ts: 4 },
+        ],
+      },
+    );
+
+    renderPage("cursor");
+
+    expect(
+      await screen.findByRole("heading", { name: "Cursor Alpha" }),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: "继续会话" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("对话记录")).not.toBeInTheDocument();
+    expect(screen.queryByText("must not render")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("must-not-launch-through-generic-terminal"),
+    ).not.toBeInTheDocument();
+    expect(getMessages).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "继续会话" }));
+
+    await waitFor(() =>
+      expect(cursorApiMocks.launchSession).toHaveBeenCalledWith({
+        sessionId: "11111111-1111-4111-8111-111111111111",
+        workspaceOverride: undefined,
+      }),
+    );
+    expect(launchTerminal).not.toHaveBeenCalled();
+  });
+
+  it("US-002/US-004 never polls generic resume state for Cursor", async () => {
+    const getResumeState = vi.spyOn(sessionsApi, "getResumeState");
+
+    try {
+      renderPage("cursor");
+
+      expect(
+        await screen.findByRole("heading", { name: "Cursor Alpha" }),
+      ).toBeInTheDocument();
+      expect(getResumeState).not.toHaveBeenCalled();
+    } finally {
+      getResumeState.mockRestore();
+    }
+  });
+
+  it("US-004 hides Cursor item and group checkboxes in grouped batch mode", async () => {
+    renderPage("all");
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("heading", { name: "Claude Session" }),
+      ).toBeInTheDocument(),
+    );
+
+    await enterGroupedBatchMode();
+    expandDirectoryGroup("cursor", "cursor-workspace");
+
+    expect(
+      screen.getByRole("button", { name: /Cursor Alpha/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("checkbox", {
+        name: /选择 cursor 供应商分组内会话/,
+      }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("checkbox", {
+        name: /选择 cursor-workspace 目录分组内会话/,
+      }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("checkbox", { name: "选择会话" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("exits batch mode and clears selection when switching to Cursor", async () => {
+    renderPage("all");
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("heading", { name: "Claude Session" }),
+      ).toBeInTheDocument(),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /批量管理/i }));
+    fireEvent.click(screen.getAllByRole("checkbox", { name: "选择会话" })[0]);
+    expect(screen.getByText("已选 1 项")).toBeInTheDocument();
+
+    await switchProviderFilter(/Cursor/i);
+
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", { name: /退出批量管理/i }),
+      ).not.toBeInTheDocument(),
+    );
+
+    await switchProviderFilter(/Codex/i);
+    fireEvent.click(screen.getByRole("button", { name: /批量管理/i }));
+    expect(screen.getByText("已选 0 项")).toBeInTheDocument();
   });
 
   it("drops hidden selections when search narrows the result set", async () => {

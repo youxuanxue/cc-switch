@@ -1,5 +1,6 @@
 export type { AppId } from "./types";
 export { piApi } from "./pi";
+export { cursorApi } from "./cursor";
 export { providersApi, universalProvidersApi } from "./providers";
 export { settingsApi } from "./settings";
 export { backupsApi } from "./settings";
@@ -36,3 +37,14 @@ export type {
   ManagedAuthStatus,
   ManagedAuthDeviceCodeResponse,
 } from "./auth";
+export type {
+  CursorLaunchResult,
+  CursorOfficialAccount,
+  CursorOfficialAuthMode,
+  CursorOfficialAuthUpdate,
+  CursorOfficialRuntimeState,
+  CursorOfficialStatus,
+  CursorSessionIndexStatus,
+  CursorSessionRequest,
+  CursorSessionResumeContext,
+} from "./cursor";

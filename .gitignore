@@ -17,6 +17,8 @@ GEMINI.md
 /.idea
 /.vscode
 vitest-report.json
+playwright-report/
+test-results/
 nul
 
 # Flatpak build artifacts
@@ -25,6 +27,7 @@ flatpak-build/
 flatpak-repo/
 .worktrees/
 .spec-workflow/
+docs/superpowers/
 copilot-api
 .history
 CODEBUDDY.md
