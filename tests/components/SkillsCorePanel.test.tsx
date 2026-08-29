@@ -59,7 +59,7 @@ describe("SkillsCorePanel first open labels", () => {
     expect(screen.queryByText("grokbuild")).not.toBeInTheDocument();
   });
 
-  it("shows job / when-not / consequence so a candidate can be decided", async () => {
+  it("shows one product sentence so a candidate can be decided", async () => {
     i18n.addResourceBundle("zh", "translation", zh, true, true);
     render(<SkillsCorePanel onOpenDiscovery={() => undefined} />);
 
@@ -72,12 +72,13 @@ describe("SkillsCorePanel first open labels", () => {
       expect(skillsCoreApi.previewOpen).toHaveBeenCalledWith(["pi"]);
     });
     expect(
-      screen.getByText("含 submodule 的仓库里，Agent 建/切工作区必须走统一助手"),
+      screen.getByText("在含 submodule 的仓库里，统一帮 Agent 建和切工作区。"),
     ).toBeInTheDocument();
     expect(screen.getByText("Do a one-off thing")).toBeInTheDocument();
-    expect(screen.getAllByText(/工作/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/何时不要/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/进台后果/).length).toBeGreaterThan(0);
+    expect(screen.queryByText("工作")).not.toBeInTheDocument();
+    expect(screen.queryByText("何时不要")).not.toBeInTheDocument();
+    expect(screen.queryByText("进台后果")).not.toBeInTheDocument();
+    expect(screen.queryByText("local-draft")).not.toBeInTheDocument();
     expect(screen.queryByText("ignored when curated")).not.toBeInTheDocument();
   });
 });

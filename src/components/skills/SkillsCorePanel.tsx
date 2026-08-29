@@ -206,27 +206,9 @@ const SkillsCorePanel = React.forwardRef<
                         disabled={busy || preview.conflicts.length > 0}
                       />
                       <div className="min-w-0 space-y-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-medium">{cand.name}</span>
-                          <Badge variant="secondary">{cand.provenance}</Badge>
-                        </div>
-                        <p>
-                          <span className="text-muted-foreground">
-                            {t("skills.core.decisionJob")}：
-                          </span>
-                          {decision.job}
-                        </p>
-                        <p>
-                          <span className="text-muted-foreground">
-                            {t("skills.core.decisionWhenNot")}：
-                          </span>
-                          {decision.whenNot}
-                        </p>
-                        <p>
-                          <span className="text-muted-foreground">
-                            {t("skills.core.decisionConsequence")}：
-                          </span>
-                          {decision.consequence}
+                        <span className="font-medium">{cand.name}</span>
+                        <p className="text-muted-foreground">
+                          {decision.summary}
                         </p>
                       </div>
                     </label>

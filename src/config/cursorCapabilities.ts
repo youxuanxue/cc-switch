@@ -5,7 +5,7 @@ export const cursorCapabilities = {
   userApiKey: "supported",
   fixedSessionResume: "supported",
   localSessionIndex: "conditional",
-  transcriptPreview: "unsupported",
+  transcriptPreview: "supported",
   sessionDeletion: "unsupported",
 } as const satisfies Record<string, CursorCapabilityState>;
 

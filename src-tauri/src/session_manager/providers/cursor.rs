@@ -1,13 +1,15 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use rusqlite::{Connection, OpenFlags};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use uuid::Uuid;
 
-use crate::session_manager::SessionMeta;
+use crate::session_manager::{SessionMessage, SessionMeta};
 
-use super::utils::{truncate_summary, TITLE_MAX_CHARS};
+use super::utils::{extract_text, truncate_summary, TITLE_MAX_CHARS};
 
 const PROVIDER_ID: &str = "cursor";
 const INDEX_REASON_MAX_CHARS: usize = 240;
@@ -229,7 +231,7 @@ fn scan_sessions_in(root: &Path) -> Result<Vec<SessionMeta>, String> {
                 project_dir: record.cwd,
                 created_at: record.created_at_ms,
                 last_active_at: record.updated_at_ms,
-                source_path: None,
+                source_path: store_path_if_present(&record.metadata_path),
                 resume_command: None,
             })
             .collect()
@@ -271,6 +273,132 @@ pub fn index_status() -> CursorIndexStatus {
 
 pub fn find_session(session_id: &str) -> Result<CursorSessionRecord, String> {
     find_session_in(&cursor_chats_root(), session_id)
+}
+
+fn store_path_if_present(metadata_path: &Path) -> Option<String> {
+    let store = metadata_path.parent()?.join("store.db");
+    store
+        .is_file()
+        .then(|| store.to_string_lossy().replace('\\', "/"))
+}
+
+fn decode_hex(value: &str) -> Result<Vec<u8>, String> {
+    if value.len() % 2 != 0 {
+        return Err("Failed to decode Cursor hex".to_string());
+    }
+    (0..value.len())
+        .step_by(2)
+        .map(|index| {
+            u8::from_str_radix(&value[index..index + 2], 16)
+                .map_err(|_| "Failed to decode Cursor hex".to_string())
+        })
+        .collect()
+}
+
+fn encode_hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+fn decode_store_meta(value: &str) -> Result<Value, String> {
+    let trimmed = value.trim();
+    if trimmed.starts_with('{') {
+        return serde_json::from_str(trimmed)
+            .map_err(|error| format!("Failed to parse Cursor store meta: {error}"));
+    }
+    let bytes = decode_hex(trimmed)?;
+    serde_json::from_slice(&bytes)
+        .map_err(|error| format!("Failed to parse Cursor store meta: {error}"))
+}
+
+fn extract_known_blob_ids(data: &[u8], known_ids: &HashSet<[u8; 32]>) -> Vec<String> {
+    let mut ids = Vec::new();
+    let mut index = 0;
+    while index + 32 <= data.len() {
+        let mut candidate = [0u8; 32];
+        candidate.copy_from_slice(&data[index..index + 32]);
+        if known_ids.contains(&candidate) {
+            ids.push(encode_hex(&candidate));
+            index += 32;
+        } else {
+            index += 1;
+        }
+    }
+    ids
+}
+
+fn decode_hex_id(id: &str) -> Option<[u8; 32]> {
+    let bytes = decode_hex(id).ok()?;
+    bytes.try_into().ok()
+}
+
+fn message_from_blob(data: &[u8]) -> Option<SessionMessage> {
+    let value: Value = serde_json::from_slice(data).ok()?;
+    let role = value.get("role")?.as_str()?;
+    if role == "system" {
+        return None;
+    }
+    let content = value.get("content").map(extract_text).unwrap_or_default();
+    if content.trim().is_empty() {
+        return None;
+    }
+    Some(SessionMessage {
+        role: role.to_string(),
+        content,
+        ts: None,
+    })
+}
+
+pub fn load_messages(path: &Path) -> Result<Vec<SessionMessage>, String> {
+    if path.file_name().and_then(|name| name.to_str()) != Some("store.db") {
+        return Err("Unsupported Cursor transcript source".to_string());
+    }
+    if !path.is_file() {
+        return Ok(Vec::new());
+    }
+
+    let connection = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .map_err(|error| format!("Failed to open Cursor store: {error}"))?;
+    let meta_value: String =
+        match connection.query_row("SELECT value FROM meta LIMIT 1", [], |row| row.get(0)) {
+            Ok(value) => value,
+            Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(Vec::new()),
+            Err(error) => return Err(format!("Failed to read Cursor store meta: {error}")),
+        };
+    let meta = decode_store_meta(&meta_value)?;
+    let Some(root_id) = meta.get("latestRootBlobId").and_then(Value::as_str) else {
+        return Ok(Vec::new());
+    };
+
+    let mut blobs = HashMap::new();
+    let mut known_ids = HashSet::new();
+    let mut statement = connection
+        .prepare("SELECT id, data FROM blobs")
+        .map_err(|error| format!("Failed to read Cursor store blobs: {error}"))?;
+    let rows = statement
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, Vec<u8>>(1)?))
+        })
+        .map_err(|error| format!("Failed to read Cursor store blobs: {error}"))?;
+    for row in rows {
+        let (id, data) =
+            row.map_err(|error| format!("Failed to read Cursor store blobs: {error}"))?;
+        if let Some(decoded) = decode_hex_id(&id) {
+            known_ids.insert(decoded);
+        }
+        blobs.insert(id, data);
+    }
+
+    let Some(root) = blobs.get(root_id) else {
+        return Ok(Vec::new());
+    };
+    if let Some(message) = message_from_blob(root) {
+        return Ok(vec![message]);
+    }
+
+    Ok(extract_known_blob_ids(root, &known_ids)
+        .into_iter()
+        .filter_map(|blob_id| blobs.get(&blob_id).and_then(|data| message_from_blob(data)))
+        .collect())
 }
 
 #[cfg(test)]
@@ -338,6 +466,109 @@ mod tests {
         assert!(session.summary.is_none());
         assert!(session.source_path.is_none());
         assert!(session.resume_command.is_none());
+    }
+
+    fn write_store(dir: &Path, root_id: &str, blobs: &[(&str, Vec<u8>)]) -> PathBuf {
+        let path = dir.join("store.db");
+        let connection = Connection::open(&path).unwrap();
+        connection
+            .execute("CREATE TABLE blobs (id TEXT PRIMARY KEY, data BLOB)", [])
+            .unwrap();
+        connection
+            .execute("CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT)", [])
+            .unwrap();
+        for (id, data) in blobs {
+            connection
+                .execute("INSERT INTO blobs (id, data) VALUES (?1, ?2)", (id, data))
+                .unwrap();
+        }
+        let meta = serde_json::json!({ "latestRootBlobId": root_id }).to_string();
+        connection
+            .execute(
+                "INSERT INTO meta (key, value) VALUES ('0', ?1)",
+                [encode_hex(meta.as_bytes())],
+            )
+            .unwrap();
+        path
+    }
+
+    #[test]
+    fn us005_sets_source_path_only_when_store_exists() {
+        let root = tempdir().unwrap();
+        write_meta(
+            root.path(),
+            "workspace-a",
+            CHAT_ID,
+            Some(20),
+            Some(true),
+            Some("/workspace/app"),
+        );
+        let chat_dir = root.path().join("workspace-a").join(CHAT_ID);
+        write_store(
+            &chat_dir,
+            &"33".repeat(32),
+            &[(&"33".repeat(32), b"{}".to_vec())],
+        );
+
+        let sessions = scan_sessions_in(root.path()).expect("recognized Cursor index");
+        assert_eq!(sessions.len(), 1);
+        let source = PathBuf::from(sessions[0].source_path.as_deref().unwrap());
+        let chat_dir = chat_dir.canonicalize().unwrap();
+        assert_eq!(
+            source.file_name().and_then(|name| name.to_str()),
+            Some("store.db")
+        );
+        assert_eq!(source.parent(), Some(chat_dir.as_path()));
+        assert!(source.is_file());
+    }
+
+    #[test]
+    fn us005_loads_ordered_conversation_and_skips_system_and_unreferenced_blobs() {
+        let root = tempdir().unwrap();
+        let user_id = "11".repeat(32);
+        let assistant_id = "22".repeat(32);
+        let system_id = "aa".repeat(32);
+        let extra_id = "bb".repeat(32);
+        let root_id = "33".repeat(32);
+        let mut root_blob = decode_hex(&user_id).unwrap();
+        root_blob.extend(decode_hex(&assistant_id).unwrap());
+        let path = write_store(
+            root.path(),
+            &root_id,
+            &[
+                (
+                    system_id.as_str(),
+                    br#"{"role":"system","content":"ignore me"}"#.to_vec(),
+                ),
+                (
+                    extra_id.as_str(),
+                    br#"{"role":"user","content":"not in root"}"#.to_vec(),
+                ),
+                (
+                    user_id.as_str(),
+                    br#"{"role":"user","content":[{"type":"text","text":"hello"}]}"#.to_vec(),
+                ),
+                (
+                    assistant_id.as_str(),
+                    br#"{"role":"assistant","content":[{"type":"text","text":"hi"},{"type":"tool-call","toolName":"read"}]}"#.to_vec(),
+                ),
+                (root_id.as_str(), root_blob),
+            ],
+        );
+
+        let messages = load_messages(&path).expect("load cursor transcript");
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0].role, "user");
+        assert_eq!(messages[0].content, "hello");
+        assert_eq!(messages[1].role, "assistant");
+        assert_eq!(messages[1].content, "hi\n[Tool: read]");
+    }
+
+    #[test]
+    fn us005_rejects_non_store_transcript_paths() {
+        let error = load_messages(Path::new("/tmp/does-not-matter.jsonl"))
+            .expect_err("only store.db is a Cursor transcript");
+        assert_eq!(error, "Unsupported Cursor transcript source");
     }
 
     #[test]

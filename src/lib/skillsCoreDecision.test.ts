@@ -3,13 +3,8 @@ import { describe, expect, it } from "vitest";
 import { skillDecisionCopy } from "./skillsCoreDecision";
 
 const copy: Record<string, string> = {
-  "skills.core.decision.git-worktree-submodule.job": "curated-job",
-  "skills.core.decision.git-worktree-submodule.whenNot": "curated-when-not",
-  "skills.core.decision.git-worktree-submodule.consequence":
-    "curated-consequence",
-  "skills.core.decisionFallback.job": "fallback-{{name}}",
-  "skills.core.decisionFallback.whenNot": "fallback-when-not",
-  "skills.core.decisionFallback.consequence": "fallback-consequence",
+  "skills.core.decision.git-worktree-submodule": "curated-summary",
+  "skills.core.decisionFallback": "fallback-{{name}}",
 };
 
 function t(key: string, options?: Record<string, unknown>): string {
@@ -23,7 +18,7 @@ function t(key: string, options?: Record<string, unknown>): string {
 }
 
 describe("skillDecisionCopy", () => {
-  it("uses curated job / when-not / consequence for known workbench skills", () => {
+  it("uses one curated sentence for known workbench skills", () => {
     const decision = skillDecisionCopy(
       "git-worktree-submodule",
       "ignored frontmatter",
@@ -31,9 +26,7 @@ describe("skillDecisionCopy", () => {
     );
 
     expect(decision.curated).toBe(true);
-    expect(decision.job).toBe("curated-job");
-    expect(decision.whenNot).toBe("curated-when-not");
-    expect(decision.consequence).toBe("curated-consequence");
+    expect(decision.summary).toBe("curated-summary");
   });
 
   it("falls back to the skill description for unknown names", () => {
@@ -44,16 +37,21 @@ describe("skillDecisionCopy", () => {
     );
 
     expect(decision.curated).toBe(false);
-    expect(decision.job).toBe("Do a one-off thing");
-    expect(decision.whenNot).toBe("fallback-when-not");
-    expect(decision.consequence).toBe("fallback-consequence");
+    expect(decision.summary).toBe("Do a one-off thing");
   });
 
   it("does not treat an unknown name as curated just because a description exists", () => {
     const decision = skillDecisionCopy("writing-skills", "Write skills", t);
 
     expect(decision.curated).toBe(false);
-    expect(decision.job).not.toBe("curated-job");
-    expect(decision.job).toBe("Write skills");
+    expect(decision.summary).not.toBe("curated-summary");
+    expect(decision.summary).toBe("Write skills");
+  });
+
+  it("uses the product fallback when an unknown skill has no description", () => {
+    const decision = skillDecisionCopy("mystery", "  ", t);
+
+    expect(decision.curated).toBe(false);
+    expect(decision.summary).toBe("fallback-mystery");
   });
 });

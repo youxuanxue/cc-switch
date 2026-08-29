@@ -2691,35 +2691,12 @@
       "open": "开张并确认工作台",
       "candidates": "候选技能",
       "candidatesHint": "勾上 = 进公共工作台，所有已勾 Agent 立刻共用。不勾 = 当没看见。",
-      "decisionJob": "工作",
-      "decisionWhenNot": "何时不要",
-      "decisionConsequence": "进台后果",
-      "decisionFallback": {
-        "job": "{{name}}：现场已有这份技能",
-        "whenNot": "只偶尔用一次、或只属于某个项目时，不要勾进公共工作台。",
-        "consequence": "勾上后，所有已勾 Agent 都会看见这份技能。"
-      },
+      "decisionFallback": "{{name}}：本机已经有这份技能。",
       "decision": {
-        "git-worktree-submodule": {
-          "job": "含 submodule 的仓库里，Agent 建/切工作区必须走统一助手",
-          "whenNot": "没有 submodule、或不需要隔离工作区",
-          "consequence": "所有已勾 Agent 都会按这份规则建 worktree；手写 git worktree add 会被当成错"
-        },
-        "xj-review": {
-          "job": "合入前先跑机械门禁，再审查到可合",
-          "whenNot": "不审 PR、不走合入",
-          "consequence": "所有已勾 Agent 都能发起同一套审查；不会替你点 merge"
-        },
-        "twin": {
-          "job": "你明确叫 Twin 时，按 CLI 合同监督目标",
-          "whenNot": "日常编码、没在用 Twin",
-          "consequence": "所有已勾 Agent 都能调 Twin；不会自动开监督"
-        },
-        "dev-rules-fanout": {
-          "job": "规则合入后，往本机已登记项目散规则并开 PR",
-          "whenNot": "不是在做规则同步",
-          "consequence": "所有已勾 Agent 都能跑散播；不会自动对每个项目开张"
-        }
+        "git-worktree-submodule": "在含 submodule 的仓库里，统一帮 Agent 建和切工作区。",
+        "xj-review": "合入前先过检查，再审到可以合。",
+        "twin": "你明确叫 Twin 时，按约定帮你盯着目标。",
+        "dev-rules-fanout": "规则合入后，把同一套规则散到本机已登记项目并开 PR。"
       },
       "conflict": "同名内容不一致，整笔停：{{names}}",
       "inUse": "在用 Agent",

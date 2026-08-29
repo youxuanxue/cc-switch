@@ -208,6 +208,45 @@ export const groupSessionsByProviderAndDirectory = (
   return providerGroups;
 };
 
+const CURSOR_ENVELOPE_TAGS =
+  "user_info|git_status|agent_transcripts|rules|agent_skills|dynamic_tools|timestamp|system_notification|image_files|user_query";
+
+export const extractCursorUserQuery = (content: string) => {
+  let query: string | null = null;
+  for (const match of content.matchAll(
+    /<user_query>\s*([\s\S]*?)\s*<\/user_query>/gi,
+  )) {
+    const value = match[1]?.trim();
+    if (value) query = value;
+  }
+  return query;
+};
+
+export const extractCursorDisplayContent = (content: string) => {
+  const query = extractCursorUserQuery(content);
+  if (query) return query;
+
+  const remainder = content
+    .replace(
+      new RegExp(`<(${CURSOR_ENVELOPE_TAGS})>[\\s\\S]*?</\\1>`, "gi"),
+      "",
+    )
+    .trim();
+  if (remainder) return remainder;
+  if (content.trimStart().startsWith("<")) return "";
+  return content;
+};
+
+export const shouldHideCursorMessageFromToc = (content: string) => {
+  const display = extractCursorDisplayContent(content);
+  if (!display) return true;
+  return display.startsWith("Your conversation was summarized");
+};
+
+export const extractCursorPromptPreview = (content: string) => {
+  return extractCursorDisplayContent(content) || content;
+};
+
 export const shouldHideCodexMessageFromToc = (content: string) => {
   const trimmed = content.trim();
   return (

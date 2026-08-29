@@ -119,6 +119,7 @@ pub fn load_messages(provider_id: &str, source_path: &str) -> Result<Vec<Session
         "grokbuild" => grokbuild::load_messages(path),
         "hermes" => hermes::load_messages(path),
         "pi" => pi::load_messages(path),
+        "cursor" => cursor::load_messages(path),
         _ => Err(format!("Unsupported provider: {provider_id}")),
     }
 }
@@ -328,14 +329,17 @@ mod tests {
     }
 
     #[test]
-    fn us004_rejects_cursor_message_loading_and_deletion() {
-        let message_error = load_messages("cursor", "/tmp/does-not-matter")
-            .expect_err("Cursor transcripts are unsupported");
-        assert_eq!(message_error, "Unsupported provider: cursor");
-
+    fn us004_rejects_cursor_deletion_even_when_transcript_exists() {
         let delete_error = delete_session("cursor", "session-id", "/tmp/does-not-matter")
             .expect_err("Cursor deletion is unsupported");
         assert_eq!(delete_error, "Unsupported provider: cursor");
+    }
+
+    #[test]
+    fn us005_rejects_non_store_cursor_transcript_through_dispatch() {
+        let error = load_messages("cursor", "/tmp/does-not-matter.jsonl")
+            .expect_err("only store.db is a Cursor transcript");
+        assert_eq!(error, "Unsupported Cursor transcript source");
     }
 
     #[test]

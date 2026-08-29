@@ -211,19 +211,29 @@ fn is_executable_file(path: &std::path::Path) -> bool {
         .unwrap_or(false)
 }
 
+fn build_iterm_script(escaped_command: &str) -> String {
+    // Insets match the current iTerm window that clears the menu bar:
+    // left 53, top 33, flush to the right and bottom edges.
+    format!(
+        r#"tell application "Finder"
+    set screenBounds to bounds of window of desktop
+end tell
+tell application "iTerm"
+    activate
+    create window with default profile
+    set {{x1, y1, x2, y2}} to screenBounds
+    set bounds of current window to {{x1 + 53, y1 + 33, x2, y2}}
+    tell current session of current window
+        write text "{escaped_command}"
+    end tell
+end tell"#
+    )
+}
+
 fn launch_iterm(command: &str, cwd: Option<&str>) -> Result<(), String> {
     let full_command = build_shell_command(command, cwd);
     let escaped = escape_osascript(&full_command);
-    // iTerm2 AppleScript to create a new window and execute command
-    let script = format!(
-        r#"tell application "iTerm"
-    activate
-    create window with default profile
-    tell current session of current window
-        write text "{escaped}"
-    end tell
-end tell"#
-    );
+    let script = build_iterm_script(&escaped);
 
     let status = Command::new("osascript")
         .arg("-e")
@@ -503,6 +513,17 @@ fn escape_osascript(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn iterm_script_sizes_new_windows_to_the_desktop() {
+        let script = build_iterm_script("codex resume abc");
+
+        assert!(script.contains(r#"tell application "Finder""#));
+        assert!(script.contains("bounds of window of desktop"));
+        assert!(script.contains("set bounds of current window to {x1 + 53, y1 + 33, x2, y2}"));
+        assert!(script.contains(r#"write text "codex resume abc""#));
+        assert!(!script.contains("set fullscreen"));
+    }
 
     #[test]
     fn cursor_launcher_request_accepts_only_a_path_and_workspace() {

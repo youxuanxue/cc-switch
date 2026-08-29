@@ -85,18 +85,23 @@ pub fn extract_text(content: &Value) -> String {
 fn extract_text_from_item(item: &Value) -> Option<String> {
     let item_type = item.get("type").and_then(Value::as_str).unwrap_or("");
 
-    // Anthropic uses tool_use; Pi's assistant messages use toolCall.
-    if matches!(item_type, "tool_use" | "toolCall") {
+    // Anthropic uses tool_use; Pi uses toolCall; Cursor Agent uses tool-call.
+    if matches!(item_type, "tool_use" | "toolCall" | "tool-call") {
         let name = item
             .get("name")
+            .or_else(|| item.get("toolName"))
             .and_then(Value::as_str)
             .unwrap_or("unknown");
         return Some(format!("[Tool: {name}]"));
     }
 
+    if item_type == "redacted-reasoning" {
+        return None;
+    }
+
     // tool_result: extract nested content
-    if item_type == "tool_result" {
-        if let Some(content) = item.get("content") {
+    if matches!(item_type, "tool_result" | "tool-result") {
+        if let Some(content) = item.get("content").or_else(|| item.get("result")) {
             let text = extract_text(content);
             if !text.is_empty() {
                 return Some(text);
@@ -180,6 +185,22 @@ mod tests {
         assert_eq!(
             extract_text(&json!([{ "type": "toolCall", "name": "read" }])),
             "[Tool: read]"
+        );
+    }
+
+    #[test]
+    fn extract_text_supports_cursor_tool_parts() {
+        assert_eq!(
+            extract_text(&json!([
+                { "type": "text", "text": "looking" },
+                { "type": "tool-call", "toolName": "read" },
+                { "type": "redacted-reasoning" }
+            ])),
+            "looking\n[Tool: read]"
+        );
+        assert_eq!(
+            extract_text(&json!([{ "type": "tool-result", "toolName": "read", "result": "ok" }])),
+            "ok"
         );
     }
 }
