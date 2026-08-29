@@ -2654,9 +2654,40 @@
     "core": {
       "loading": "Loading skills control plane…",
       "firstOpenTitle": "First time: pick in-use agents",
-      "firstOpenHint": "None are pre-checked. Seen directories are not pre-selected. Picking none keeps the shop closed.",
+      "firstOpenHint": "None are pre-checked. Seen directories are not pre-selected. Picking none keeps the shop closed. This step only opens the shared workbench; project-only skills come later.",
       "open": "Open and confirm the workbench",
       "candidates": "Candidates",
+      "candidatesHint": "Checked skills enter the shared workbench and are projected to every selected agent. Unchecked means unseen.",
+      "decisionJob": "Job",
+      "decisionWhenNot": "Skip when",
+      "decisionConsequence": "If added",
+      "decisionFallback": {
+        "job": "{{name}}: already present on this machine",
+        "whenNot": "Skip if you only need it once, or only inside one project.",
+        "consequence": "Checking it puts it on the shared workbench for every selected agent."
+      },
+      "decision": {
+        "git-worktree-submodule": {
+          "job": "In repos with submodules, agents must create or switch worktrees through the shared helper",
+          "whenNot": "No submodules, or no isolated worktree needed",
+          "consequence": "Every selected agent follows this worktree rule; hand-rolled git worktree add is treated as wrong"
+        },
+        "xj-review": {
+          "job": "Run mechanical gates, then review to merge-ready",
+          "whenNot": "You are not reviewing a PR or preparing a merge",
+          "consequence": "Every selected agent can start the same review; it will not merge for you"
+        },
+        "twin": {
+          "job": "When you explicitly invoke Twin, supervise a goal through the CLI contract",
+          "whenNot": "Everyday coding, or Twin is not in use",
+          "consequence": "Every selected agent can call Twin; it will not start supervision by itself"
+        },
+        "dev-rules-fanout": {
+          "job": "After a rules merge, fan out to registered local projects and open PRs",
+          "whenNot": "You are not syncing rules",
+          "consequence": "Every selected agent can run the fan-out; it will not open a shop for each project"
+        }
+      },
       "conflict": "Same-name content conflicts; batch stopped: {{names}}",
       "inUse": "In-use agents",
       "followCatalog": "Follow catalog updates",
