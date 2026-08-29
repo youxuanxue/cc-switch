@@ -169,6 +169,36 @@ const switchToGroupedView = async () => {
   );
 };
 
+const switchToProjectView = async () => {
+  await openViewModeMenu();
+  const projectOption = await screen.findByRole("option", { name: /项目/i });
+  await userEvent.click(projectOption);
+  await waitFor(() =>
+    expect(
+      screen.queryByRole("option", { name: /项目/i }),
+    ).not.toBeInTheDocument(),
+  );
+};
+
+const switchToFlatView = async () => {
+  await openViewModeMenu();
+  const flatOption = await screen.findByRole("option", { name: /列表/i });
+  await userEvent.click(flatOption);
+  await waitFor(() =>
+    expect(
+      screen.queryByRole("option", { name: /列表/i }),
+    ).not.toBeInTheDocument(),
+  );
+};
+
+const expandProjectGroup = (project: string) => {
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: new RegExp(`展开或折叠 ${project} 项目分组`),
+    }),
+  );
+};
+
 const switchProviderFilter = async (providerLabel: RegExp) => {
   const providerFilterTrigger = screen.getByRole("combobox", {
     name: /供应商筛选/i,
@@ -178,6 +208,21 @@ const switchProviderFilter = async (providerLabel: RegExp) => {
   await userEvent.click(
     await screen.findByRole("option", { name: providerLabel }),
   );
+};
+
+const waitForHeading = async (name: string) => {
+  await waitFor(() =>
+    expect(screen.getByRole("heading", { name })).toBeInTheDocument(),
+  );
+};
+
+const filterToCodex = async () => {
+  await switchProviderFilter(/Codex/i);
+  await waitForHeading("Alpha Session");
+};
+
+const filterToCursor = async () => {
+  await switchProviderFilter(/Cursor/i);
 };
 
 const enterGroupedBatchMode = async () => {
@@ -331,14 +376,33 @@ describe("SessionManagerPage", () => {
     discovery.mockRestore();
   });
 
+  it("defaults to the project view with all providers", async () => {
+    renderPage("codex");
+
+    await waitForHeading("Claude Session");
+    expect(
+      screen.getByRole("button", { name: /展开或折叠 claude 项目分组/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /展开或折叠 codex 项目分组/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: /展开或折叠 cursor-workspace 项目分组/,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Alpha Session/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /展开或折叠 claude 供应商分组/ }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("6")).toBeInTheDocument();
+  });
+
   it("deletes the selected session and selects the next visible session", async () => {
     renderPage();
-
-    await waitFor(() =>
-      expect(
-        screen.getByRole("heading", { name: "Alpha Session" }),
-      ).toBeInTheDocument(),
-    );
+    await filterToCodex();
 
     fireEvent.click(screen.getByRole("button", { name: /删除会话/i }));
 
@@ -361,12 +425,7 @@ describe("SessionManagerPage", () => {
 
   it("removes a deleted session from filtered search results", async () => {
     renderPage();
-
-    await waitFor(() =>
-      expect(
-        screen.getByRole("heading", { name: "Alpha Session" }),
-      ).toBeInTheDocument(),
-    );
+    await filterToCodex();
 
     openSearch();
 
@@ -405,12 +464,7 @@ describe("SessionManagerPage", () => {
       .mockRejectedValueOnce(new Error("network error"));
 
     renderPage();
-
-    await waitFor(() =>
-      expect(
-        screen.getByRole("heading", { name: "Alpha Session" }),
-      ).toBeInTheDocument(),
-    );
+    await filterToCodex();
 
     fireEvent.click(screen.getByRole("button", { name: /批量管理/i }));
     fireEvent.click(screen.getByRole("button", { name: /全选当前/i }));
@@ -436,12 +490,7 @@ describe("SessionManagerPage", () => {
 
   it("keeps the exit batch mode button visible when search hides all sessions", async () => {
     renderPage();
-
-    await waitFor(() =>
-      expect(
-        screen.getByRole("heading", { name: "Alpha Session" }),
-      ).toBeInTheDocument(),
-    );
+    await filterToCodex();
 
     fireEvent.click(screen.getByRole("button", { name: /批量管理/i }));
     openSearch();
@@ -496,6 +545,7 @@ describe("SessionManagerPage", () => {
     setSessionFixtures([], {});
 
     renderPage("cursor");
+    await filterToCursor();
 
     const warning = await screen.findByRole("alert");
     expect(warning).toHaveTextContent("Cursor 会话索引不可用");
@@ -514,6 +564,7 @@ describe("SessionManagerPage", () => {
 
     try {
       renderPage("cursor");
+      await filterToCursor();
 
       await screen.findByRole("alert");
       await waitFor(() => expect(listSessions).toHaveBeenCalledTimes(1));
@@ -615,11 +666,16 @@ describe("SessionManagerPage", () => {
 
     try {
       renderPage("cursor");
+      await filterToCursor();
 
       expect(
         await screen.findByRole("heading", { name: "Cursor Alpha" }),
       ).toBeInTheDocument();
-      expect(getResumeState).not.toHaveBeenCalled();
+      expect(
+        getResumeState.mock.calls.every(
+          ([providerId]) => providerId !== "cursor",
+        ),
+      ).toBe(true);
     } finally {
       getResumeState.mockRestore();
     }
@@ -664,6 +720,7 @@ describe("SessionManagerPage", () => {
       ).toBeInTheDocument(),
     );
 
+    await switchToFlatView();
     fireEvent.click(screen.getByRole("button", { name: /批量管理/i }));
     fireEvent.click(screen.getAllByRole("checkbox", { name: "选择会话" })[0]);
     expect(screen.getByText("已选 1 项")).toBeInTheDocument();
@@ -683,12 +740,7 @@ describe("SessionManagerPage", () => {
 
   it("drops hidden selections when search narrows the result set", async () => {
     renderPage();
-
-    await waitFor(() =>
-      expect(
-        screen.getByRole("heading", { name: "Alpha Session" }),
-      ).toBeInTheDocument(),
-    );
+    await filterToCodex();
 
     fireEvent.click(screen.getByRole("button", { name: /批量管理/i }));
     fireEvent.click(screen.getByRole("button", { name: /全选当前/i }));
@@ -713,6 +765,7 @@ describe("SessionManagerPage", () => {
 
   it("removes successfully deleted sessions from the UI before refetch completes", async () => {
     const view = renderPage();
+    await filterToCodex();
     let resolveInvalidate!: () => void;
     const invalidateSpy = vi
       .spyOn(view.client, "invalidateQueries")
@@ -722,12 +775,6 @@ describe("SessionManagerPage", () => {
             resolveInvalidate = () => resolve(undefined);
           }),
       );
-
-    await waitFor(() =>
-      expect(
-        screen.getByRole("heading", { name: "Alpha Session" }),
-      ).toBeInTheDocument(),
-    );
 
     fireEvent.click(screen.getByRole("button", { name: /批量管理/i }));
     fireEvent.click(screen.getByRole("button", { name: /全选当前/i }));
@@ -783,12 +830,7 @@ describe("SessionManagerPage", () => {
 
   it("persists manual expansion and collapses all grouped sessions", async () => {
     renderPage();
-
-    await waitFor(() =>
-      expect(
-        screen.getByRole("heading", { name: "Alpha Session" }),
-      ).toBeInTheDocument(),
-    );
+    await filterToCodex();
 
     await switchToGroupedView();
     expandDirectoryGroup("codex", "codex");
@@ -805,6 +847,7 @@ describe("SessionManagerPage", () => {
       ).toEqual({
         expandedProviderIds: ["codex"],
         expandedDirectoryKeys: ["codex:/mock/codex"],
+        expandedProjectKeys: [],
       }),
     );
 
@@ -821,6 +864,7 @@ describe("SessionManagerPage", () => {
       ).toEqual({
         expandedProviderIds: [],
         expandedDirectoryKeys: [],
+        expandedProjectKeys: [],
       }),
     );
   });
@@ -828,6 +872,7 @@ describe("SessionManagerPage", () => {
   it("keeps filtered grouped sessions collapsed until expanding the group", async () => {
     renderPage("all");
 
+    await switchToFlatView();
     await waitFor(() =>
       expect(screen.getByText("Alpha Session")).toBeInTheDocument(),
     );
@@ -865,12 +910,7 @@ describe("SessionManagerPage", () => {
 
   it("supports batch deletion from grouped view", async () => {
     renderPage();
-
-    await waitFor(() =>
-      expect(
-        screen.getByRole("heading", { name: "Alpha Session" }),
-      ).toBeInTheDocument(),
-    );
+    await filterToCodex();
 
     await switchToGroupedView();
     fireEvent.click(screen.getByRole("button", { name: /批量管理/i }));
@@ -924,12 +964,7 @@ describe("SessionManagerPage", () => {
 
   it("selects visible deletable sessions by directory group and marks the provider as mixed", async () => {
     renderPage();
-
-    await waitFor(() =>
-      expect(
-        screen.getByRole("heading", { name: "Alpha Session" }),
-      ).toBeInTheDocument(),
-    );
+    await filterToCodex();
 
     await enterGroupedBatchMode();
     expandDirectoryGroup("codex", "codex");
@@ -950,12 +985,7 @@ describe("SessionManagerPage", () => {
 
   it("marks grouped batch checkboxes as mixed when only one session is selected", async () => {
     renderPage();
-
-    await waitFor(() =>
-      expect(
-        screen.getByRole("heading", { name: "Alpha Session" }),
-      ).toBeInTheDocument(),
-    );
+    await filterToCodex();
 
     await enterGroupedBatchMode();
     expandDirectoryGroup("codex", "codex");
@@ -975,12 +1005,7 @@ describe("SessionManagerPage", () => {
 
   it("batch deletes only sessions selected from a grouped directory", async () => {
     renderPage();
-
-    await waitFor(() =>
-      expect(
-        screen.getByRole("heading", { name: "Alpha Session" }),
-      ).toBeInTheDocument(),
-    );
+    await filterToCodex();
 
     await enterGroupedBatchMode();
     expandDirectoryGroup("codex", "codex");
@@ -1018,6 +1043,232 @@ describe("SessionManagerPage", () => {
     expect(toastSuccessMock).toHaveBeenCalled();
   });
 
+  it("aggregates cross-agent sessions under one project group", async () => {
+    setSessionFixtures(
+      [
+        {
+          providerId: "cursor",
+          sessionId: "11111111-1111-4111-8111-111111111111",
+          title: "Cursor Shared",
+          projectDir: "/work/acme/app/",
+          lastActiveAt: 40,
+        },
+        {
+          providerId: "codex",
+          sessionId: "codex-shared",
+          title: "Codex Shared",
+          projectDir: "/work/acme/app",
+          lastActiveAt: 30,
+          sourcePath: "/tmp/codex-shared.jsonl",
+          resumeCommand: "codex resume codex-shared",
+        },
+        {
+          providerId: "claude",
+          sessionId: "claude-other",
+          title: "Claude Other",
+          projectDir: "/work/acme/docs",
+          lastActiveAt: 20,
+          sourcePath: "/tmp/claude-other.jsonl",
+          resumeCommand: "claude --resume claude-other",
+        },
+      ],
+      {},
+    );
+
+    renderPage("all");
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("heading", { name: "Cursor Shared" }),
+      ).toBeInTheDocument(),
+    );
+
+    await switchToProjectView();
+
+    expect(
+      screen.getByRole("button", { name: /全部收起/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /展开或折叠 app 项目分组/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /展开或折叠 docs 项目分组/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /展开或折叠 cursor 供应商分组/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Cursor Shared/ }),
+    ).not.toBeInTheDocument();
+
+    expandProjectGroup("app");
+
+    expect(
+      screen.getByRole("button", { name: /Cursor Shared/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Codex Shared/ }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Claude Other")).not.toBeInTheDocument();
+  });
+
+  it("aggregates wts worktrees with the sibling main checkout", async () => {
+    setSessionFixtures(
+      [
+        {
+          providerId: "cursor",
+          sessionId: "11111111-1111-4111-8111-111111111111",
+          title: "Main Checkout",
+          projectDir: "/Users/feng/Codes/cc-switch",
+          lastActiveAt: 40,
+        },
+        {
+          providerId: "codex",
+          sessionId: "codex-wt",
+          title: "Worktree Session",
+          projectDir: "/Users/feng/Codes/cc-switch-wt-cursor-official-sessions",
+          lastActiveAt: 30,
+          sourcePath: "/tmp/codex-wt.jsonl",
+          resumeCommand: "codex resume codex-wt",
+        },
+        {
+          providerId: "claude",
+          sessionId: "claude-other",
+          title: "Other Repo",
+          projectDir: "/tmp/other-app",
+          lastActiveAt: 20,
+          sourcePath: "/tmp/claude-other.jsonl",
+          resumeCommand: "claude --resume claude-other",
+        },
+      ],
+      {},
+    );
+
+    renderPage("all");
+
+    await waitForHeading("Main Checkout");
+    expect(
+      screen.getByRole("button", { name: /展开或折叠 cc-switch 项目分组/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", {
+        name: /展开或折叠 cc-switch-wt-cursor-official-sessions 项目分组/,
+      }),
+    ).not.toBeInTheDocument();
+
+    expandProjectGroup("cc-switch");
+
+    expect(
+      screen.getByRole("button", { name: /Main Checkout/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Worktree Session/ }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("cursor-official-sessions")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Other Repo/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("selects only deletable sessions when checking a mixed-agent project group", async () => {
+    setSessionFixtures(
+      [
+        {
+          providerId: "cursor",
+          sessionId: "11111111-1111-4111-8111-111111111111",
+          title: "Cursor Shared",
+          projectDir: "/work/acme/app",
+          lastActiveAt: 40,
+        },
+        {
+          providerId: "codex",
+          sessionId: "codex-shared",
+          title: "Codex Shared",
+          projectDir: "/work/acme/app",
+          lastActiveAt: 30,
+          sourcePath: "/tmp/codex-shared.jsonl",
+          resumeCommand: "codex resume codex-shared",
+        },
+      ],
+      {},
+    );
+
+    renderPage("all");
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("heading", { name: "Cursor Shared" }),
+      ).toBeInTheDocument(),
+    );
+
+    await switchToProjectView();
+    fireEvent.click(screen.getByRole("button", { name: /批量管理/i }));
+
+    const projectCheckbox = screen.getByRole("checkbox", {
+      name: /选择 app 项目分组内会话/,
+    });
+    fireEvent.click(projectCheckbox);
+
+    expect(projectCheckbox).toBeChecked();
+    expect(screen.getByText("已选 1 项")).toBeInTheDocument();
+
+    expandProjectGroup("app");
+    expect(
+      screen.getByRole("button", { name: /Cursor Shared/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("checkbox", { name: "选择会话" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("checkbox", {
+        name: /选择 cursor 供应商分组内会话/,
+      }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("persists project group expansion independently of agent grouping", async () => {
+    renderPage("all");
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("heading", { name: "Claude Session" }),
+      ).toBeInTheDocument(),
+    );
+
+    await switchToProjectView();
+    expandProjectGroup("codex");
+
+    expect(
+      screen.getByRole("button", { name: /Alpha Session/ }),
+    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        JSON.parse(window.localStorage.getItem(GROUP_EXPANSION_STORAGE_KEY)!),
+      ).toEqual({
+        expandedProviderIds: [],
+        expandedDirectoryKeys: [],
+        expandedProjectKeys: ["/mock/codex"],
+      }),
+    );
+
+    collapseAllGroups();
+
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", { name: /Alpha Session/ }),
+      ).not.toBeInTheDocument(),
+    );
+    await waitFor(() =>
+      expect(
+        JSON.parse(window.localStorage.getItem(GROUP_EXPANSION_STORAGE_KEY)!),
+      ).toEqual({
+        expandedProviderIds: [],
+        expandedDirectoryKeys: [],
+        expandedProjectKeys: [],
+      }),
+    );
+  });
+
   it("renames the button to 回到会话 when the terminal session is already live", async () => {
     vi.spyOn(platform, "isMac").mockReturnValue(true);
     vi.spyOn(sessionsApi, "getResumeState").mockResolvedValue({
@@ -1025,11 +1276,7 @@ describe("SessionManagerPage", () => {
     });
 
     renderPage();
-    await waitFor(() =>
-      expect(
-        screen.getByRole("heading", { name: "Alpha Session" }),
-      ).toBeInTheDocument(),
-    );
+    await filterToCodex();
 
     expect(
       await screen.findByRole("button", {
@@ -1048,11 +1295,7 @@ describe("SessionManagerPage", () => {
     });
 
     renderPage();
-    await waitFor(() =>
-      expect(
-        screen.getByRole("heading", { name: "Alpha Session" }),
-      ).toBeInTheDocument(),
-    );
+    await filterToCodex();
 
     expect(
       await screen.findByRole("button", {
@@ -1063,17 +1306,16 @@ describe("SessionManagerPage", () => {
 
   it("focuses the already-open terminal instead of launching a second resume", async () => {
     vi.spyOn(platform, "isMac").mockReturnValue(true);
+    vi.spyOn(sessionsApi, "getResumeState").mockResolvedValue({
+      appearance: "resume",
+    });
     const launch = vi.spyOn(sessionsApi, "launchTerminal").mockResolvedValue({
       action: "focused",
       app: "iTerm",
     });
 
     renderPage();
-    await waitFor(() =>
-      expect(
-        screen.getByRole("heading", { name: "Alpha Session" }),
-      ).toBeInTheDocument(),
-    );
+    await filterToCodex();
 
     fireEvent.click(
       screen.getByRole("button", { name: /sessionManager.resume$/i }),
@@ -1147,17 +1389,16 @@ describe("SessionManagerPage", () => {
 
   it("does not launch another resume when a non-terminal client holds the writer", async () => {
     vi.spyOn(platform, "isMac").mockReturnValue(true);
+    vi.spyOn(sessionsApi, "getResumeState").mockResolvedValue({
+      appearance: "resume",
+    });
     const launch = vi.spyOn(sessionsApi, "launchTerminal").mockResolvedValue({
       action: "occupied",
       holder: "CodeG",
     });
 
     renderPage();
-    await waitFor(() =>
-      expect(
-        screen.getByRole("heading", { name: "Alpha Session" }),
-      ).toBeInTheDocument(),
-    );
+    await filterToCodex();
 
     fireEvent.click(
       screen.getByRole("button", { name: /sessionManager.resume$/i }),

@@ -19,6 +19,7 @@ import {
   CheckSquare,
   ListTree,
   List,
+  FolderTree,
   ChevronDown,
   ChevronRight,
   ChevronsDownUp,
@@ -77,9 +78,12 @@ import {
   getProviderLabel,
   getSessionDirectoryGroupKey,
   getSessionKey,
+  getSessionProjectGroupKey,
   getSessionResumeI18nKeys,
+  groupSessionsByProject,
   groupSessionsByProviderAndDirectory,
   type SessionDirectoryGroup,
+  type SessionProjectGroup,
   type SessionProviderGroup,
 } from "./utils";
 import { buildSessionTocItems, toDisplayMessages } from "./sessionChrome";
@@ -101,7 +105,7 @@ type ProviderFilter =
   | "hermes"
   | "pi";
 
-type SessionListViewMode = "flat" | "grouped";
+type SessionListViewMode = "flat" | "grouped" | "byProject";
 
 type GroupSelectionState = {
   checked: boolean | "indeterminate";
@@ -113,14 +117,17 @@ type GroupSelectionState = {
 type SessionGroupExpansionState = {
   expandedProviderIds: Set<string>;
   expandedDirectoryKeys: Set<string>;
+  expandedProjectKeys: Set<string>;
 };
 
 const readInitialSessionListViewMode = (): SessionListViewMode => {
-  if (typeof window === "undefined") return "flat";
+  if (typeof window === "undefined") return "byProject";
   const stored = window.localStorage.getItem(
     SESSION_LIST_VIEW_MODE_STORAGE_KEY,
   );
-  return stored === "grouped" || stored === "flat" ? stored : "flat";
+  return stored === "grouped" || stored === "flat" || stored === "byProject"
+    ? stored
+    : "byProject";
 };
 
 const readInitialSessionGroupExpansionState =
@@ -129,6 +136,7 @@ const readInitialSessionGroupExpansionState =
       return {
         expandedProviderIds: new Set(),
         expandedDirectoryKeys: new Set(),
+        expandedProjectKeys: new Set(),
       };
     }
 
@@ -142,6 +150,7 @@ const readInitialSessionGroupExpansionState =
         return {
           expandedProviderIds: new Set(),
           expandedDirectoryKeys: new Set(),
+          expandedProjectKeys: new Set(),
         };
       }
 
@@ -157,15 +166,23 @@ const readInitialSessionGroupExpansionState =
               typeof directoryKey === "string",
           )
         : [];
+      const expandedProjectKeys = Array.isArray(parsed.expandedProjectKeys)
+        ? parsed.expandedProjectKeys.filter(
+            (projectKey: unknown): projectKey is string =>
+              typeof projectKey === "string",
+          )
+        : [];
 
       return {
         expandedProviderIds: new Set(expandedProviderIds),
         expandedDirectoryKeys: new Set(expandedDirectoryKeys),
+        expandedProjectKeys: new Set(expandedProjectKeys),
       };
     } catch {
       return {
         expandedProviderIds: new Set(),
         expandedDirectoryKeys: new Set(),
+        expandedProjectKeys: new Set(),
       };
     }
   };
@@ -173,10 +190,12 @@ const readInitialSessionGroupExpansionState =
 const serializeSessionGroupExpansionState = (
   expandedProviderGroups: Set<string>,
   expandedDirectoryGroups: Set<string>,
+  expandedProjectGroups: Set<string>,
 ) =>
   JSON.stringify({
     expandedProviderIds: Array.from(expandedProviderGroups).sort(),
     expandedDirectoryKeys: Array.from(expandedDirectoryGroups).sort(),
+    expandedProjectKeys: Array.from(expandedProjectGroups).sort(),
   });
 
 const filterSetToAllowedValues = (
@@ -235,9 +254,7 @@ export function SessionManagerPage({ appId }: { appId: string }) {
   const [cursorResumeCommand, setCursorResumeCommand] = useState<string | null>(
     null,
   );
-  const [providerFilter, setProviderFilter] = useState<ProviderFilter>(
-    appId as ProviderFilter,
-  );
+  const [providerFilter, setProviderFilter] = useState<ProviderFilter>("all");
   const cursorSessionIndex = useCursorSessionIndex(providerFilter === "cursor");
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [listViewMode, setListViewMode] = useState<SessionListViewMode>(
@@ -252,10 +269,9 @@ export function SessionManagerPage({ appId }: { appId: string }) {
   const [expandedDirectoryGroups, setExpandedDirectoryGroups] = useState<
     Set<string>
   >(() => initialGroupExpansionState.expandedDirectoryKeys);
-
-  useEffect(() => {
-    setProviderFilter(appId as ProviderFilter);
-  }, [appId]);
+  const [expandedProjectGroups, setExpandedProjectGroups] = useState<
+    Set<string>
+  >(() => initialGroupExpansionState.expandedProjectKeys);
 
   // 使用 FlexSearch 全文搜索
   const { search: searchSessions } = useSessionSearch({
@@ -267,15 +283,20 @@ export function SessionManagerPage({ appId }: { appId: string }) {
     return searchSessions(search);
   }, [searchSessions, search]);
 
+  const unknownDirectoryLabel = t("sessionManager.unknownDirectory", {
+    defaultValue: "未知目录",
+  });
   const groupedSessions = useMemo(
     () =>
       groupSessionsByProviderAndDirectory(
         filteredSessions,
-        t("sessionManager.unknownDirectory", {
-          defaultValue: "未知目录",
-        }),
+        unknownDirectoryLabel,
       ),
-    [filteredSessions, t],
+    [filteredSessions, unknownDirectoryLabel],
+  );
+  const projectGroupedSessions = useMemo(
+    () => groupSessionsByProject(filteredSessions, unknownDirectoryLabel),
+    [filteredSessions, unknownDirectoryLabel],
   );
 
   const validGroupExpansionKeys = useMemo(
@@ -284,6 +305,11 @@ export function SessionManagerPage({ appId }: { appId: string }) {
       directoryKeys: new Set(
         sessions.map((session) =>
           getSessionDirectoryGroupKey(session.providerId, session.projectDir),
+        ),
+      ),
+      projectKeys: new Set(
+        sessions.map((session) =>
+          getSessionProjectGroupKey(session.projectDir),
         ),
       ),
     }),
@@ -303,9 +329,10 @@ export function SessionManagerPage({ appId }: { appId: string }) {
       serializeSessionGroupExpansionState(
         expandedProviderGroups,
         expandedDirectoryGroups,
+        expandedProjectGroups,
       ),
     );
-  }, [expandedDirectoryGroups, expandedProviderGroups]);
+  }, [expandedDirectoryGroups, expandedProjectGroups, expandedProviderGroups]);
 
   useEffect(() => {
     if (isLoading) return;
@@ -315,6 +342,9 @@ export function SessionManagerPage({ appId }: { appId: string }) {
     );
     setExpandedDirectoryGroups((current) =>
       filterSetToAllowedValues(current, validGroupExpansionKeys.directoryKeys),
+    );
+    setExpandedProjectGroups((current) =>
+      filterSetToAllowedValues(current, validGroupExpansionKeys.projectKeys),
     );
   }, [isLoading, validGroupExpansionKeys]);
 
@@ -343,13 +373,19 @@ export function SessionManagerPage({ appId }: { appId: string }) {
   }, [filteredSessions, selectedKey]);
 
   const listViewModeLabel =
-    listViewMode === "grouped"
-      ? t("sessionManager.viewModeGrouped", {
-          defaultValue: "分类",
+    listViewMode === "byProject"
+      ? t("sessionManager.viewModeByProject", {
+          defaultValue: "项目",
         })
-      : t("sessionManager.viewModeFlat", {
-          defaultValue: "列表",
-        });
+      : listViewMode === "grouped"
+        ? t("sessionManager.viewModeGrouped", {
+            defaultValue: "分类",
+          })
+        : t("sessionManager.viewModeFlat", {
+            defaultValue: "列表",
+          });
+  const isGroupedListView =
+    listViewMode === "grouped" || listViewMode === "byProject";
 
   const isCursorSession = selectedSession?.providerId === "cursor";
   const headerResumeCommand = selectedSession
@@ -754,9 +790,22 @@ export function SessionManagerPage({ appId }: { appId: string }) {
     });
   };
 
+  const toggleProjectGroup = (projectKey: string) => {
+    setExpandedProjectGroups((current) => {
+      const next = new Set(current);
+      if (next.has(projectKey)) {
+        next.delete(projectKey);
+      } else {
+        next.add(projectKey);
+      }
+      return next;
+    });
+  };
+
   const handleCollapseAllGroups = () => {
     setExpandedProviderGroups(new Set());
     setExpandedDirectoryGroups(new Set());
+    setExpandedProjectGroups(new Set());
   };
 
   const renderSessionItem = (session: SessionMeta) => {
@@ -831,6 +880,30 @@ export function SessionManagerPage({ appId }: { appId: string }) {
         onCheckedChange={() =>
           toggleSessionGroupChecked(
             directoryGroup.sessions,
+            !selectionState.isSelected,
+          )
+        }
+      />
+    );
+  };
+
+  const renderProjectGroupCheckbox = (
+    projectGroup: SessionProjectGroup,
+    selectionState: GroupSelectionState,
+  ) => {
+    if (!selectionMode || selectionState.selectableCount === 0) return null;
+
+    return (
+      <Checkbox
+        checked={selectionState.checked}
+        aria-label={t("sessionManager.selectProjectGroupForBatch", {
+          defaultValue: "选择 {{project}} 项目分组内会话",
+          project: projectGroup.label,
+        })}
+        onClick={(event) => event.stopPropagation()}
+        onCheckedChange={() =>
+          toggleSessionGroupChecked(
+            projectGroup.sessions,
             !selectionState.isSelected,
           )
         }
@@ -1040,7 +1113,9 @@ export function SessionManagerPage({ appId }: { appId: string }) {
                                     defaultValue: "查看方式",
                                   })}
                                 </span>
-                                {listViewMode === "grouped" ? (
+                                {listViewMode === "byProject" ? (
+                                  <FolderTree className="size-3.5" />
+                                ) : listViewMode === "grouped" ? (
                                   <ListTree className="size-3.5" />
                                 ) : (
                                   <List className="size-3.5" />
@@ -1070,9 +1145,19 @@ export function SessionManagerPage({ appId }: { appId: string }) {
                                 </span>
                               </div>
                             </SelectItem>
+                            <SelectItem value="byProject">
+                              <div className="flex items-center gap-2">
+                                <FolderTree className="size-3.5" />
+                                <span>
+                                  {t("sessionManager.viewModeByProject", {
+                                    defaultValue: "项目",
+                                  })}
+                                </span>
+                              </div>
+                            </SelectItem>
                           </SelectContent>
                         </Select>
-                        {listViewMode === "grouped" && (
+                        {isGroupedListView && (
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <Button
@@ -1526,6 +1611,111 @@ export function SessionManagerPage({ appId }: { appId: string }) {
                                       </Collapsible>
                                     );
                                   },
+                                )}
+                              </CollapsibleContent>
+                            </Collapsible>
+                          );
+                        })}
+                      </div>
+                    ) : listViewMode === "byProject" ? (
+                      <div className="space-y-2">
+                        {projectGroupedSessions.map((projectGroup) => {
+                          const projectOpen = expandedProjectGroups.has(
+                            projectGroup.key,
+                          );
+                          const projectSelectionState = getGroupSelectionState(
+                            projectGroup.sessions,
+                          );
+
+                          return (
+                            <Collapsible
+                              key={projectGroup.key}
+                              open={projectOpen}
+                              onOpenChange={() =>
+                                toggleProjectGroup(projectGroup.key)
+                              }
+                            >
+                              <div className="flex w-full items-center gap-2 rounded-md border bg-muted/40 px-2.5 py-2 transition-colors hover:bg-muted">
+                                {renderProjectGroupCheckbox(
+                                  projectGroup,
+                                  projectSelectionState,
+                                )}
+                                <CollapsibleTrigger asChild>
+                                  <button
+                                    type="button"
+                                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                                    aria-label={t(
+                                      "sessionManager.toggleProjectGroup",
+                                      {
+                                        defaultValue:
+                                          "展开或折叠 {{project}} 项目分组",
+                                        project: projectGroup.label,
+                                      },
+                                    )}
+                                  >
+                                    {projectOpen ? (
+                                      <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
+                                    ) : (
+                                      <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
+                                    )}
+                                    <FolderOpen className="size-3.5 shrink-0 text-muted-foreground" />
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                                          {projectGroup.label}
+                                        </span>
+                                      </TooltipTrigger>
+                                      <TooltipContent
+                                        side="bottom"
+                                        className="max-w-xs"
+                                      >
+                                        {projectGroup.workspaceDirs.length >
+                                        1 ? (
+                                          <div className="space-y-1">
+                                            {projectGroup.workspaceDirs.map(
+                                              (workspaceDir) => (
+                                                <p
+                                                  key={workspaceDir}
+                                                  className="font-mono text-xs break-all"
+                                                >
+                                                  {workspaceDir}
+                                                </p>
+                                              ),
+                                            )}
+                                          </div>
+                                        ) : (
+                                          <p className="font-mono text-xs break-all">
+                                            {projectGroup.projectDir ??
+                                              unknownDirectoryLabel}
+                                          </p>
+                                        )}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                    <div className="flex shrink-0 items-center gap-0.5">
+                                      {projectGroup.providerIds.map(
+                                        (providerId) => (
+                                          <ProviderIcon
+                                            key={providerId}
+                                            icon={getProviderIconName(
+                                              providerId,
+                                            )}
+                                            name={providerId}
+                                            size={12}
+                                          />
+                                        ),
+                                      )}
+                                    </div>
+                                    {renderGroupSelectionBadge(
+                                      projectSelectionState,
+                                      projectGroup.sessions.length,
+                                      "secondary",
+                                    )}
+                                  </button>
+                                </CollapsibleTrigger>
+                              </div>
+                              <CollapsibleContent className="mt-1 space-y-1 pl-2">
+                                {projectGroup.sessions.map((session) =>
+                                  renderSessionItem(session),
                                 )}
                               </CollapsibleContent>
                             </Collapsible>

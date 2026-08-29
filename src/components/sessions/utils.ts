@@ -19,6 +19,15 @@ export interface SessionProviderGroup {
   directories: SessionDirectoryGroup[];
 }
 
+export interface SessionProjectGroup {
+  key: string;
+  projectDir: string | null;
+  label: string;
+  sessions: SessionMeta[];
+  providerIds: string[];
+  workspaceDirs: string[];
+}
+
 const getCodexRequestHeadingPayload = (lineText: string) => {
   if (!lineText.startsWith("#")) return null;
 
@@ -69,6 +78,11 @@ const extractCodexPromptFromIdeContext = (content: string) => {
 export const getSessionKey = (session: SessionMeta) =>
   `${session.providerId}:${session.sessionId}:${session.sourcePath ?? ""}`;
 
+export const normalizeProjectDir = (projectDir?: string | null) => {
+  const trimmed = projectDir?.trim().replace(/[\\/]+$/, "") || "";
+  return trimmed || null;
+};
+
 export const getSessionDirectoryGroupKey = (
   providerId: string,
   projectDir?: string | null,
@@ -76,6 +90,61 @@ export const getSessionDirectoryGroupKey = (
   const trimmed = projectDir?.trim();
   return `${providerId}:${trimmed || UNKNOWN_PROJECT_DIR_KEY}`;
 };
+
+const WTS_WORKTREE_MARKER = "-wt-";
+
+export interface WtsProjectIdentity {
+  key: string;
+  canonicalDir: string | null;
+  label: string;
+  worktreeSlug: string | null;
+}
+
+export const resolveWtsProjectIdentity = (
+  projectDir?: string | null,
+): WtsProjectIdentity => {
+  const normalized = normalizeProjectDir(projectDir);
+  if (!normalized) {
+    return {
+      key: UNKNOWN_PROJECT_DIR_KEY,
+      canonicalDir: null,
+      label: "",
+      worktreeSlug: null,
+    };
+  }
+
+  const sepIndex = Math.max(
+    normalized.lastIndexOf("/"),
+    normalized.lastIndexOf("\\"),
+  );
+  const parent = sepIndex >= 0 ? normalized.slice(0, sepIndex) : "";
+  const base = sepIndex >= 0 ? normalized.slice(sepIndex + 1) : normalized;
+  const sep = sepIndex >= 0 ? normalized[sepIndex] : "/";
+  const markerIndex = base.lastIndexOf(WTS_WORKTREE_MARKER);
+  const repo = markerIndex > 0 ? base.slice(0, markerIndex) : "";
+  const slug =
+    markerIndex > 0 ? base.slice(markerIndex + WTS_WORKTREE_MARKER.length) : "";
+
+  if (repo && slug) {
+    const canonicalDir = parent ? `${parent}${sep}${repo}` : repo;
+    return {
+      key: canonicalDir,
+      canonicalDir,
+      label: repo,
+      worktreeSlug: slug,
+    };
+  }
+
+  return {
+    key: normalized,
+    canonicalDir: normalized,
+    label: base,
+    worktreeSlug: null,
+  };
+};
+
+export const getSessionProjectGroupKey = (projectDir?: string | null) =>
+  resolveWtsProjectIdentity(projectDir).key;
 
 export const getBaseName = (value?: string | null) => {
   if (!value) return "";
@@ -206,6 +275,43 @@ export const groupSessionsByProviderAndDirectory = (
   });
 
   return providerGroups;
+};
+
+export const groupSessionsByProject = (
+  sessions: SessionMeta[],
+  unknownDirectoryLabel: string,
+): SessionProjectGroup[] => {
+  const projectGroups: SessionProjectGroup[] = [];
+  const projectGroupMap = new Map<string, SessionProjectGroup>();
+
+  sessions.forEach((session) => {
+    const identity = resolveWtsProjectIdentity(session.projectDir);
+    const workspaceDir = normalizeProjectDir(session.projectDir);
+    let projectGroup = projectGroupMap.get(identity.key);
+
+    if (!projectGroup) {
+      projectGroup = {
+        key: identity.key,
+        projectDir: identity.canonicalDir,
+        label: identity.canonicalDir ? identity.label : unknownDirectoryLabel,
+        sessions: [],
+        providerIds: [],
+        workspaceDirs: [],
+      };
+      projectGroupMap.set(identity.key, projectGroup);
+      projectGroups.push(projectGroup);
+    }
+
+    projectGroup.sessions.push(session);
+    if (!projectGroup.providerIds.includes(session.providerId)) {
+      projectGroup.providerIds.push(session.providerId);
+    }
+    if (workspaceDir && !projectGroup.workspaceDirs.includes(workspaceDir)) {
+      projectGroup.workspaceDirs.push(workspaceDir);
+    }
+  });
+
+  return projectGroups;
 };
 
 const CURSOR_ENVELOPE_TAGS =

@@ -52,7 +52,7 @@ export interface RecordedInvoke {
 
 export interface TauriIpcHarnessOptions {
   view?: "sessions" | "settings";
-  listViewMode?: "flat" | "grouped";
+  listViewMode?: "flat" | "grouped" | "byProject";
   sessions?: SessionFixture[];
   cursorStatus?: CursorOfficialStatus;
   cursorIndexStatus?: CursorIndexStatus;
@@ -77,7 +77,7 @@ export async function installTauriIpcHarness(
 ): Promise<void> {
   const initialState = {
     view: options.view ?? "sessions",
-    listViewMode: options.listViewMode ?? "flat",
+    listViewMode: options.listViewMode ?? "byProject",
     sessions: options.sessions ?? [],
     cursorStatus: options.cursorStatus ?? defaultCursorStatus,
     cursorIndexStatus: options.cursorIndexStatus ?? {

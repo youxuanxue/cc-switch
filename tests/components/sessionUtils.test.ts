@@ -3,7 +3,9 @@ import {
   extractCodexPromptPreview,
   formatSessionMessagePreview,
   getSessionResumeI18nKeys,
+  groupSessionsByProject,
   groupSessionsByProviderAndDirectory,
+  resolveWtsProjectIdentity,
   extractCursorDisplayContent,
   shouldHideCodexMessageFromToc,
   shouldHideCursorMessageFromToc,
@@ -283,6 +285,180 @@ describe("session utils", () => {
     ).toEqual([
       "11111111-1111-4111-8111-111111111111",
       "22222222-2222-4222-8222-222222222222",
+    ]);
+  });
+
+  it("aggregates sessions from different agents under the same project", () => {
+    const sessions: SessionMeta[] = [
+      {
+        providerId: "cursor",
+        sessionId: "cursor-1",
+        projectDir: "/workspace/app/",
+      },
+      {
+        providerId: "codex",
+        sessionId: "codex-1",
+        projectDir: "/workspace/app",
+      },
+      {
+        providerId: "claude",
+        sessionId: "claude-1",
+        projectDir: "/workspace/docs",
+      },
+    ];
+
+    const groups = groupSessionsByProject(sessions, "未知目录");
+
+    expect(groups).toHaveLength(2);
+    expect(groups[0]).toMatchObject({
+      projectDir: "/workspace/app",
+      label: "app",
+      providerIds: ["cursor", "codex"],
+    });
+    expect(groups[0].sessions.map((session) => session.sessionId)).toEqual([
+      "cursor-1",
+      "codex-1",
+    ]);
+    expect(groups[1]).toMatchObject({
+      projectDir: "/workspace/docs",
+      label: "docs",
+      providerIds: ["claude"],
+    });
+  });
+
+  it("keeps same-named directories on different paths as separate projects", () => {
+    const sessions: SessionMeta[] = [
+      {
+        providerId: "codex",
+        sessionId: "app-a",
+        projectDir: "/work/acme/app",
+      },
+      {
+        providerId: "cursor",
+        sessionId: "app-b",
+        projectDir: "/tmp/app",
+      },
+    ];
+
+    const groups = groupSessionsByProject(sessions, "未知目录");
+
+    expect(groups).toHaveLength(2);
+    expect(groups.map((group) => group.projectDir)).toEqual([
+      "/work/acme/app",
+      "/tmp/app",
+    ]);
+    expect(groups[0].sessions.map((session) => session.sessionId)).toEqual([
+      "app-a",
+    ]);
+    expect(groups[1].sessions.map((session) => session.sessionId)).toEqual([
+      "app-b",
+    ]);
+  });
+
+  it("uses an unknown project group for sessions without project directories", () => {
+    const sessions: SessionMeta[] = [
+      {
+        providerId: "codex",
+        sessionId: "codex-1",
+        projectDir: null,
+      },
+      {
+        providerId: "claude",
+        sessionId: "claude-1",
+        projectDir: "   ",
+      },
+    ];
+
+    const groups = groupSessionsByProject(sessions, "未知目录");
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]).toMatchObject({
+      projectDir: null,
+      label: "未知目录",
+      providerIds: ["codex", "claude"],
+    });
+    expect(groups[0].sessions.map((session) => session.sessionId)).toEqual([
+      "codex-1",
+      "claude-1",
+    ]);
+  });
+
+  it("maps wts worktrees back to the sibling main checkout", () => {
+    expect(
+      resolveWtsProjectIdentity(
+        "/Users/feng/Codes/cc-switch-wt-cursor-official-sessions",
+      ),
+    ).toEqual({
+      key: "/Users/feng/Codes/cc-switch",
+      canonicalDir: "/Users/feng/Codes/cc-switch",
+      label: "cc-switch",
+      worktreeSlug: "cursor-official-sessions",
+    });
+    expect(
+      resolveWtsProjectIdentity("/Users/feng/Codes/cc-switch-wt-foo-wt-bar"),
+    ).toMatchObject({
+      key: "/Users/feng/Codes/cc-switch-wt-foo",
+      worktreeSlug: "bar",
+    });
+    expect(resolveWtsProjectIdentity("/Users/feng/Codes/cc-switch")).toEqual({
+      key: "/Users/feng/Codes/cc-switch",
+      canonicalDir: "/Users/feng/Codes/cc-switch",
+      label: "cc-switch",
+      worktreeSlug: null,
+    });
+  });
+
+  it("aggregates the main checkout and wts worktrees as one project", () => {
+    const sessions: SessionMeta[] = [
+      {
+        providerId: "cursor",
+        sessionId: "main",
+        projectDir: "/Users/feng/Codes/cc-switch",
+      },
+      {
+        providerId: "codex",
+        sessionId: "wt-a",
+        projectDir: "/Users/feng/Codes/cc-switch-wt-cursor-official-sessions/",
+      },
+      {
+        providerId: "claude",
+        sessionId: "wt-b",
+        projectDir: "/Users/feng/Codes/cc-switch-wt-session-project-view",
+      },
+      {
+        providerId: "cursor",
+        sessionId: "other-repo",
+        projectDir: "/tmp/cc-switch-wt-lookalike",
+      },
+    ];
+
+    const groups = groupSessionsByProject(sessions, "未知目录");
+
+    expect(groups).toHaveLength(2);
+    expect(groups[0]).toMatchObject({
+      key: "/Users/feng/Codes/cc-switch",
+      projectDir: "/Users/feng/Codes/cc-switch",
+      label: "cc-switch",
+      providerIds: ["cursor", "codex", "claude"],
+      workspaceDirs: [
+        "/Users/feng/Codes/cc-switch",
+        "/Users/feng/Codes/cc-switch-wt-cursor-official-sessions",
+        "/Users/feng/Codes/cc-switch-wt-session-project-view",
+      ],
+    });
+    expect(groups[0].sessions.map((session) => session.sessionId)).toEqual([
+      "main",
+      "wt-a",
+      "wt-b",
+    ]);
+    expect(groups[1]).toMatchObject({
+      key: "/tmp/cc-switch",
+      projectDir: "/tmp/cc-switch",
+      label: "cc-switch",
+      workspaceDirs: ["/tmp/cc-switch-wt-lookalike"],
+    });
+    expect(groups[1].sessions.map((session) => session.sessionId)).toEqual([
+      "other-repo",
     ]);
   });
 
