@@ -294,6 +294,22 @@ export function CursorOfficialAuthControl({
         </div>
       ) : null}
 
+      {variant === "compact" &&
+      (status?.state === "statusUnavailable" || Boolean(error)) ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={isLoading}
+          onClick={() => void refresh()}
+        >
+          <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
+          {t("settings.authCenter.cursorRefresh", {
+            defaultValue: "刷新状态",
+          })}
+        </Button>
+      ) : null}
+
       {variant === "full" ? (
         <div className="flex flex-wrap items-center justify-between gap-2">
           <details className="text-xs text-muted-foreground">

@@ -8,3 +8,11 @@ export const cursorCapabilities = {
   transcriptPreview: "unsupported",
   sessionDeletion: "unsupported",
 } as const satisfies Record<string, CursorCapabilityState>;
+
+export type CursorCapability = keyof typeof cursorCapabilities;
+
+export function isCursorCapabilitySupported(
+  capability: CursorCapability,
+): boolean {
+  return cursorCapabilities[capability] === "supported";
+}

@@ -132,6 +132,25 @@ describe("CursorOfficialAuthControl", () => {
     expect(apiMocks.launchLogin).not.toHaveBeenCalled();
   });
 
+  it("US-003 lets compact status-unavailable remediation retry the shared probe", async () => {
+    const user = userEvent.setup();
+    apiMocks.getOfficialStatus.mockResolvedValue({
+      ...needsLoginStatus,
+      state: "statusUnavailable",
+      error: "status schema changed",
+    });
+    renderControl({ variant: "compact" });
+
+    expect(
+      await screen.findByText("status schema changed"),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "刷新状态" }));
+
+    await waitFor(() =>
+      expect(apiMocks.getOfficialStatus).toHaveBeenCalledTimes(2),
+    );
+  });
+
   it("clears a configured key only through the explicit clear action", async () => {
     const user = userEvent.setup();
     apiMocks.getOfficialStatus.mockResolvedValue({

@@ -813,12 +813,14 @@ pub fn get_cursor_official_settings() -> CursorOfficialSettings {
 
 pub fn update_settings(mut new_settings: AppSettings) -> Result<(), AppError> {
     new_settings.normalize_paths();
-    save_settings_file(&new_settings)?;
-
     let mut guard = settings_store().write().unwrap_or_else(|e| {
         log::warn!("设置锁已毒化，使用恢复值: {e}");
         e.into_inner()
     });
+    // Cursor Official 凭据只能由专用窄接口修改。通用整对象保存即使基于旧快照，
+    // 也必须在最终提交的写锁内保留后端当前值，避免并发替换或显式清除被回放。
+    new_settings.cursor_official = guard.cursor_official.clone();
+    save_settings_file(&new_settings)?;
     *guard = new_settings;
     Ok(())
 }
@@ -1275,6 +1277,38 @@ mod tests {
     use super::*;
     use crate::app_config::AppType;
 
+    struct SettingsStateGuard {
+        previous_home: Option<std::ffi::OsString>,
+        previous_settings: AppSettings,
+    }
+
+    impl SettingsStateGuard {
+        fn isolated() -> (Self, tempfile::TempDir) {
+            let temp_dir = tempfile::tempdir().expect("create isolated settings home");
+            let previous_home = std::env::var_os("CC_SWITCH_TEST_HOME");
+            std::env::set_var("CC_SWITCH_TEST_HOME", temp_dir.path());
+            let previous_settings = get_settings();
+            (
+                Self {
+                    previous_home,
+                    previous_settings,
+                },
+                temp_dir,
+            )
+        }
+    }
+
+    impl Drop for SettingsStateGuard {
+        fn drop(&mut self) {
+            let previous = self.previous_settings.clone();
+            let _ = mutate_settings(move |settings| *settings = previous);
+            match self.previous_home.as_ref() {
+                Some(home) => std::env::set_var("CC_SWITCH_TEST_HOME", home),
+                None => std::env::remove_var("CC_SWITCH_TEST_HOME"),
+            }
+        }
+    }
+
     #[test]
     fn visible_apps_old_settings_default_claude_desktop_visible() {
         let visible: VisibleApps = serde_json::from_value(serde_json::json!({
@@ -1370,6 +1404,56 @@ mod tests {
                 .and_then(|cursor| cursor.user_api_key.as_deref()),
             None
         );
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn us003_generic_settings_commit_preserves_newer_cursor_credentials() {
+        let (_guard, _temp_dir) = SettingsStateGuard::isolated();
+        mutate_settings(|settings| {
+            *settings = AppSettings {
+                cursor_official: Some(CursorOfficialSettings {
+                    auth_mode: CursorOfficialAuthMode::UserApiKey,
+                    user_api_key: Some("stale-key".to_string()),
+                }),
+                ..AppSettings::default()
+            };
+        })
+        .expect("seed stale generic settings snapshot");
+        let stale_generic_snapshot = get_settings();
+
+        update_cursor_official_settings(
+            CursorOfficialAuthMode::UserApiKey,
+            Some("newer-key".to_string()),
+        )
+        .expect("replace Cursor key through the dedicated path");
+        update_settings(stale_generic_snapshot).expect("commit stale generic settings snapshot");
+
+        let current = get_cursor_official_settings();
+        assert_eq!(current.auth_mode, CursorOfficialAuthMode::UserApiKey);
+        assert_eq!(current.user_api_key.as_deref(), Some("newer-key"));
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn us003_generic_settings_commit_does_not_restore_an_explicitly_cleared_cursor_key() {
+        let (_guard, _temp_dir) = SettingsStateGuard::isolated();
+        mutate_settings(|settings| {
+            *settings = AppSettings {
+                cursor_official: Some(CursorOfficialSettings {
+                    auth_mode: CursorOfficialAuthMode::UserApiKey,
+                    user_api_key: Some("stale-key".to_string()),
+                }),
+                ..AppSettings::default()
+            };
+        })
+        .expect("seed stale generic settings snapshot");
+        let stale_generic_snapshot = get_settings();
+
+        clear_cursor_user_api_key().expect("clear Cursor key through the dedicated path");
+        update_settings(stale_generic_snapshot).expect("commit stale generic settings snapshot");
+
+        assert_eq!(get_cursor_official_settings().user_api_key, None);
     }
 
     #[test]

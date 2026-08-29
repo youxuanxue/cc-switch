@@ -503,21 +503,18 @@ fn escape_osascript(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::Path;
 
     #[test]
     fn cursor_launcher_request_accepts_only_a_path_and_workspace() {
-        let launcher = Path::new("/private/tmp/cc-switch launcher/cursor-launcher.sh");
-        let workspace = Path::new("/workspace/project");
+        let root = tempfile::tempdir().unwrap();
+        let launcher = root.path().join("cc-switch launcher/cursor-launcher.sh");
+        let workspace = root.path().join("workspace/project");
 
-        let request = cursor_launcher_request(Some("iterm2"), launcher, workspace).unwrap();
+        let request = cursor_launcher_request(Some("iterm2"), &launcher, &workspace).unwrap();
 
         assert_eq!(request.target, "iterm");
-        assert_eq!(
-            request.command,
-            "'/private/tmp/cc-switch launcher/cursor-launcher.sh'"
-        );
-        assert_eq!(request.cwd, "/workspace/project");
+        assert_eq!(request.command, format!("'{}'", launcher.display()));
+        assert_eq!(request.cwd, workspace.to_str().unwrap());
         assert!(request.custom_config.is_none());
     }
 
