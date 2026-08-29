@@ -19,6 +19,7 @@ const OFFICIAL_ENV_REMOVALS: [&str; 5] = [
     "ANTHROPIC_AUTH_TOKEN",
 ];
 const CURSOR_COMMAND_TIMEOUT: Duration = Duration::from_secs(10);
+#[cfg(not(target_os = "windows"))]
 const CURSOR_DISCOVERY_TIMEOUT: Duration = Duration::from_secs(5);
 const CURSOR_CAPTURE_MAX_BYTES: usize = 64 * 1024;
 const CURSOR_VERSION_MAX_CHARS: usize = 120;
@@ -132,6 +133,7 @@ struct CursorCommandOutput {
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum CursorResolveError {
     NotFound,
+    #[cfg(not(target_os = "windows"))]
     Other(String),
 }
 
@@ -424,6 +426,7 @@ fn get_status_with_runner<R: CursorCommandRunner>(
                 None,
             );
         }
+        #[cfg(not(target_os = "windows"))]
         Err(CursorResolveError::Other(error)) => {
             return status_shell(
                 settings,
@@ -970,6 +973,7 @@ fn resolve_launch_executable<R: CursorCommandRunner>(
     match runner.resolve_agent() {
         Ok(executable) => Ok(executable),
         Err(CursorResolveError::NotFound) => Err("Cursor Agent CLI is not installed".to_string()),
+        #[cfg(not(target_os = "windows"))]
         Err(CursorResolveError::Other(error)) => Err(sanitize_cursor_error(&error, known_secrets)),
     }
 }
