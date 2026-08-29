@@ -2688,9 +2688,40 @@
     "core": {
       "loading": "正在讀取技能控制面…",
       "firstOpenTitle": "第一次：先勾在用 Agent",
-      "firstOpenHint": "預設全不勾。看見過的目錄不會預勾。一個都不勾 = 未開張。",
+      "firstOpenHint": "預設全不勾。看見過的目錄不會預勾。一個都不勾 = 未開張。這次只開公共工作臺；專案專用技能以後單獨管。",
       "open": "開張並確認工作臺",
       "candidates": "候選技能",
+      "candidatesHint": "勾上 = 進公共工作臺，所有已勾 Agent 立刻共用。不勾 = 當沒看見。",
+      "decisionJob": "工作",
+      "decisionWhenNot": "何時不要",
+      "decisionConsequence": "進臺後果",
+      "decisionFallback": {
+        "job": "{{name}}：現場已有這份技能",
+        "whenNot": "只偶爾用一次、或只屬於某個專案時，不要勾進公共工作臺。",
+        "consequence": "勾上後，所有已勾 Agent 都會看見這份技能。"
+      },
+      "decision": {
+        "git-worktree-submodule": {
+          "job": "含 submodule 的倉庫裡，Agent 建/切工作區必須走統一助手",
+          "whenNot": "沒有 submodule、或不需要隔離工作區",
+          "consequence": "所有已勾 Agent 都會按這份規則建 worktree；手寫 git worktree add 會被當成錯"
+        },
+        "xj-review": {
+          "job": "合入前先跑機械門禁，再審查到可合",
+          "whenNot": "不審 PR、不走合入",
+          "consequence": "所有已勾 Agent 都能發起同一套審查；不會替你點 merge"
+        },
+        "twin": {
+          "job": "你明確叫 Twin 時，按 CLI 合同監督目標",
+          "whenNot": "日常編碼、沒在用 Twin",
+          "consequence": "所有已勾 Agent 都能調 Twin；不會自動開監督"
+        },
+        "dev-rules-fanout": {
+          "job": "規則合入後，往本機已登記專案散規則並開 PR",
+          "whenNot": "不是在做規則同步",
+          "consequence": "所有已勾 Agent 都能跑散播；不會自動對每個專案開張"
+        }
+      },
       "conflict": "同名內容不一致，整筆停：{{names}}",
       "inUse": "在用 Agent",
       "followCatalog": "自動跟上貨架",

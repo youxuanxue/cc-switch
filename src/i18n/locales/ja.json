@@ -2687,9 +2687,40 @@
     "core": {
       "loading": "スキル制御面を読み込み中…",
       "firstOpenTitle": "初回：利用中の Agent を選ぶ",
-      "firstOpenHint": "初期状態はすべて未選択です。検出済みディレクトリは自動選択しません。未選択のままでは開店しません。",
+      "firstOpenHint": "初期状態はすべて未選択です。検出済みディレクトリは自動選択しません。未選択のままでは開店しません。今回は共有作業台だけを開きます。プロジェクト専用スキルは後で扱います。",
       "open": "開店して作業台を確定",
       "candidates": "候補スキル",
+      "candidatesHint": "チェックしたスキルは共有作業台に入り、選択した全 Agent に投影されます。未チェックは「見ていない」扱いになります。",
+      "decisionJob": "仕事",
+      "decisionWhenNot": "入れないとき",
+      "decisionConsequence": "作業台に入れると",
+      "decisionFallback": {
+        "job": "{{name}}：このマシンに既にあります",
+        "whenNot": "一度きり、または特定プロジェクトだけの用途なら、共有作業台に入れない。",
+        "consequence": "チェックすると共有作業台に入り、選択した全 Agent から見えます。"
+      },
+      "decision": {
+        "git-worktree-submodule": {
+          "job": "submodule のあるリポジトリでは、Agent は共通ヘルパーで worktree を作る／切り替える",
+          "whenNot": "submodule がない、または隔離作業領域が不要",
+          "consequence": "選択した全 Agent がこの worktree 規則に従う。手書きの git worktree add は誤りとして扱う"
+        },
+        "xj-review": {
+          "job": "マージ前に機械ゲートを走らせ、レビューを完了させる",
+          "whenNot": "PR を見ていない、マージ準備でもない",
+          "consequence": "選択した全 Agent が同じレビューを始められる。merge は代行しない"
+        },
+        "twin": {
+          "job": "Twin を明示したときだけ、CLI 契約で目標を監督する",
+          "whenNot": "日常のコーディング、または Twin を使っていない",
+          "consequence": "選択した全 Agent が Twin を呼べる。監督は自動開始しない"
+        },
+        "dev-rules-fanout": {
+          "job": "ルール合入後、登録済みローカルプロジェクトへ展開して PR を開く",
+          "whenNot": "ルール同期をしていない",
+          "consequence": "選択した全 Agent が展開を実行できる。プロジェクトごとに開店はしない"
+        }
+      },
       "conflict": "同名で内容が不一致のため一括停止：{{names}}",
       "inUse": "利用中の Agent",
       "followCatalog": "カタログに自動追従",

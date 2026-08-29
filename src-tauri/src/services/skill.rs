@@ -2739,6 +2739,12 @@ impl SkillService {
         Ok(meta)
     }
 
+    pub(crate) fn skill_frontmatter_description(skill_dir: &Path) -> String {
+        Self::read_skill_name_desc(&skill_dir.join("SKILL.md"), "")
+            .1
+            .unwrap_or_default()
+    }
+
     /// 从 SKILL.md 读取名称和描述，不存在则用目录名兜底
     fn read_skill_name_desc(skill_md: &Path, fallback_name: &str) -> (String, Option<String>) {
         if skill_md.exists() {
