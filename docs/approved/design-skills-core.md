@@ -3,12 +3,8 @@ title: 统一 Agent Skill Catalog 与 CC Switch Skills Core
 status: shipped
 approved_by: feng
 risk_level: high
-related_prs:
-  - https://github.com/youxuanxue/cc-switch/pull/6
-  - https://github.com/youxuanxue/cc-switch/pull/9
-related_commits:
-  - 12e13692097c79970a6547c7f4a20bb9ff935522
-  - ff0d8a5dd30b8dd05688f36cce4d4b06ab146b1f
+related_prs: ["https://github.com/youxuanxue/cc-switch/pull/6", "https://github.com/youxuanxue/cc-switch/pull/9"]
+related_commits: ["12e13692097c79970a6547c7f4a20bb9ff935522", "ff0d8a5dd30b8dd05688f36cce4d4b06ab146b1f"]
 ---
 
 # 统一 Agent Skill Catalog 与 CC Switch Skills Core
