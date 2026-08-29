@@ -1,10 +1,10 @@
 ---
 title: 统一 Agent Skill Catalog 与 CC Switch Skills Core
-status: approved
+status: shipped
 approved_by: feng
 risk_level: high
-related_prs: []
-related_commits: []
+related_prs: ["https://github.com/youxuanxue/cc-switch/pull/6"]
+related_commits: ["12e13692097c79970a6547c7f4a20bb9ff935522"]
 ---
 
 # 统一 Agent Skill Catalog 与 CC Switch Skills Core
@@ -266,8 +266,8 @@ dev-rules **保留**项目 `.cursor/skills` 编辑入口；**删除**的是 home
 
 1. **agent-skills** README writer 声明先合（[youxuanxue/agent-skills#66](https://github.com/youxuanxue/agent-skills/pull/66)）。货架门口不得还挂旧 writer。
 2. **本文件 merge。** 进 main 前 `approved_by` 必须是具体人名（R5），禁止先合再翻。
-3. **cc-switch Core**：catalog reader → 库成员 / 在用名单 → 本节全部 CLI（含 `open` / import / follow-catalog / upgrade，及未开张拒写）→ Cursor/Antigravity + `claude-cursor` 布局（不以 `get_app_skills_dir(Claude)` 为写入目标）→ UI（库 + 在用 Agent + 诊断，无矩阵开关）。
-4. **dev-rules / Twin**：inactive contract（小 PR，绑定本文件）。
+3. **cc-switch Core**：catalog reader → 库成员 / 在用名单 → 本节全部 CLI（含 `open` / import / follow-catalog / upgrade，及未开张拒写）→ Cursor/Antigravity + `claude-cursor` 布局（不以 `get_app_skills_dir(Claude)` 为写入目标）→ UI（库 + 在用 Agent + 诊断，无矩阵开关）。已落地：[#6](https://github.com/youxuanxue/cc-switch/pull/6) / `12e13692`。
+4. **dev-rules / Twin**：inactive contract（小 PR，绑定本文件）。下一笔。
 5. **在用 Agent 逐个入伙** → **删除 legacy writer**。
 
 不把货架、Core、legacy contract、fan-out 塞进一个 PR。
