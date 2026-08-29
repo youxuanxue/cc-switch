@@ -8,7 +8,8 @@ use crate::services::skill::SkillService;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AgentToken {
-    ClaudeCursor,
+    Claude,
+    Cursor,
     Codex,
     Gemini,
     GrokBuild,
@@ -21,7 +22,11 @@ pub enum AgentToken {
 impl AgentToken {
     pub fn parse(token: &str) -> Result<Self, AppError> {
         match token {
-            "claude-cursor" => Ok(Self::ClaudeCursor),
+            "claude" => Ok(Self::Claude),
+            "cursor" => Ok(Self::Cursor),
+            "claude-cursor" => Err(AppError::InvalidInput(
+                "claude-cursor 已废止：请分别使用 --agent claude 与 --agent cursor".into(),
+            )),
             "codex" => Ok(Self::Codex),
             "gemini" => Ok(Self::Gemini),
             "grokbuild" => Ok(Self::GrokBuild),
@@ -37,7 +42,8 @@ impl AgentToken {
 
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::ClaudeCursor => "claude-cursor",
+            Self::Claude => "claude",
+            Self::Cursor => "cursor",
             Self::Codex => "codex",
             Self::Gemini => "gemini",
             Self::GrokBuild => "grokbuild",
@@ -50,7 +56,8 @@ impl AgentToken {
 
     pub fn app_type(self) -> Option<AppType> {
         match self {
-            Self::ClaudeCursor => None,
+            Self::Claude => Some(AppType::Claude),
+            Self::Cursor => None,
             Self::Codex => Some(AppType::Codex),
             Self::Gemini => Some(AppType::Gemini),
             Self::GrokBuild => Some(AppType::GrokBuild),
@@ -63,7 +70,7 @@ impl AgentToken {
 
     pub fn projection_root(self) -> Result<PathBuf, AppError> {
         match self {
-            Self::ClaudeCursor => Ok(cursor_skills_dir()),
+            Self::Cursor => Ok(cursor_skills_dir()),
             Self::Antigravity => Ok(antigravity_skills_dir()),
             other => {
                 let app = other
@@ -86,10 +93,6 @@ pub fn antigravity_skills_dir() -> PathBuf {
         .join("skills")
 }
 
-pub fn claude_skills_root() -> Result<PathBuf, AppError> {
-    SkillService::get_app_skills_dir(&AppType::Claude).map_err(|e| AppError::Message(e.to_string()))
-}
-
 /// Remove a directory symlink without touching its target.
 /// Windows directory junctions / `symlink_dir` links must use `remove_dir`;
 /// `remove_file` returns Access Denied (OS error 5).
@@ -101,20 +104,6 @@ pub fn remove_dir_symlink(path: &Path) -> Result<(), AppError> {
     #[cfg(windows)]
     {
         fs::remove_dir(path).map_err(|e| AppError::io(path, e))
-    }
-}
-
-pub fn is_dir_symlink_to(link: &Path, target: &Path) -> bool {
-    let meta = match fs::symlink_metadata(link) {
-        Ok(m) => m,
-        Err(_) => return false,
-    };
-    if !meta.file_type().is_symlink() {
-        return false;
-    }
-    match (fs::canonicalize(link), fs::canonicalize(target)) {
-        (Ok(a), Ok(b)) => a == b,
-        _ => fs::read_link(link).ok().as_deref() == Some(target),
     }
 }
 
