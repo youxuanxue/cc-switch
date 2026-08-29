@@ -35,6 +35,7 @@
 ## Linked Tests
 
 - src-tauri/src/commands/settings.rs::tests::us003_generic_settings_redact_and_preserve_cursor_credentials
+- src-tauri/src/settings.rs::tests::us003_sync_and_sql_export_exclude_cursor_official_credentials
 - src-tauri/src/settings.rs::tests::us003_private_settings_write_restricts_existing_file_to_0600
 - src-tauri/src/services/cursor_official.rs::tests::us003_official_env_isolates_login_and_user_api_key_modes
 - src-tauri/src/services/cursor_official.rs::tests::us003_status_dto_redacts_credentials_and_errors

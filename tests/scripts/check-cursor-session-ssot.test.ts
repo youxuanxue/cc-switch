@@ -138,6 +138,13 @@ describe("US-004 Cursor session SSOT checker", () => {
     expect(result.output).toContain("cursor-session-ssot: PASS");
   });
 
+  it("passes against the real repository", () => {
+    const result = runChecker(process.cwd());
+
+    expect(result.status).toBe(0);
+    expect(result.output).toContain("cursor-session-ssot: PASS");
+  });
+
   it("rejects duplicated Cursor resume-state derivation", () => {
     const root = createConformingFixture();
     writeFixtureFile(
@@ -363,6 +370,7 @@ describe("US-004 Cursor session SSOT checker", () => {
       '- "scripts/check-cursor-session-ssot.mjs"',
     );
     expect(frontendFilter).toContain('- ".preflight/local-lint.conf"');
+    expect(workflow).toContain("node scripts/check-cursor-session-ssot.mjs");
   });
 
   it("rejects direct sourcePath-based Cursor deletion eligibility", () => {

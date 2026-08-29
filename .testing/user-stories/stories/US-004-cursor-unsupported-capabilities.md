@@ -43,6 +43,7 @@
 - tests/components/SessionManagerPage.test.tsx::US-004 hides Cursor item and group checkboxes in grouped batch mode
 - tests/components/cursorResumeState.test.ts::US-004 blocks Cursor resume outside macOS without blocking indexing
 - tests/scripts/check-cursor-session-ssot.test.ts::US-004 rejects Cursor owner and generic-terminal bypasses
+- tests/scripts/check-cursor-session-ssot.test.ts::passes against the real repository
 - tests/e2e/cursor-official-sessions.spec.ts::US-004 keeps unsupported Cursor capabilities absent from the UI
 
 Run:

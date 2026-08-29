@@ -1457,6 +1457,58 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
+    fn us003_sync_and_sql_export_exclude_cursor_official_credentials() {
+        const FIXTURE_KEY: &str = "cursor-sync-sentinel-secret";
+        let (_guard, _temp_dir) = SettingsStateGuard::isolated();
+        update_cursor_official_settings(
+            CursorOfficialAuthMode::UserApiKey,
+            Some(FIXTURE_KEY.to_string()),
+        )
+        .expect("plant fixture Cursor key in local settings");
+
+        let on_disk = get_cursor_official_settings();
+        assert_eq!(on_disk.user_api_key.as_deref(), Some(FIXTURE_KEY));
+
+        let db = crate::database::Database::memory().expect("memory database");
+        let sql = db.export_sql_string().expect("export SQL backup");
+        let sync_sql = db
+            .export_sql_string_for_sync()
+            .expect("export SQL for sync");
+        assert!(!sql.contains(FIXTURE_KEY));
+        assert!(!sql.contains("cursorOfficial"));
+        assert!(!sync_sql.contains(FIXTURE_KEY));
+        assert!(!sync_sql.contains("cursorOfficial"));
+
+        let snapshot = crate::services::sync_protocol::build_local_snapshot(&db)
+            .expect("build WebDAV/S3 snapshot");
+        let sql_text = String::from_utf8_lossy(&snapshot.db_sql);
+        let manifest_text = String::from_utf8_lossy(&snapshot.manifest_bytes);
+        let skills_text = String::from_utf8_lossy(&snapshot.skills_zip);
+        assert!(!sql_text.contains(FIXTURE_KEY));
+        assert!(!sql_text.contains("cursorOfficial"));
+        assert!(!manifest_text.contains(FIXTURE_KEY));
+        assert!(!manifest_text.contains("cursorOfficial"));
+        assert!(!skills_text.contains(FIXTURE_KEY));
+
+        let manifest: serde_json::Value =
+            serde_json::from_slice(&snapshot.manifest_bytes).expect("parse sync manifest");
+        let artifact_keys = manifest["artifacts"]
+            .as_object()
+            .expect("sync artifacts")
+            .keys()
+            .cloned()
+            .collect::<std::collections::BTreeSet<_>>();
+        assert_eq!(
+            artifact_keys,
+            ["db.sql", "skills.zip"]
+                .into_iter()
+                .map(str::to_string)
+                .collect()
+        );
+    }
+
+    #[test]
     fn cursor_official_update_rejects_empty_replacement_key() {
         let mut settings = AppSettings::default();
 
