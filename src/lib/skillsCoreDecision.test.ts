@@ -5,7 +5,8 @@ import { skillDecisionCopy } from "./skillsCoreDecision";
 const copy: Record<string, string> = {
   "skills.core.decision.git-worktree-submodule.job": "curated-job",
   "skills.core.decision.git-worktree-submodule.whenNot": "curated-when-not",
-  "skills.core.decision.git-worktree-submodule.consequence": "curated-consequence",
+  "skills.core.decision.git-worktree-submodule.consequence":
+    "curated-consequence",
   "skills.core.decisionFallback.job": "fallback-{{name}}",
   "skills.core.decisionFallback.whenNot": "fallback-when-not",
   "skills.core.decisionFallback.consequence": "fallback-consequence",
