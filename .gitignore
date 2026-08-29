@@ -27,6 +27,7 @@ flatpak-build/
 flatpak-repo/
 .worktrees/
 .spec-workflow/
+docs/superpowers/
 copilot-api
 .history
 CODEBUDDY.md
