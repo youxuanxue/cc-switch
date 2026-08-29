@@ -12,8 +12,13 @@ const copy: Record<string, string> = {
 };
 
 function t(key: string, options?: Record<string, unknown>): string {
-  const template = copy[key] ?? key;
-  return template.replace("{{name}}", String(options?.name ?? ""));
+  if (!(key in copy)) {
+    if (options && "defaultValue" in options) {
+      return String(options.defaultValue ?? "");
+    }
+    return key;
+  }
+  return copy[key].replace("{{name}}", String(options?.name ?? ""));
 }
 
 describe("skillDecisionCopy", () => {

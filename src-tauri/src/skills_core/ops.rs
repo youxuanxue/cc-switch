@@ -496,6 +496,7 @@ fn scan_field_skills(
 
 fn is_codeg_store_skill(path: &Path) -> bool {
     let store = crate::config::get_home_dir().join(".codeg").join("skills");
+    let store = fs::canonicalize(&store).unwrap_or(store);
     if let Ok(real) = fs::canonicalize(path) {
         if real.starts_with(&store) {
             return true;
@@ -510,33 +511,16 @@ fn is_codeg_store_skill(path: &Path) -> bool {
                     .map(|parent| parent.join(&link))
                     .unwrap_or(link)
             };
-            resolved.starts_with(&store)
+            fs::canonicalize(&resolved)
+                .map(|real| real.starts_with(&store))
+                .unwrap_or_else(|_| resolved.starts_with(&store))
         }
         Err(_) => false,
     }
 }
 
 fn skill_description(dir: &Path) -> String {
-    let skill_md = dir.join("SKILL.md");
-    let Ok(content) = fs::read_to_string(&skill_md) else {
-        return String::new();
-    };
-    let content = content.trim_start_matches('\u{feff}');
-    let parts: Vec<&str> = content.splitn(3, "---").collect();
-    if parts.len() < 3 {
-        return String::new();
-    }
-    for line in parts[1].lines() {
-        let line = line.trim();
-        let Some(rest) = line.strip_prefix("description:") else {
-            continue;
-        };
-        let value = rest.trim().trim_matches('"').trim_matches('\'');
-        if !value.is_empty() {
-            return value.to_string();
-        }
-    }
-    String::new()
+    SkillService::skill_frontmatter_description(dir)
 }
 
 fn scan_roots(token: AgentToken) -> Result<Vec<PathBuf>, AppError> {

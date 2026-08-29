@@ -1,12 +1,3 @@
-export const CURATED_SKILL_DECISIONS = [
-  "git-worktree-submodule",
-  "xj-review",
-  "twin",
-  "dev-rules-fanout",
-] as const;
-
-export type CuratedSkillDecision = (typeof CURATED_SKILL_DECISIONS)[number];
-
 export interface SkillDecisionCopy {
   job: string;
   whenNot: string;
@@ -16,8 +7,9 @@ export interface SkillDecisionCopy {
 
 type Translate = (key: string, options?: Record<string, unknown>) => string;
 
-export function isCuratedSkillDecision(name: string): name is CuratedSkillDecision {
-  return (CURATED_SKILL_DECISIONS as readonly string[]).includes(name);
+function translatedOrEmpty(t: Translate, key: string): string {
+  const value = t(key, { defaultValue: "" });
+  return value === key ? "" : value;
 }
 
 export function skillDecisionCopy(
@@ -25,13 +17,14 @@ export function skillDecisionCopy(
   description: string | undefined,
   t: Translate,
 ): SkillDecisionCopy {
-  if (isCuratedSkillDecision(name)) {
-    return {
-      job: t(`skills.core.decision.${name}.job`),
-      whenNot: t(`skills.core.decision.${name}.whenNot`),
-      consequence: t(`skills.core.decision.${name}.consequence`),
-      curated: true,
-    };
+  const job = translatedOrEmpty(t, `skills.core.decision.${name}.job`);
+  const whenNot = translatedOrEmpty(t, `skills.core.decision.${name}.whenNot`);
+  const consequence = translatedOrEmpty(
+    t,
+    `skills.core.decision.${name}.consequence`,
+  );
+  if (job && whenNot && consequence) {
+    return { job, whenNot, consequence, curated: true };
   }
 
   const trimmed = description?.trim() ?? "";

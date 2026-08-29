@@ -227,6 +227,60 @@ fn codeg_store_symlink_is_not_a_first_open_candidate() {
     assert_eq!(preview.candidates[0].provenance, "catalog-managed");
 }
 
+#[cfg(unix)]
+#[test]
+fn relative_codeg_store_symlink_is_not_a_first_open_candidate() {
+    let (_guard, home, state) = setup();
+    let db = &*state.db;
+    write_catalog(&home, "g".repeat(40).as_str(), &[("rec-one", true, "rec")]);
+    let codeg = home.join(".codeg").join("skills").join("tdd");
+    write_skill(&codeg, "tdd", "codeg-owned");
+    let dest_dir = home.join(".pi").join("agent").join("skills");
+    fs::create_dir_all(&dest_dir).expect("pi skills");
+    let dest = dest_dir.join("tdd");
+    std::os::unix::fs::symlink("../../../.codeg/skills/tdd", &dest).expect("relative symlink");
+
+    let preview = skills_core::preview_first_open(&db, &["pi".into()]).unwrap();
+    assert!(
+        !preview.candidates.iter().any(|c| c.name == "tdd"),
+        "relative CodeG store projections must not pollute first-open"
+    );
+    assert_eq!(
+        preview
+            .candidates
+            .iter()
+            .map(|c| c.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["rec-one"]
+    );
+}
+
+#[test]
+fn folded_yaml_description_is_not_the_fold_marker() {
+    let (_guard, home, state) = setup();
+    let db = &*state.db;
+    write_catalog(&home, "h".repeat(40).as_str(), &[("rec-one", true, "rec")]);
+    let dir = home.join(".codex").join("skills").join("folded");
+    fs::create_dir_all(&dir).expect("skill dir");
+    fs::write(
+        dir.join("SKILL.md"),
+        "---\nname: folded\ndescription: >-\n  Use when reviewing a folded job.\n---\nbody\n",
+    )
+    .expect("folded SKILL.md");
+
+    let preview = skills_core::preview_first_open(&db, &["codex".into()]).unwrap();
+    assert_eq!(preview.candidates.len(), 1);
+    assert_eq!(preview.candidates[0].name, "folded");
+    assert_ne!(preview.candidates[0].description, ">-");
+    assert!(
+        preview.candidates[0]
+            .description
+            .contains("reviewing a folded job"),
+        "got {:?}",
+        preview.candidates[0].description
+    );
+}
+
 #[test]
 fn first_open_same_name_different_hash_fails_closed() {
     let (_guard, home, state) = setup();
