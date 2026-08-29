@@ -18,14 +18,12 @@ import {
   History,
   BarChart2,
   Download,
-  FolderArchive,
   Search,
   FolderOpen,
   KeyRound,
   Shield,
   Cpu,
   LayoutDashboard,
-  Loader2,
   RefreshCw,
 } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -48,7 +46,6 @@ import { useProxyStatus } from "@/hooks/useProxyStatus";
 import { useUsageCacheBridge } from "@/hooks/useUsageCacheBridge";
 import { useTauriEvent } from "@/hooks/useTauriEvent";
 import { useLastValidValue } from "@/hooks/useLastValidValue";
-import { useScanUnmanagedSkills } from "@/hooks/useSkills";
 import {
   extractErrorMessage,
   translatePiProviderMutationError,
@@ -86,9 +83,9 @@ import {
   getSkillsPageHeaderActions,
   type SkillsPageSource,
 } from "@/components/skills/SkillsPage";
-import UnifiedSkillsPanel, {
-  type SkillsCheckUpdatesState,
-} from "@/components/skills/UnifiedSkillsPanel";
+import SkillsCorePanel, {
+  type SkillsCorePanelHandle,
+} from "@/components/skills/SkillsCorePanel";
 import { DeepLinkImportDialog } from "@/components/DeepLinkImportDialog";
 import { FirstRunNoticeDialog } from "@/components/FirstRunNoticeDialog";
 import { AgentsPanel } from "@/components/agents/AgentsPanel";
@@ -188,14 +185,8 @@ function App() {
   const [isWindowMaximized, setIsWindowMaximized] = useState(false);
   const [mcpManagementBusy, setMcpManagementBusy] = useState(false);
   const [skillsManagementBusy, setSkillsManagementBusy] = useState(false);
-  const [skillsNavigationBusy, setSkillsNavigationBusy] = useState(false);
   const [promptManagementBusy, setPromptManagementBusy] = useState(false);
   const [promptNavigationBusy, setPromptNavigationBusy] = useState(false);
-  const [skillsCheckUpdatesState, setSkillsCheckUpdatesState] =
-    useState<SkillsCheckUpdatesState>({
-      isChecking: false,
-      hasSkills: false,
-    });
 
   useEffect(() => {
     localStorage.setItem(VIEW_STORAGE_KEY, currentView);
@@ -264,11 +255,7 @@ function App() {
     useState<PromptPrimaryAction>("prompt");
   const mcpPanelRef = useRef<any>(null);
   const skillsPageRef = useRef<any>(null);
-  const unifiedSkillsPanelRef = useRef<any>(null);
-  // 订阅未管理 Skill 的共享缓存（实际扫描由 UnifiedSkillsPanel 进入页面时触发）。
-  // 这里 enabled 默认 false，仅用于「导入」按钮的绿点提示，不主动发起扫描。
-  const { data: unmanagedSkills } = useScanUnmanagedSkills();
-  const hasUnmanagedSkills = (unmanagedSkills?.length ?? 0) > 0;
+  const skillsCorePanelRef = useRef<SkillsCorePanelHandle>(null);
   const addActionButtonClass =
     "bg-orange-500 hover:bg-orange-600 dark:bg-orange-500 dark:hover:bg-orange-600 text-white shadow-lg shadow-orange-500/30 dark:shadow-orange-500/40 rounded-full w-8 h-8";
 
@@ -645,8 +632,7 @@ function App() {
   }, [activeApp]);
 
   const currentViewRef = useRef(currentView);
-  const managementBusy =
-    mcpManagementBusy || skillsNavigationBusy || promptNavigationBusy;
+  const managementBusy = mcpManagementBusy || promptNavigationBusy;
   const managementBusyRef = useRef(false);
   managementBusyRef.current = managementBusy;
 
@@ -1032,15 +1018,10 @@ function App() {
           return <HermesMemoryPanel />;
         case "skills":
           return (
-            <UnifiedSkillsPanel
-              ref={unifiedSkillsPanelRef}
+            <SkillsCorePanel
+              ref={skillsCorePanelRef}
               onOpenDiscovery={handleOpenSkillsDiscovery}
               onInteractionBlockedChange={setSkillsManagementBusy}
-              onNavigationBlockedChange={setSkillsNavigationBusy}
-              onCheckUpdatesStateChange={setSkillsCheckUpdatesState}
-              currentApp={
-                sharedFeatureApp === "openclaw" ? "claude" : sharedFeatureApp
-              }
             />
           );
         case "skillsDiscovery":
@@ -1459,81 +1440,29 @@ function App() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      disabled={
-                        skillsManagementBusy ||
-                        skillsCheckUpdatesState.isChecking ||
-                        !skillsCheckUpdatesState.hasSkills
-                      }
-                      onClick={() =>
-                        unifiedSkillsPanelRef.current?.checkUpdates()
-                      }
-                      className={cn(
-                        "hover:bg-black/5 dark:hover:bg-white/5",
-                        skillsManagementBusy && "disabled:opacity-100",
-                      )}
-                    >
-                      {skillsCheckUpdatesState.isChecking ? (
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      ) : (
-                        <RefreshCw className="w-4 h-4 mr-2" />
-                      )}
-                      {skillsCheckUpdatesState.isChecking
-                        ? t("skills.checkingUpdates")
-                        : t("skills.checkUpdates")}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
                       disabled={skillsManagementBusy}
-                      onClick={() =>
-                        unifiedSkillsPanelRef.current?.openRestoreFromBackup()
-                      }
+                      onClick={() => skillsCorePanelRef.current?.syncNow()}
                       className="hover:bg-black/5 disabled:opacity-100 dark:hover:bg-white/5"
                     >
-                      <History className="w-4 h-4 mr-2" />
-                      {t("skills.restoreFromBackup.button")}
+                      <RefreshCw className="w-4 h-4 mr-2" />
+                      {t("skills.core.sync")}
                     </Button>
                     <Button
                       variant="ghost"
                       size="sm"
                       disabled={skillsManagementBusy}
-                      onClick={() =>
-                        unifiedSkillsPanelRef.current?.openInstallFromZip()
-                      }
+                      onClick={() => skillsCorePanelRef.current?.openImport()}
                       className="hover:bg-black/5 disabled:opacity-100 dark:hover:bg-white/5"
-                    >
-                      <FolderArchive className="w-4 h-4 mr-2" />
-                      {t("skills.installFromZip.button")}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={skillsManagementBusy}
-                      onClick={() =>
-                        unifiedSkillsPanelRef.current?.openImport()
-                      }
-                      className="relative hover:bg-black/5 disabled:opacity-100 dark:hover:bg-white/5"
-                      title={
-                        hasUnmanagedSkills
-                          ? t("skills.unmanagedAvailable")
-                          : undefined
-                      }
                     >
                       <Download className="w-4 h-4 mr-2" />
                       {t("skills.import")}
-                      {hasUnmanagedSkills && (
-                        <span
-                          className="absolute top-1 right-1 h-2 w-2 rounded-full bg-green-500"
-                          aria-hidden="true"
-                        />
-                      )}
                     </Button>
                     <Button
                       variant="ghost"
                       size="sm"
                       disabled={skillsManagementBusy}
                       onClick={() =>
-                        unifiedSkillsPanelRef.current?.openDiscovery()
+                        skillsCorePanelRef.current?.openDiscovery()
                       }
                       className="hover:bg-black/5 disabled:opacity-100 dark:hover:bg-white/5"
                     >
