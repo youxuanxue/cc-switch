@@ -529,6 +529,9 @@ pub struct AppSettings {
     /// - Linux: "gnome-terminal" | "konsole" | "xfce4-terminal" | "alacritty" | "kitty" | "ghostty"
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub preferred_terminal: Option<String>,
+    /// iTerm 打开方式：`tab`（已有窗口则新标签，默认）或 `window`（始终新窗口）
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub terminal_open_mode: Option<String>,
 
     // ===== 本机自动迁移状态 =====
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -601,6 +604,7 @@ impl Default for AppSettings {
             backup_interval_hours: None,
             backup_retain_count: None,
             preferred_terminal: None,
+            terminal_open_mode: None,
             local_migrations: None,
         }
     }
@@ -1226,6 +1230,18 @@ pub fn get_preferred_terminal() -> Option<String> {
             e.into_inner()
         })
         .preferred_terminal
+        .clone()
+}
+
+/// iTerm 打开方式：已有窗口时开标签页（默认），或始终开新窗口。
+pub fn get_terminal_open_mode() -> Option<String> {
+    settings_store()
+        .read()
+        .unwrap_or_else(|e| {
+            log::warn!("设置锁已毒化，使用恢复值: {e}");
+            e.into_inner()
+        })
+        .terminal_open_mode
         .clone()
 }
 

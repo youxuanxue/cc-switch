@@ -284,8 +284,12 @@ export function SettingsPage({
                     />
                     <TerminalSettings
                       value={settings.preferredTerminal}
+                      openMode={settings.terminalOpenMode}
                       onChange={(terminal) =>
                         handleAutoSave({ preferredTerminal: terminal })
+                      }
+                      onOpenModeChange={(mode) =>
+                        handleAutoSave({ terminalOpenMode: mode })
                       }
                     />
                   </motion.div>

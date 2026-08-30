@@ -253,6 +253,7 @@ describe("SessionManagerPage", () => {
     toastErrorMock.mockReset();
     Element.prototype.scrollIntoView = vi.fn();
     window.localStorage.removeItem("cc-switch.sessionManager.listViewMode");
+    window.localStorage.removeItem("cc-switch.sessionManager.staleCleanupDays");
     window.localStorage.removeItem(GROUP_EXPANSION_STORAGE_KEY);
     platformMocks.isMac.mockReset().mockReturnValue(true);
     cursorApiMocks.getOfficialStatus.mockReset().mockResolvedValue({
@@ -1439,6 +1440,151 @@ describe("SessionManagerPage", () => {
       );
     });
     expect(toastSuccessMock).not.toHaveBeenCalled();
+    launch.mockRestore();
+  });
+
+  it("opens idle cleanup and reuses the existing delete confirmation", async () => {
+    const now = Date.now();
+    const day = 86_400_000;
+    setSessionFixtures(
+      [
+        {
+          providerId: "codex",
+          sessionId: "stale-session",
+          title: "Stale Session",
+          projectDir: "/mock/codex",
+          lastActiveAt: now - 40 * day,
+          sourcePath: "/mock/codex/stale.jsonl",
+        },
+        {
+          providerId: "codex",
+          sessionId: "fresh-session",
+          title: "Fresh Session",
+          projectDir: "/mock/codex",
+          lastActiveAt: now - 2 * day,
+          sourcePath: "/mock/codex/fresh.jsonl",
+        },
+        {
+          providerId: "cursor",
+          sessionId: "11111111-1111-4111-8111-111111111111",
+          title: "Cursor Stale",
+          projectDir: "/mock/cursor/cursor-workspace",
+          lastActiveAt: now - 40 * day,
+        },
+      ],
+      {},
+    );
+
+    renderPage();
+    const cleanupButton = await screen.findByRole("button", {
+      name: /清理闲置会话/i,
+    });
+    fireEvent.click(cleanupButton);
+
+    expect(
+      await screen.findByText("将删除 1 个会话，跳过 1 个不可删。"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Developer: Delete Old Chats/),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /继续删除/i }));
+
+    const confirm = await screen.findByTestId("confirm-dialog");
+    expect(confirm).toHaveTextContent("删除会话");
+    expect(confirm).toHaveTextContent("Stale Session");
+    expect(confirm).not.toHaveTextContent("Fresh Session");
+    expect(confirm).not.toHaveTextContent("Cursor Stale");
+  });
+
+  it("does not submit idle cleanup when days are invalid or no sessions match", async () => {
+    const now = Date.now();
+    setSessionFixtures(
+      [
+        {
+          providerId: "codex",
+          sessionId: "fresh-only",
+          title: "Fresh Only",
+          projectDir: "/mock/codex",
+          lastActiveAt: now,
+          sourcePath: "/mock/codex/fresh.jsonl",
+        },
+      ],
+      {},
+    );
+
+    renderPage();
+    const cleanupButton = await screen.findByRole("button", {
+      name: /清理闲置会话/i,
+    });
+    fireEvent.click(cleanupButton);
+
+    const daysInput = await screen.findByLabelText(/未活跃天数/i);
+    await userEvent.clear(daysInput);
+    await userEvent.type(daysInput, "0");
+    expect(screen.getByText("请输入 1 到 3650 之间的整数。")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /继续删除/i })).toBeDisabled();
+
+    await userEvent.clear(daysInput);
+    await userEvent.type(daysInput, "30");
+    expect(screen.getByText("没有符合条件的可删会话。")).toBeInTheDocument();
+    expect(
+      screen.queryByText(/Developer: Delete Old Chats/),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /继续删除/i })).toBeDisabled();
+    expect(screen.queryByTestId("confirm-dialog")).not.toBeInTheDocument();
+  });
+
+  it("starts a new session in the selected project's main workspace", async () => {
+    setSessionFixtures(
+      [
+        {
+          providerId: "codex",
+          sessionId: "only-session",
+          title: "Only Session",
+          projectDir: "/Users/feng/Codes/cc-switch",
+          lastActiveAt: Date.now(),
+          sourcePath: "/mock/codex/only.jsonl",
+        },
+      ],
+      {},
+    );
+    const launch = vi
+      .spyOn(sessionsApi, "launchTerminal")
+      .mockResolvedValue({ action: "launched" });
+
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: /新建会话/i }));
+
+    expect(await screen.findByLabelText(/项目目录/i)).toHaveValue(
+      "/Users/feng/Codes/cc-switch",
+    );
+    fireEvent.click(screen.getByRole("button", { name: /打开会话/i }));
+
+    await waitFor(() => {
+      expect(launch).toHaveBeenCalledWith({
+        command: "codex",
+        cwd: "/Users/feng/Codes/cc-switch",
+      });
+    });
+    launch.mockRestore();
+  });
+
+  it("does not launch a new session with an unsafe workspace name", async () => {
+    const launch = vi.spyOn(sessionsApi, "launchTerminal");
+
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: /新建会话/i }));
+
+    const workspaceInput = await screen.findByLabelText(/工作区名称/i);
+    await userEvent.type(workspaceInput, "../escape");
+    expect(
+      screen.getByText(
+        "工作区名称只能使用字母、数字、点、下划线和连字符。",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /打开会话/i })).toBeDisabled();
+    expect(launch).not.toHaveBeenCalled();
     launch.mockRestore();
   });
 });

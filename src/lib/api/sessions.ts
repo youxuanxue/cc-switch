@@ -23,9 +23,18 @@ export interface SessionResumeState {
   appearance: SessionResumeAppearance;
 }
 
+export interface WtsWorkspace {
+  slug: string;
+  path: string;
+}
+
 export const sessionsApi = {
   async list(): Promise<SessionMeta[]> {
     return await invoke("list_sessions");
+  },
+
+  async listWtsWorkspaces(projectDir: string): Promise<WtsWorkspace[]> {
+    return await invoke("list_wts_workspaces", { projectDir });
   },
 
   async getMessages(
@@ -69,9 +78,17 @@ export const sessionsApi = {
     sessionId?: string | null;
     providerId?: string | null;
     sourcePath?: string | null;
+    terminal?: string | null;
   }): Promise<ResumeLaunchResult> {
-    const { command, cwd, customConfig, sessionId, providerId, sourcePath } =
-      options;
+    const {
+      command,
+      cwd,
+      customConfig,
+      sessionId,
+      providerId,
+      sourcePath,
+      terminal,
+    } = options;
     return await invoke("launch_session_terminal", {
       command,
       cwd,
@@ -79,6 +96,7 @@ export const sessionsApi = {
       sessionId,
       providerId,
       sourcePath,
+      terminal,
     });
   },
 };
