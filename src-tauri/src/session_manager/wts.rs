@@ -21,12 +21,8 @@ pub fn is_valid_wts_slug(slug: &str) -> bool {
 }
 
 pub fn list_wts_workspaces(project_dir: &Path) -> Result<Vec<WtsWorkspace>, String> {
-    let project_dir = fs::canonicalize(project_dir).map_err(|error| {
-        format!(
-            "项目目录不可用：{} ({error})",
-            project_dir.display()
-        )
-    })?;
+    let project_dir = fs::canonicalize(project_dir)
+        .map_err(|error| format!("项目目录不可用：{} ({error})", project_dir.display()))?;
     if !project_dir.is_dir() {
         return Err(format!("项目目录不是文件夹：{}", project_dir.display()));
     }
