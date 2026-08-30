@@ -40,7 +40,7 @@ approved_by: user-chat-2026-08-28
 - Cursor Desktop BYOK 管理。
 - `agent-local`、`agent-cli-local` 或任何受限 entitlement 绕过。
 - Cursor Proxy、Failover、MCP、Prompt、Skills 或通用 Provider 切换。
-- Cursor 会话删除。`sourcePath` 只授权只读预览，不能当成删除授权。
+- Cursor Desktop 应用库（`state.vscdb` 等）删除。Agent CLI 本地索引（`~/.cursor/chats/<bucket>/<chat-id>/`）可以由闲置清理/删除入口移除；`sourcePath` 仍只用于定位该会话目录，不能授权删除 Desktop 库或整个项目桶。
 - 新会话的 `wts`/worktree 启动。本期只接入已有会话索引与恢复；隔离新会话单独设计。
 - 修改 Cursor bundle、认证文件格式或私有控制面。
 - 自动恢复真实私人会话或创建新会话作为测试步骤。
@@ -93,7 +93,7 @@ Cursor 本期能力如下：
 | `agent --workspace … --resume <chat-id>` | `supported` | 使用公开的官方 workspace 与恢复参数 |
 | 本地会话索引 | `conditional` | 依赖本机存在且可解析的 `~/.cursor/chats` |
 | Transcript 预览 | `supported` | 只读解析 `store.db`，复用现有对话记录与目录 |
-| Cursor 会话删除 | `unsupported` | 本期不修改 Cursor 私有历史存储 |
+| Cursor Agent CLI 本地会话删除 | `supported` | 只删 `~/.cursor/chats/<bucket>/<chat-id>/`；Desktop 聊天库仍不可删 |
 
 能力状态只作为代码和测试中的产品承诺 SSOT，不渲染到用户界面。用户只看到当前机器上的两层运行态和下一步动作：
 
@@ -114,7 +114,7 @@ Cursor 出现在会话工具筛选和现有“工具 → 项目目录 → 会话
 
 - “继续会话”。
 
-列表和详情主视觉与其他会话同一套头栏：标题、时间、项目目录、源文件、可复制的固定恢复命令，以及“恢复会话”。选中后中间复用“对话记录”和右侧目录。未就绪时才在头栏下方插入登录/选目录等补救，不另做一块 Cursor 专用详情卡。Cursor 不支持删除时，删除按钮、批量勾选框和分组删除入口全部隐藏，不展示禁用按钮。`sourcePath` 只用于只读预览，不能重新当成删除授权。
+列表和详情主视觉与其他会话同一套头栏：标题、时间、项目目录、源文件、可复制的固定恢复命令，以及“恢复会话”。选中后中间复用“对话记录”和右侧目录。未就绪时才在头栏下方插入登录/选目录等补救，不另做一块 Cursor 专用详情卡。Agent CLI 本地会话（合法 chat UUID + `sourcePath`）可以删除；没有删除资格的会话隐藏删除按钮和勾选框，不展示禁用按钮。`sourcePath` 只定位该会话目录，不能授权删除 Desktop 库、项目桶或工作区。
 
 ### 4.2 两层状态，而不是一个大状态机
 
@@ -300,7 +300,7 @@ resumeCommand = 空
 
 ### 7.4 Transcript 只读预览
 
-对话预览只读取会话目录下的 `store.db`。扫描只在该文件存在时写入 `sourcePath`；加载时文件名必须是 `store.db`，否则拒绝。解析只走根 blob 上的直接引用，跳过 `system`，不把 `sourcePath` 当成删除授权。不扫描 `~/.cursor/projects/*/agent-transcripts`。目录导航可隐藏 `<user_info>` 信封，正文仍走共享对话记录。
+对话预览只读取会话目录下的 `store.db`。扫描优先写入 `store.db`，没有 store 时退回 `meta.json` 以便删除定位；加载消息时文件名必须是 `store.db`，否则拒绝。解析只走根 blob 上的直接引用，跳过 `system`。`sourcePath` 只定位该 Agent CLI 会话目录，不能授权删除 Desktop 库或整个项目桶。不扫描 `~/.cursor/projects/*/agent-transcripts`。目录导航可隐藏 `<user_info>` 信封，正文仍走共享对话记录。
 
 ## 8. 恢复与密钥边界
 
@@ -366,15 +366,15 @@ Windows/Linux 不新增一套未经验证的密钥拼接或剪贴板降级。本
 
 ## 9. 删除行为
 
-Cursor 现在会为 `store.db` 填充 `sourcePath`，但删除能力仍是 `unsupported`。不能把 `sourcePath` 当成删除授权，也不能只靠字段为空来隐藏删除入口。
+Cursor Agent CLI 本地会话可以删除；Cursor Desktop 聊天库仍然不可删。
 
-- 前端使用一个共享的 `isSessionDeletable(session)` 资格函数；现有 provider 继续按 `sourcePath` 判断，Cursor 固定返回 `false`，即使已有 transcript 路径。
-- 单项删除按钮和会话勾选框只在资格为 `true` 时渲染；provider/目录分组没有可删除会话时不渲染分组勾选框。
-- 当前筛选没有任何可删除会话时不提供批量管理入口；若用户从其他筛选切到该状态，自动退出批量模式并清空选择。
-- Cursor 不进入后端删除 dispatch，直接返回 unsupported，形成独立于 UI 的第二道保护。
-- Cursor 不计入可批量删除数量。
+- `sourcePath` 指向该 chat 目录下的 `store.db`（没有 store 时退回 `meta.json`），只授权删除 `~/.cursor/chats/<bucket>/<chat-id>/` 这一层。
+- 前端使用共享的 `isSessionDeletable(session)`：Cursor 需要合法 chat UUID 且能力为 `sessionDeletion: supported`。
+- 后端只删除 chat-id 目录，拒绝项目桶、`chats` 根目录、以及 `~/.cursor/chats` 以外的路径（包括 Desktop `state.vscdb`）。
+- 单项删除、批量管理和闲置清理走同一条资格函数与删除 dispatch。
+- 不删除工作区目录，不声明已清理 Cursor Desktop 官方聊天。
 
-本期不改变现有 provider 的 `SessionMeta` 或删除行为。
+本期不改变其他 provider 的 `SessionMeta` 或删除行为。
 
 ## 10. 技术边界与代码 owner
 
@@ -439,11 +439,11 @@ Cursor 现在会为 `store.db` 填充 `sourcePath`，但删除能力仍是 `unsu
 - metadata 重复时按 `updatedAtMs`、规范化路径稳定去重，列表与恢复选择一致。
 - 索引状态与扫描复用同一个根目录/布局 resolver；索引不可用不改变 `list_sessions` 的既有返回契约。
 - `cwd` 为空或目录不存在的会话仍进入索引。
-- Cursor `sourcePath` 仅在 `store.db` 存在时指向该文件；`resumeCommand` 仍为空，不能进入通用终端恢复路径。删除仍拒绝 Cursor。
+- Cursor `sourcePath` 优先指向同目录 `store.db`，没有 store 时退回 `meta.json`；`resumeCommand` 仍为空，不能进入通用终端恢复路径。删除只允许 Agent CLI chat 目录。
 - 原目录失效且没有 override 时返回 `workspaceRequired`，不启动终端。
 - workspace override 只接受可 canonicalize 的现有目录，拒绝文件和失效路径。
 - 恢复命令固定为 `agent --workspace <workspace> --resume <chat-id>`。
-- 删除 dispatch 拒绝 Cursor。
+- 删除 dispatch 拒绝 Desktop / 项目桶 / chats 根目录，只删除匹配的 Agent CLI chat 目录。
 - Login/User API Key 两种模式生成正确的环境策略。
 - Login 模式清除继承的 `CURSOR_API_KEY`；官方模式清除第三方 endpoint 环境。
 - 密钥不进入 argv、DTO、日志文本或恢复命令。
@@ -465,8 +465,8 @@ Cursor 现在会为 `store.db` 填充 `sourcePath`，但删除能力仍是 `unsu
 - 会话筛选包含 Cursor。
 - 目录分类直接使用 `cwd`，不创建或读取 Project 实体。
 - 数据源状态与当前会话恢复状态由不同 owner 派生。
-- Cursor 在存在 `store.db` 时请求会话消息，并复用共享对话记录、消息数和目录导航；删除入口仍然全部隐藏。
-- 删除资格函数保持现有 provider 行为并固定拒绝 Cursor；Cursor 单项删除、选择框、分组删除和批量删除入口全部隐藏，而不是禁用。
+- Cursor 仅在 `sourcePath` 文件名为 `store.db` 时请求会话消息，并复用共享对话记录、消息数和目录导航；`meta.json` 只用于删除定位。
+- 删除资格函数对 Agent CLI 本地会话（合法 chat UUID + `sourcePath`）返回可删；Desktop 路径、非法 ID 和缺少 `sourcePath` 的会话隐藏删除入口。
 - 项目 preflight 的 Cursor SSOT 契约检查能发现页面绕过共享认证/恢复/删除 owner，或 Cursor 重新调用通用终端恢复 IPC。
 - 已就绪时恢复调用专用 API；未登录时显示并调用“登录并继续”。
 - 原目录失效时显示“选择目录并继续”；取消选择保持当前状态，选择目录后保留 override，按认证状态立即恢复或继续内联补救。
@@ -485,7 +485,7 @@ Cursor 现在会为 `store.db` 填充 `sourcePath`，但删除能力仍是 `unsu
 5. 选择原目录失效的会话，确认原地出现“选择目录并继续”；取消选择无 toast，选择新路径后以该 override 继续。
 6. 构造“目录失效 + 未登录”和“目录失效 + API Key 缺失”组合，确认只选择一次目录，认证完成后使用保留的 override 恢复。
 7. 选择未登录且目录有效的会话，确认原地出现“登录并继续”并调用 `launch_cursor_login_and_session(chat-id)`。
-8. 确认有 `store.db` 的 Cursor 会话能翻对话记录，头栏有固定恢复命令，删除入口和能力支持等级仍不存在。
+8. 确认有 `store.db` 的 Cursor 会话能翻对话记录，头栏有固定恢复命令，Agent CLI 本地删除入口可用，能力支持等级仍不出现。
 9. 确认 IPC 参数不含密钥、任意命令或环境变量；即使直接伪造 workspace override，后端也会拒绝文件、失效路径和无法 canonicalize 的路径。
 
 ### 12.4 本机 smoke
@@ -506,8 +506,8 @@ Cursor 现在会为 `store.db` 填充 `sourcePath`，但删除能力仍是 `unsu
 - Cursor 未登录时，用户不离开当前会话即可“登录并继续”。
 - Login 与 User API Key 均为正式支持；TokenKey、Desktop BYOK 和 `agent-local` 未被误标为可用。
 - 本地索引不可用会准确降级，不阻断其他 provider。
-- 有 `store.db` 的 Cursor 会话能翻对话记录；没有该文件时显示共享空状态。删除仍不可用。
-- Cursor 会话不能被删除，且界面不展示无效删除入口。
+- 有 `store.db` 的 Cursor 会话能翻对话记录；没有该文件时显示共享空状态，`sourcePath` 可退回 `meta.json` 以便删除。
+- Agent CLI 本地会话可以删除；Desktop 聊天库、项目桶、chats 根目录和工作区不可删，界面不展示无效删除入口。
 - User API Key 保存后不从后端返回，不进入 argv、日志、命令预览、WebDAV/S3 或数据库备份。
 - 认证中心没有误导性的全局 Beta；主视觉只表达运行态，能力支持等级不出现在 UI。
 - Rust、前端单元测试、类型检查、格式检查和 Playwright 真实 UI e2e 通过。

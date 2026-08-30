@@ -462,7 +462,7 @@ describe("session utils", () => {
     ]);
   });
 
-  it("keeps deletion eligibility in one owner and always rejects Cursor", () => {
+  it("keeps deletion eligibility in one owner and only deletes Cursor Agent CLI chats", () => {
     expect(
       isSessionDeletable({
         providerId: "codex",
@@ -476,6 +476,14 @@ describe("session utils", () => {
         sessionId: "missing-source",
       }),
     ).toBe(false);
+    expect(
+      isSessionDeletable({
+        providerId: "cursor",
+        sessionId: "11111111-1111-4111-8111-111111111111",
+        sourcePath:
+          "/Users/me/.cursor/chats/workspace/11111111-1111-4111-8111-111111111111/store.db",
+      }),
+    ).toBe(true);
     expect(
       isSessionDeletable({
         providerId: "cursor",
