@@ -317,6 +317,13 @@ export const iconMetadata: Record<string, IconMetadata> = {
     keywords: ["cubence", "api", "relay"],
     defaultColor: "#4B5563",
   },
+  cursor: {
+    name: "cursor",
+    displayName: "Cursor",
+    category: "ai-provider",
+    keywords: ["cursor", "ide", "agent"],
+    defaultColor: "currentColor",
+  },
   deepseek: {
     name: "deepseek",
     displayName: "DeepSeek",
