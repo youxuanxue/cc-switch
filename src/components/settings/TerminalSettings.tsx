@@ -94,6 +94,8 @@ export function TerminalSettings({
   // Use value or default
   const currentValue = value || defaultTerminal;
   const currentOpenMode = openMode === "window" ? "window" : "tab";
+  const showItermOpenMode =
+    isMac() && (currentValue === "iterm2" || currentValue === "iterm");
 
   return (
     <section className="space-y-2">
@@ -115,7 +117,7 @@ export function TerminalSettings({
           ))}
         </SelectContent>
       </Select>
-      {isMac() ? (
+      {showItermOpenMode ? (
         <>
           <p className="pt-2 text-xs text-muted-foreground">
             {t("settings.terminal.openModeDescription")}

@@ -1,5 +1,8 @@
+import type { WtsWorkspace } from "@/lib/api/sessions";
 import type { SessionMeta } from "@/types";
 import { resolveWtsProjectIdentity } from "./utils";
+
+export type { WtsWorkspace };
 
 export const MAIN_WORKSPACE = "main";
 
@@ -19,11 +22,6 @@ export interface KnownProject {
   dir: string;
   label: string;
   slugs: string[];
-}
-
-export interface WtsWorkspace {
-  slug: string;
-  path: string;
 }
 
 export type NewSessionLaunch =
