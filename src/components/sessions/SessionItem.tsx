@@ -16,6 +16,7 @@ import {
   getProviderLabel,
   getSessionKey,
   highlightText,
+  resolveWtsProjectIdentity,
 } from "./utils";
 
 interface SessionItemProps {
@@ -41,6 +42,9 @@ export function SessionItem({
   const title = formatSessionTitle(session);
   const lastActive = session.lastActiveAt || session.createdAt || undefined;
   const sessionKey = getSessionKey(session);
+  const worktreeSlug = resolveWtsProjectIdentity(
+    session.projectDir,
+  ).worktreeSlug;
 
   return (
     <div
@@ -100,6 +104,12 @@ export function SessionItem({
               ? formatRelativeTime(lastActive, t)
               : t("common.unknown")}
           </span>
+          {worktreeSlug ? (
+            <>
+              <span aria-hidden="true">·</span>
+              <span className="truncate">{worktreeSlug}</span>
+            </>
+          ) : null}
         </div>
       </button>
     </div>
