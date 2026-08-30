@@ -6,14 +6,37 @@ export const STALE_CLEANUP_MIN_DAYS = 1;
 export const STALE_CLEANUP_MAX_DAYS = 3650;
 export const STALE_CLEANUP_DEFAULT_DAYS = 30;
 
+const CURSOR_AGENT_CHAT_ID =
+  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
+function isCursorAgentChatId(sessionId: string): boolean {
+  return CURSOR_AGENT_CHAT_ID.test(sessionId);
+}
+
+export function sessionMessageSourcePath(
+  session: SessionMeta | null | undefined,
+): string | undefined {
+  if (!session?.sourcePath) {
+    return undefined;
+  }
+  if (session.providerId === "cursor") {
+    const fileName = session.sourcePath.split(/[/\\]/).pop();
+    return fileName === "store.db" ? session.sourcePath : undefined;
+  }
+  return session.sourcePath;
+}
+
 export function isSessionDeletable(session: SessionMeta): boolean {
+  if (!session.sourcePath) {
+    return false;
+  }
   if (session.providerId === "cursor") {
     return (
       isCursorCapabilitySupported("sessionDeletion") &&
-      Boolean(session.sourcePath)
+      isCursorAgentChatId(session.sessionId)
     );
   }
-  return Boolean(session.sourcePath);
+  return true;
 }
 
 export function normalizeStaleCleanupDays(days: number): number | null {

@@ -72,6 +72,7 @@ import {
 import {
   STALE_CLEANUP_DEFAULT_DAYS,
   isSessionDeletable,
+  sessionMessageSourcePath,
   normalizeStaleCleanupDays,
 } from "./sessionCapabilities";
 import { NewSessionDialog } from "./NewSessionDialog";
@@ -435,7 +436,7 @@ export function SessionManagerPage({ appId }: { appId: string }) {
   const { data: messages = [], isLoading: isLoadingMessages } =
     useSessionMessagesQuery(
       selectedSession?.providerId,
-      selectedSession?.sourcePath,
+      sessionMessageSourcePath(selectedSession),
     );
   const { data: resumeState } = useSessionResumeStateQuery(
     isCursorSession ? undefined : selectedSession?.providerId,

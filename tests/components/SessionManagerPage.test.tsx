@@ -335,6 +335,8 @@ describe("SessionManagerPage", () => {
         projectDir: "/mock/cursor/cursor-workspace",
         createdAt: 0,
         lastActiveAt: 4,
+        sourcePath:
+          "/mock/cursor/chats/workspace/11111111-1111-4111-8111-111111111111/store.db",
       },
       {
         providerId: "cursor",
@@ -343,6 +345,8 @@ describe("SessionManagerPage", () => {
         projectDir: "/mock/cursor/cursor-workspace",
         createdAt: 0,
         lastActiveAt: 3,
+        sourcePath:
+          "/mock/cursor/chats/workspace/22222222-2222-4222-8222-222222222222/store.db",
       },
     ];
     const messages: Record<string, SessionMessage[]> = {
@@ -504,7 +508,7 @@ describe("SessionManagerPage", () => {
     expect(screen.getByRole("button", { name: /退出批量管理/i })).toBeVisible();
   });
 
-  it("US-004 exposes the Cursor filter while hiding unsupported delete actions", async () => {
+  it("US-004 exposes the Cursor filter and Agent CLI local delete actions", async () => {
     renderPage("all");
 
     await waitFor(() =>
@@ -519,11 +523,11 @@ describe("SessionManagerPage", () => {
       await screen.findByRole("heading", { name: "Cursor Alpha" }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: /删除会话/i }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("button", { name: /删除会话/i }),
+    ).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: /批量管理/i }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("button", { name: /批量管理/i }),
+    ).toBeInTheDocument();
 
     await switchProviderFilter(/Codex/i);
 
@@ -586,7 +590,7 @@ describe("SessionManagerPage", () => {
     }
   });
 
-  it("US-002/US-005 renders Cursor transcript through shared chrome without delete or generic terminal plumbing", async () => {
+  it("US-002/US-005 renders Cursor transcript through shared chrome without generic terminal plumbing", async () => {
     const user = userEvent.setup();
     const getMessages = vi.spyOn(sessionsApi, "getMessages");
     const launchTerminal = vi.spyOn(sessionsApi, "launchTerminal");
@@ -648,8 +652,8 @@ describe("SessionManagerPage", () => {
       screen.queryByText("must-not-launch-through-generic-terminal"),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: /删除会话/ }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("button", { name: /删除会话/ }),
+    ).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "恢复会话" }));
 
@@ -682,7 +686,7 @@ describe("SessionManagerPage", () => {
     }
   });
 
-  it("US-004 hides Cursor item and group checkboxes in grouped batch mode", async () => {
+  it("US-004 shows Cursor Agent CLI checkboxes in grouped batch mode", async () => {
     renderPage("all");
 
     await waitFor(() =>
@@ -698,21 +702,21 @@ describe("SessionManagerPage", () => {
       screen.getByRole("button", { name: /Cursor Alpha/ }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("checkbox", {
+      screen.getByRole("checkbox", {
         name: /选择 cursor 供应商分组内会话/,
       }),
-    ).not.toBeInTheDocument();
+    ).toBeInTheDocument();
     expect(
-      screen.queryByRole("checkbox", {
+      screen.getByRole("checkbox", {
         name: /选择 cursor-workspace 目录分组内会话/,
       }),
-    ).not.toBeInTheDocument();
+    ).toBeInTheDocument();
     expect(
-      screen.queryByRole("checkbox", { name: "选择会话" }),
-    ).not.toBeInTheDocument();
+      screen.getAllByRole("checkbox", { name: "选择会话" }).length,
+    ).toBeGreaterThan(0);
   });
 
-  it("exits batch mode and clears selection when switching to Cursor", async () => {
+  it("keeps batch mode when switching to Cursor Agent CLI sessions", async () => {
     renderPage("all");
 
     await waitFor(() =>
@@ -728,14 +732,9 @@ describe("SessionManagerPage", () => {
 
     await switchProviderFilter(/Cursor/i);
 
-    await waitFor(() =>
-      expect(
-        screen.queryByRole("button", { name: /退出批量管理/i }),
-      ).not.toBeInTheDocument(),
-    );
-
-    await switchProviderFilter(/Codex/i);
-    fireEvent.click(screen.getByRole("button", { name: /批量管理/i }));
+    expect(
+      await screen.findByRole("button", { name: /退出批量管理/i }),
+    ).toBeInTheDocument();
     expect(screen.getByText("已选 0 项")).toBeInTheDocument();
   });
 
@@ -1470,6 +1469,8 @@ describe("SessionManagerPage", () => {
           title: "Cursor Stale",
           projectDir: "/mock/cursor/cursor-workspace",
           lastActiveAt: now - 40 * day,
+          sourcePath:
+            "/mock/cursor/chats/workspace/11111111-1111-4111-8111-111111111111/store.db",
         },
       ],
       {},
@@ -1482,19 +1483,16 @@ describe("SessionManagerPage", () => {
     fireEvent.click(cleanupButton);
 
     expect(
-      await screen.findByText("将删除 1 个会话，跳过 1 个不可删。"),
+      await screen.findByText("将删除 2 个会话，跳过 0 个不可删。"),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText(/Developer: Delete Old Chats/),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/Agent CLI 的本地会话目录/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /继续删除/i }));
 
     const confirm = await screen.findByTestId("confirm-dialog");
-    expect(confirm).toHaveTextContent("删除会话");
-    expect(confirm).toHaveTextContent("Stale Session");
+    expect(confirm).toHaveTextContent("批量删除会话");
+    expect(confirm).toHaveTextContent("2");
     expect(confirm).not.toHaveTextContent("Fresh Session");
-    expect(confirm).not.toHaveTextContent("Cursor Stale");
   });
 
   it("does not submit idle cleanup when days are invalid or no sessions match", async () => {
@@ -1522,12 +1520,16 @@ describe("SessionManagerPage", () => {
     const daysInput = await screen.findByLabelText(/未活跃天数/i);
     await userEvent.clear(daysInput);
     await userEvent.type(daysInput, "0");
-    expect(screen.getByText("请输入 1 到 3650 之间的整数。")).toBeInTheDocument();
+    expect(
+      screen.getByText("请输入 1 到 3650 之间的整数。"),
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /继续删除/i })).toBeDisabled();
 
     await userEvent.clear(daysInput);
     await userEvent.type(daysInput, "30");
     expect(screen.getByText("没有符合条件的可删会话。")).toBeInTheDocument();
+    expect(screen.queryByText(/Agent CLI/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Cursor Desktop/)).not.toBeInTheDocument();
     expect(
       screen.queryByText(/Developer: Delete Old Chats/),
     ).not.toBeInTheDocument();
@@ -1579,9 +1581,7 @@ describe("SessionManagerPage", () => {
     const workspaceInput = await screen.findByLabelText(/工作区名称/i);
     await userEvent.type(workspaceInput, "../escape");
     expect(
-      screen.getByText(
-        "工作区名称只能使用字母、数字、点、下划线和连字符。",
-      ),
+      screen.getByText("工作区名称只能使用字母、数字、点、下划线和连字符。"),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /打开会话/i })).toBeDisabled();
     expect(launch).not.toHaveBeenCalled();

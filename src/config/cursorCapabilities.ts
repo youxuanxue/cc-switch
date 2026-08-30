@@ -6,7 +6,8 @@ export const cursorCapabilities = {
   fixedSessionResume: "supported",
   localSessionIndex: "conditional",
   transcriptPreview: "supported",
-  sessionDeletion: "unsupported",
+  // Agent CLI local chats under ~/.cursor/chats only. Cursor Desktop stores stay out of scope.
+  sessionDeletion: "supported",
 } as const satisfies Record<string, CursorCapabilityState>;
 
 export type CursorCapability = keyof typeof cursorCapabilities;

@@ -3,6 +3,7 @@ import {
   MS_PER_DAY,
   getSessionActivityAt,
   normalizeStaleCleanupDays,
+  sessionMessageSourcePath,
   summarizeStaleCleanup,
 } from "@/components/sessions/sessionCapabilities";
 import type { SessionMeta } from "@/types";
@@ -14,6 +15,36 @@ const session = (
 ): SessionMeta => ({
   providerId: "codex",
   ...overrides,
+});
+
+describe("session message source path", () => {
+  it("only previews Cursor transcripts from store.db", () => {
+    expect(
+      sessionMessageSourcePath({
+        providerId: "cursor",
+        sessionId: "11111111-1111-4111-8111-111111111111",
+        sourcePath:
+          "/Users/me/.cursor/chats/workspace/11111111-1111-4111-8111-111111111111/store.db",
+      }),
+    ).toBe(
+      "/Users/me/.cursor/chats/workspace/11111111-1111-4111-8111-111111111111/store.db",
+    );
+    expect(
+      sessionMessageSourcePath({
+        providerId: "cursor",
+        sessionId: "11111111-1111-4111-8111-111111111111",
+        sourcePath:
+          "/Users/me/.cursor/chats/workspace/11111111-1111-4111-8111-111111111111/meta.json",
+      }),
+    ).toBeUndefined();
+    expect(
+      sessionMessageSourcePath({
+        providerId: "codex",
+        sessionId: "codex-1",
+        sourcePath: "/tmp/session.jsonl",
+      }),
+    ).toBe("/tmp/session.jsonl");
+  });
 });
 
 describe("stale session cleanup", () => {
@@ -46,11 +77,18 @@ describe("stale session cleanup", () => {
     expect(getSessionActivityAt(sessions[1])).toBe(NOW - 40 * MS_PER_DAY);
   });
 
-  it("skips Cursor, missing timestamps, and sessions without a source path", () => {
+  it("includes stale Cursor Agent CLI chats and skips missing timestamps or source paths", () => {
     const sessions = [
       session({
         providerId: "cursor",
-        sessionId: "cursor-stale",
+        sessionId: "11111111-1111-4111-8111-111111111111",
+        lastActiveAt: NOW - 40 * MS_PER_DAY,
+        sourcePath:
+          "/Users/me/.cursor/chats/workspace/11111111-1111-4111-8111-111111111111/store.db",
+      }),
+      session({
+        providerId: "cursor",
+        sessionId: "not-a-uuid",
         lastActiveAt: NOW - 40 * MS_PER_DAY,
         sourcePath: "/tmp/must-not-delete.jsonl",
       }),
@@ -66,7 +104,9 @@ describe("stale session cleanup", () => {
 
     const { targets, skipped } = summarizeStaleCleanup(sessions, 30, NOW);
 
-    expect(targets).toEqual([]);
+    expect(targets.map((item) => item.sessionId)).toEqual([
+      "11111111-1111-4111-8111-111111111111",
+    ]);
     expect(skipped).toBe(2);
   });
 

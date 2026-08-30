@@ -74,7 +74,7 @@ export function StaleSessionCleanupDialog({
           <DialogDescription>
             {t("sessionManager.staleCleanupDescription", {
               defaultValue:
-                "删除当前列表里超过指定天数未活跃的可删会话。Cursor 等不可删会话会跳过，也不会删除工作区目录。",
+                "删除当前列表里超过指定天数未活跃的可删会话。不会删除工作区目录。",
             })}
           </DialogDescription>
         </DialogHeader>
@@ -121,7 +121,7 @@ export function StaleSessionCleanupDialog({
             <p className="text-sm text-muted-foreground">
               {t("sessionManager.staleCleanupCursorHint", {
                 defaultValue:
-                  "Cursor 会话请在 Cursor 命令面板运行「Developer: Delete Old Chats…」，本应用不会删除它们。",
+                  "将删除 Cursor Agent CLI 的本地会话目录（~/.cursor/chats/…），不会动 Cursor Desktop 的聊天库，也不会删除工作区。",
               })}
             </p>
           ) : null}

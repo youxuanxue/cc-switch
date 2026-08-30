@@ -23,6 +23,7 @@ test("US-001/US-004 groups Cursor sessions by cwd without exposing unsupported c
         projectDir: "/work/acme/project-one",
         createdAt: 100,
         lastActiveAt: 400,
+        sourcePath: `/mock/cursor/chats/acme/${READY_SESSION_ID}/store.db`,
       },
       {
         providerId: "cursor",
@@ -78,9 +79,8 @@ test("US-001/US-004 groups Cursor sessions by cwd without exposing unsupported c
   await expect(page.getByRole("button", { name: /Cursor Beta/ })).toBeVisible();
   await page.getByRole("button", { name: /Cursor Alpha/ }).click();
 
-  await expect(page.getByRole("button", { name: /删除会话/ })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /批量管理/ })).toHaveCount(0);
-  await expect(page.getByRole("checkbox")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /删除会话/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /批量管理/ })).toBeVisible();
   await expect(page.getByText("对话记录")).toBeVisible();
   await expect(page.getByText(/消息数/)).toHaveCount(0);
   await expect(
@@ -285,7 +285,7 @@ test("US-005 reads Cursor conversation history through the shared session chrome
   ).toHaveCount(2);
   await expect(page.getByText("working on it")).toBeVisible();
   await expect(page.getByText("OS Version: darwin")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /删除会话/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /删除会话/ })).toBeVisible();
 
   await page.getByRole("button", { name: "恢复会话", exact: true }).click();
   await expect

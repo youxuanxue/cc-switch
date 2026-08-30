@@ -10,27 +10,25 @@ describe("Cursor capability registry", () => {
       fixedSessionResume: "supported",
       localSessionIndex: "conditional",
       transcriptPreview: "supported",
-      sessionDeletion: "unsupported",
+      sessionDeletion: "supported",
     });
   });
 
   it("US-004 drives Cursor deletion eligibility from the capability registry", () => {
-    const mutableCapabilities = cursorCapabilities as {
-      sessionDeletion: "supported" | "conditional" | "unsupported";
-    };
-    const original = mutableCapabilities.sessionDeletion;
-    mutableCapabilities.sessionDeletion = "supported";
-
-    try {
-      expect(
-        isSessionDeletable({
-          providerId: "cursor",
-          sessionId: "cursor-with-source",
-          sourcePath: "/tmp/cursor-session.jsonl",
-        }),
-      ).toBe(true);
-    } finally {
-      mutableCapabilities.sessionDeletion = original;
-    }
+    expect(
+      isSessionDeletable({
+        providerId: "cursor",
+        sessionId: "11111111-1111-4111-8111-111111111111",
+        sourcePath:
+          "/Users/me/.cursor/chats/workspace/11111111-1111-4111-8111-111111111111/store.db",
+      }),
+    ).toBe(true);
+    expect(
+      isSessionDeletable({
+        providerId: "cursor",
+        sessionId: "not-a-uuid",
+        sourcePath: "/tmp/cursor-session.jsonl",
+      }),
+    ).toBe(false);
   });
 });

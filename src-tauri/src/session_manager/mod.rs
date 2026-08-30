@@ -184,6 +184,7 @@ fn delete_session_with_roots(
                 }
                 "hermes" => hermes::delete_session(&validated_root, &validated_source, session_id),
                 "pi" => pi::delete_session(&validated_root, &validated_source, session_id),
+                "cursor" => cursor::delete_session(&validated_root, &validated_source, session_id),
                 _ => Err(format!("Unsupported provider: {provider_id}")),
             };
         }
@@ -215,6 +216,7 @@ fn provider_roots(provider_id: &str) -> Result<Vec<PathBuf>, String> {
         "grokbuild" => grokbuild::session_roots(),
         "hermes" => vec![crate::hermes_config::get_hermes_dir().join("sessions")],
         "pi" => pi::session_roots(),
+        "cursor" => cursor::session_roots(),
         _ => return Err(format!("Unsupported provider: {provider_id}")),
     };
 
@@ -330,10 +332,23 @@ mod tests {
     }
 
     #[test]
-    fn us004_rejects_cursor_deletion_even_when_transcript_exists() {
-        let delete_error = delete_session("cursor", "session-id", "/tmp/does-not-matter")
-            .expect_err("Cursor deletion is unsupported");
-        assert_eq!(delete_error, "Unsupported provider: cursor");
+    fn us004_rejects_cursor_deletion_outside_agent_cli_chats() {
+        let chats_root = tempdir().expect("agent cli chats root");
+        let outside = tempdir().expect("desktop-like store");
+        let source = outside.path().join("state.vscdb");
+        std::fs::write(&source, b"desktop").expect("write desktop store");
+
+        let delete_error = delete_session_with_roots(
+            "cursor",
+            "11111111-1111-4111-8111-111111111111",
+            &source,
+            &[chats_root.path().to_path_buf()],
+        )
+        .expect_err("Desktop app stores must stay undeletable");
+
+        assert!(delete_error.contains("outside"), "{delete_error}");
+        assert!(source.is_file());
+        assert!(chats_root.path().is_dir());
     }
 
     #[test]

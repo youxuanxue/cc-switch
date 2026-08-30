@@ -231,7 +231,7 @@ fn scan_sessions_in(root: &Path) -> Result<Vec<SessionMeta>, String> {
                 project_dir: record.cwd,
                 created_at: record.created_at_ms,
                 last_active_at: record.updated_at_ms,
-                source_path: store_path_if_present(&record.metadata_path),
+                source_path: delete_target_path(&record.metadata_path),
                 resume_command: None,
             })
             .collect()
@@ -263,6 +263,10 @@ fn find_session_in(root: &Path, session_id: &str) -> Result<CursorSessionRecord,
         .ok_or_else(|| "Cursor session not found".to_string())
 }
 
+pub fn session_roots() -> Vec<PathBuf> {
+    vec![cursor_chats_root()]
+}
+
 pub fn scan_sessions() -> Vec<SessionMeta> {
     scan_sessions_or_empty_in(&cursor_chats_root())
 }
@@ -280,6 +284,99 @@ fn store_path_if_present(metadata_path: &Path) -> Option<String> {
     store
         .is_file()
         .then(|| store.to_string_lossy().replace('\\', "/"))
+}
+
+fn delete_target_path(metadata_path: &Path) -> Option<String> {
+    store_path_if_present(metadata_path)
+        .or_else(|| metadata_path.to_str().map(|value| value.replace('\\', "/")))
+}
+
+const CURSOR_CHAT_FILES: &[&str] = &[
+    "meta.json",
+    "store.db",
+    "store.db-wal",
+    "store.db-shm",
+    "prompt_history.json",
+];
+
+fn is_cursor_chat_id(session_id: &str) -> bool {
+    Uuid::parse_str(session_id).is_ok()
+}
+
+fn resolve_agent_cli_chat_dir(root: &Path, path: &Path) -> Result<PathBuf, String> {
+    let chat_dir = if path.is_dir() {
+        path.to_path_buf()
+    } else {
+        let file_name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .ok_or_else(|| format!("Invalid Cursor session source: {}", path.display()))?;
+        if !CURSOR_CHAT_FILES.contains(&file_name) {
+            return Err(format!(
+                "Unexpected Cursor Agent CLI session source: {}",
+                path.display()
+            ));
+        }
+        path.parent()
+            .ok_or_else(|| format!("Invalid Cursor session path: {}", path.display()))?
+            .to_path_buf()
+    };
+
+    if !chat_dir.starts_with(root) || chat_dir == root {
+        return Err(format!(
+            "Refusing to delete Cursor path outside Agent CLI chats: {}",
+            chat_dir.display()
+        ));
+    }
+
+    let bucket = chat_dir.parent().ok_or_else(|| {
+        format!(
+            "Invalid Cursor Agent CLI session directory: {}",
+            chat_dir.display()
+        )
+    })?;
+    if bucket == root || bucket.parent() != Some(root) {
+        return Err(format!(
+            "Refusing to delete Cursor Agent CLI project bucket or chats root: {}",
+            chat_dir.display()
+        ));
+    }
+
+    Ok(chat_dir)
+}
+
+pub fn delete_session(root: &Path, path: &Path, session_id: &str) -> Result<bool, String> {
+    if !is_cursor_chat_id(session_id) {
+        return Err(format!("Invalid Cursor chat ID: {session_id}"));
+    }
+    if !path.starts_with(root) {
+        return Err(format!(
+            "Cursor session source is outside the Agent CLI chats root: {}",
+            path.display()
+        ));
+    }
+
+    let chat_dir = resolve_agent_cli_chat_dir(root, path)?;
+    if chat_dir.file_name().and_then(|name| name.to_str()) != Some(session_id) {
+        return Err(format!(
+            "Cursor session directory does not match session ID: {}",
+            chat_dir.display()
+        ));
+    }
+    if !chat_dir.join("meta.json").is_file() {
+        return Err(format!(
+            "Cursor Agent CLI session is missing meta.json: {}",
+            chat_dir.display()
+        ));
+    }
+
+    std::fs::remove_dir_all(&chat_dir).map_err(|error| {
+        format!(
+            "Failed to delete Cursor Agent CLI session {}: {error}",
+            chat_dir.display()
+        )
+    })?;
+    Ok(true)
 }
 
 fn decode_hex(value: &str) -> Result<Vec<u8>, String> {
@@ -464,7 +561,10 @@ mod tests {
         assert_eq!(session.created_at, Some(10));
         assert_eq!(session.last_active_at, Some(20));
         assert!(session.summary.is_none());
-        assert!(session.source_path.is_none());
+        assert!(session
+            .source_path
+            .as_deref()
+            .is_some_and(|path| path.ends_with("meta.json")));
         assert!(session.resume_command.is_none());
     }
 
@@ -717,5 +817,109 @@ mod tests {
             CursorIndexStatus::IndexUnavailable { .. }
         ));
         assert!(scan_sessions_or_empty_in(root.path()).is_empty());
+    }
+
+    #[test]
+    fn deletes_only_the_agent_cli_chat_directory() {
+        let root = tempdir().unwrap();
+        let meta = write_meta(
+            root.path(),
+            "workspace-a",
+            CHAT_ID,
+            Some(20),
+            Some(true),
+            Some("/workspace/app"),
+        );
+        let chat_dir = meta.parent().unwrap().to_path_buf();
+        std::fs::write(chat_dir.join("store.db"), b"store").unwrap();
+        write_meta(
+            root.path(),
+            "workspace-a",
+            SECOND_CHAT_ID,
+            Some(10),
+            Some(true),
+            Some("/workspace/app"),
+        );
+        let bucket = root.path().join("workspace-a");
+
+        let deleted = delete_session(root.path(), &chat_dir.join("store.db"), CHAT_ID)
+            .expect("delete agent cli chat");
+
+        assert!(deleted);
+        assert!(!chat_dir.exists());
+        assert!(bucket.join(SECOND_CHAT_ID).join("meta.json").is_file());
+        assert!(bucket.is_dir());
+        assert!(root.path().is_dir());
+    }
+
+    #[test]
+    fn deletes_agent_cli_chat_directory_from_meta_json_when_store_is_absent() {
+        let root = tempdir().unwrap();
+        let meta = write_meta(
+            root.path(),
+            "workspace-a",
+            CHAT_ID,
+            Some(20),
+            Some(true),
+            Some("/workspace/app"),
+        );
+        let chat_dir = meta.parent().unwrap().to_path_buf();
+        let bucket = root.path().join("workspace-a");
+
+        let deleted = delete_session(root.path(), &meta, CHAT_ID)
+            .expect("delete agent cli chat via meta.json");
+
+        assert!(deleted);
+        assert!(!chat_dir.exists());
+        assert!(bucket.is_dir());
+        assert!(root.path().is_dir());
+    }
+
+    #[test]
+    fn refuses_to_delete_a_project_bucket_or_chats_root() {
+        let root = tempdir().unwrap();
+        let meta = write_meta(
+            root.path(),
+            "workspace-a",
+            CHAT_ID,
+            Some(20),
+            Some(true),
+            Some("/workspace/app"),
+        );
+        let bucket = meta.parent().unwrap().parent().unwrap();
+
+        let bucket_error = delete_session(root.path(), bucket, CHAT_ID)
+            .expect_err("must not delete the project bucket");
+        assert!(bucket_error.contains("project bucket") || bucket_error.contains("chats root"));
+        assert!(meta.is_file());
+
+        let root_error = delete_session(root.path(), root.path(), CHAT_ID)
+            .expect_err("must not delete chats root");
+        assert!(
+            root_error.contains("outside Agent CLI chats") || root_error.contains("chats root")
+        );
+        assert!(meta.is_file());
+    }
+
+    #[test]
+    fn refuses_mismatched_or_invalid_cursor_chat_ids() {
+        let root = tempdir().unwrap();
+        let meta = write_meta(
+            root.path(),
+            "workspace-a",
+            CHAT_ID,
+            Some(20),
+            Some(true),
+            Some("/workspace/app"),
+        );
+
+        let mismatch = delete_session(root.path(), &meta, SECOND_CHAT_ID)
+            .expect_err("session id must match directory");
+        assert!(mismatch.contains("does not match session ID"));
+
+        let invalid =
+            delete_session(root.path(), &meta, "not-a-uuid").expect_err("chat id must be a uuid");
+        assert!(invalid.contains("Invalid Cursor chat ID"));
+        assert!(meta.is_file());
     }
 }
