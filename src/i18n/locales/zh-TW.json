@@ -1127,7 +1127,7 @@
     "deleteSelected": "批次刪除",
     "staleCleanupTooltip": "清理閒置工作階段",
     "staleCleanupTitle": "清理閒置工作階段",
-    "staleCleanupDescription": "刪除目前清單中超過指定天數未活躍的可刪工作階段。Cursor 只刪 Agent CLI 本機索引，不刪工作區，也不動 Cursor Desktop。",
+    "staleCleanupDescription": "刪除目前清單中超過指定天數未活躍的可刪工作階段。不會刪除工作區。",
     "staleCleanupDaysLabel": "未活躍天數",
     "staleCleanupPreview": "將刪除 {{count}} 個工作階段，略過 {{skipped}} 個不可刪。",
     "staleCleanupEmpty": "沒有符合條件的可刪工作階段。",

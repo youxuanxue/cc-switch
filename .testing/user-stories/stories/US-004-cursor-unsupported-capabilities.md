@@ -1,7 +1,7 @@
 # US-004-cursor-unsupported-capabilities
 
 - ID: US-004
-- Title: Keep unsupported Cursor capabilities absent and explicit
+- Title: Keep remaining unsupported Cursor capabilities absent; Agent CLI local chats may be deleted
 - As a: CC Switch user evaluating Cursor support
 - I want: the product to expose only capabilities it can safely and officially deliver
 - So that: I am not misled into relying on destructive, private, third-party, or platform-unsupported behavior

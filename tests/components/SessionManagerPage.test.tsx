@@ -1528,6 +1528,8 @@ describe("SessionManagerPage", () => {
     await userEvent.clear(daysInput);
     await userEvent.type(daysInput, "30");
     expect(screen.getByText("没有符合条件的可删会话。")).toBeInTheDocument();
+    expect(screen.queryByText(/Agent CLI/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Cursor Desktop/)).not.toBeInTheDocument();
     expect(
       screen.queryByText(/Developer: Delete Old Chats/),
     ).not.toBeInTheDocument();

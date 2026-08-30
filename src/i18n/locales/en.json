@@ -1126,7 +1126,7 @@
     "deleteSelected": "Delete",
     "staleCleanupTooltip": "Clean up idle sessions",
     "staleCleanupTitle": "Clean up idle sessions",
-    "staleCleanupDescription": "Delete deletable sessions in the current list that have been inactive for the specified number of days. Cursor cleanup removes Agent CLI local chats only, not workspace directories or Cursor Desktop.",
+    "staleCleanupDescription": "Delete deletable sessions in the current list that have been inactive for the specified number of days. Workspace directories are not deleted.",
     "staleCleanupDaysLabel": "Idle days",
     "staleCleanupPreview": "{{count}} sessions will be deleted, {{skipped}} non-deletable skipped.",
     "staleCleanupEmpty": "No matching deletable sessions.",

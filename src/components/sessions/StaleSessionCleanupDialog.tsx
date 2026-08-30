@@ -74,7 +74,7 @@ export function StaleSessionCleanupDialog({
           <DialogDescription>
             {t("sessionManager.staleCleanupDescription", {
               defaultValue:
-                "删除当前列表里超过指定天数未活跃的可删会话。Cursor 只删 Agent CLI 本地索引，不删工作区，也不动 Cursor Desktop。",
+                "删除当前列表里超过指定天数未活跃的可删会话。不会删除工作区目录。",
             })}
           </DialogDescription>
         </DialogHeader>

@@ -9,7 +9,7 @@ export const STALE_CLEANUP_DEFAULT_DAYS = 30;
 const CURSOR_AGENT_CHAT_ID =
   /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
-export function isCursorAgentChatId(sessionId: string): boolean {
+function isCursorAgentChatId(sessionId: string): boolean {
   return CURSOR_AGENT_CHAT_ID.test(sessionId);
 }
 

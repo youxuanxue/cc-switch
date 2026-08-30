@@ -1126,7 +1126,7 @@
     "deleteSelected": "削除",
     "staleCleanupTooltip": "アイドルセッションを整理",
     "staleCleanupTitle": "アイドルセッションを整理",
-    "staleCleanupDescription": "現在の一覧で指定日数以上アクティブでない、削除可能なセッションを削除します。Cursor は Agent CLI のローカル索引だけを消し、ワークスペースや Cursor Desktop は消しません。",
+    "staleCleanupDescription": "現在の一覧で指定日数以上アクティブでない、削除可能なセッションを削除します。ワークスペースは削除しません。",
     "staleCleanupDaysLabel": "非アクティブ日数",
     "staleCleanupPreview": "{{count}} 件を削除し、削除できない {{skipped}} 件はスキップします。",
     "staleCleanupEmpty": "条件に合う削除可能なセッションはありません。",
