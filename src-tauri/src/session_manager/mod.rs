@@ -333,22 +333,22 @@ mod tests {
 
     #[test]
     fn us004_rejects_cursor_deletion_outside_agent_cli_chats() {
+        let chats_root = tempdir().expect("agent cli chats root");
         let outside = tempdir().expect("desktop-like store");
         let source = outside.path().join("state.vscdb");
         std::fs::write(&source, b"desktop").expect("write desktop store");
 
-        let delete_error = delete_session(
+        let delete_error = delete_session_with_roots(
             "cursor",
             "11111111-1111-4111-8111-111111111111",
-            source.to_str().expect("utf8"),
+            &source,
+            &[chats_root.path().to_path_buf()],
         )
         .expect_err("Desktop app stores must stay undeletable");
 
-        assert!(
-            delete_error.contains("outside") || delete_error.contains("Unsupported"),
-            "{delete_error}"
-        );
+        assert!(delete_error.contains("outside"), "{delete_error}");
         assert!(source.is_file());
+        assert!(chats_root.path().is_dir());
     }
 
     #[test]
