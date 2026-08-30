@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { AppId } from "@/lib/api";
 import type { VisibleApps } from "@/types";
@@ -11,6 +11,8 @@ import {
 import { cn } from "@/lib/utils";
 import { Monitor, MoreHorizontal, Terminal } from "lucide-react";
 import { APP_IDS } from "@/config/appConfig";
+import { useSessionsQuery } from "@/lib/query";
+import { sortAppsByRecentSessionCount } from "./appSwitcherOrder";
 
 const APP_BADGE_ICON: Partial<
   Record<AppId, { icon: typeof Terminal; offsetY?: number }>
@@ -95,6 +97,7 @@ export function AppSwitcher({
   const { t } = useTranslation();
   const rootRef = useRef<HTMLDivElement>(null);
   const [moreOpen, setMoreOpen] = useState(false);
+  const { data: sessions } = useSessionsQuery();
 
   const handleSwitch = (app: AppId) => {
     if (app === activeApp) return;
@@ -102,11 +105,19 @@ export function AppSwitcher({
     onSwitch(app);
   };
 
-  // Filter apps based on visibility settings (default all visible)
-  const appsToShow = APP_IDS.filter((app) => {
-    if (!visibleApps) return true;
-    return visibleApps[app];
-  });
+  // Filter apps based on visibility settings (default all visible),
+  // then rank by local sessions active in the last 7 days.
+  const appsToShow = useMemo(
+    () =>
+      sortAppsByRecentSessionCount(
+        APP_IDS.filter((app) => {
+          if (!visibleApps) return true;
+          return visibleApps[app];
+        }),
+        sessions,
+      ),
+    [sessions, visibleApps],
+  );
   const appCount = appsToShow.length;
 
   const [visibleCount, setVisibleCount] = useState(appCount);

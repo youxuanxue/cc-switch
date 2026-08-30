@@ -1,6 +1,7 @@
 pub mod providers;
 pub mod resume;
 pub mod terminal;
+pub mod wts;
 
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};

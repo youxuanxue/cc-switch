@@ -456,6 +456,8 @@ export interface Settings {
   // Windows: "cmd" | "powershell" | "wt"
   // Linux: "gnome-terminal" | "konsole" | "xfce4-terminal" | "alacritty" | "kitty" | "ghostty"
   preferredTerminal?: string;
+  // iTerm: "tab" (reuse window, default) | "window" (always new window)
+  terminalOpenMode?: "tab" | "window";
 
   // ===== 本机自动迁移状态 =====
   localMigrations?: {

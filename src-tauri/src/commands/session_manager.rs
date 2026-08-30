@@ -72,6 +72,7 @@ pub async fn launch_session_terminal(
     sessionId: Option<String>,
     providerId: Option<String>,
     sourcePath: Option<String>,
+    terminal: Option<String>,
 ) -> Result<ResumeLaunchResult, String> {
     let command = command.clone();
     let cwd = cwd.clone();
@@ -79,16 +80,11 @@ pub async fn launch_session_terminal(
     let session_id = sessionId.clone();
     let source_path = sourcePath.clone();
     let provider_id = providerId.clone();
-
-    // Read preferred terminal from global settings
     let preferred = crate::settings::get_preferred_terminal();
-    // Map global setting terminal names to session terminal names
-    // Global uses "iterm2", session terminal uses "iterm"
-    let target = match preferred.as_deref() {
-        Some("iterm2") => "iterm".to_string(),
-        Some(t) => t.to_string(),
-        None => "terminal".to_string(), // Default to Terminal.app on macOS
-    };
+    let target = session_manager::terminal::resolve_session_terminal_target(
+        terminal.as_deref(),
+        preferred.as_deref(),
+    );
 
     tauri::async_runtime::spawn_blocking(move || {
         if let Some(session_id) = session_id.as_deref() {
@@ -114,6 +110,18 @@ pub async fn launch_session_terminal(
     })
     .await
     .map_err(|e| format!("Failed to launch terminal: {e}"))?
+}
+
+#[tauri::command]
+pub async fn list_wts_workspaces(
+    #[allow(non_snake_case)] projectDir: String,
+) -> Result<Vec<session_manager::wts::WtsWorkspace>, String> {
+    let project_dir = projectDir.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        session_manager::wts::list_wts_workspaces(Path::new(&project_dir))
+    })
+    .await
+    .map_err(|e| format!("Failed to list workspaces: {e}"))?
 }
 
 #[tauri::command]

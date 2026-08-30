@@ -76,16 +76,24 @@ function getDefaultTerminal(): string {
 
 export interface TerminalSettingsProps {
   value?: string;
+  openMode?: "tab" | "window";
   onChange: (value: string) => void;
+  onOpenModeChange?: (value: "tab" | "window") => void;
 }
 
-export function TerminalSettings({ value, onChange }: TerminalSettingsProps) {
+export function TerminalSettings({
+  value,
+  openMode,
+  onChange,
+  onOpenModeChange,
+}: TerminalSettingsProps) {
   const { t } = useTranslation();
   const terminals = getTerminalOptions();
   const defaultTerminal = getDefaultTerminal();
 
   // Use value or default
   const currentValue = value || defaultTerminal;
+  const currentOpenMode = openMode === "window" ? "window" : "tab";
 
   return (
     <section className="space-y-2">
@@ -107,6 +115,34 @@ export function TerminalSettings({ value, onChange }: TerminalSettingsProps) {
           ))}
         </SelectContent>
       </Select>
+      {isMac() ? (
+        <>
+          <p className="pt-2 text-xs text-muted-foreground">
+            {t("settings.terminal.openModeDescription")}
+          </p>
+          <Select
+            value={currentOpenMode}
+            onValueChange={(value) =>
+              onOpenModeChange?.(value === "window" ? "window" : "tab")
+            }
+          >
+            <SelectTrigger
+              className="w-[200px]"
+              aria-label={t("settings.terminal.openModeDescription")}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="tab">
+                {t("settings.terminal.openMode.tab")}
+              </SelectItem>
+              <SelectItem value="window">
+                {t("settings.terminal.openMode.window")}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </>
+      ) : null}
       <p className="text-xs text-muted-foreground">
         {t("settings.terminal.fallbackHint")}
       </p>

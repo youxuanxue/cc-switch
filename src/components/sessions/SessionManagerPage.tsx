@@ -16,7 +16,9 @@ import {
   FolderOpen,
   FileText,
   X,
+  CalendarClock,
   CheckSquare,
+  Plus,
   ListTree,
   List,
   FolderTree,
@@ -67,7 +69,13 @@ import {
   CursorResumeGate,
   type CursorResumePrimaryAction,
 } from "./CursorResumeGate";
-import { isSessionDeletable } from "./sessionCapabilities";
+import {
+  STALE_CLEANUP_DEFAULT_DAYS,
+  isSessionDeletable,
+  normalizeStaleCleanupDays,
+} from "./sessionCapabilities";
+import { NewSessionDialog } from "./NewSessionDialog";
+import { StaleSessionCleanupDialog } from "./StaleSessionCleanupDialog";
 import { SessionMessageItem } from "./SessionMessageItem";
 import { SessionTocDialog, SessionTocSidebar } from "./SessionToc";
 import {
@@ -92,6 +100,8 @@ const SESSION_LIST_VIEW_MODE_STORAGE_KEY =
   "cc-switch.sessionManager.listViewMode";
 const SESSION_GROUP_EXPANSION_STORAGE_KEY =
   "cc-switch.sessionManager.groupExpansionState";
+const SESSION_STALE_CLEANUP_DAYS_STORAGE_KEY =
+  "cc-switch.sessionManager.staleCleanupDays";
 
 type ProviderFilter =
   | "all"
@@ -128,6 +138,14 @@ const readInitialSessionListViewMode = (): SessionListViewMode => {
   return stored === "grouped" || stored === "flat" || stored === "byProject"
     ? stored
     : "byProject";
+};
+
+const readInitialStaleCleanupDays = (): number => {
+  if (typeof window === "undefined") return STALE_CLEANUP_DEFAULT_DAYS;
+  const stored = Number(
+    window.localStorage.getItem(SESSION_STALE_CLEANUP_DAYS_STORAGE_KEY),
+  );
+  return normalizeStaleCleanupDays(stored) ?? STALE_CLEANUP_DEFAULT_DAYS;
 };
 
 const readInitialSessionGroupExpansionState =
@@ -260,6 +278,11 @@ export function SessionManagerPage({ appId }: { appId: string }) {
   const [listViewMode, setListViewMode] = useState<SessionListViewMode>(
     readInitialSessionListViewMode,
   );
+  const [newSessionOpen, setNewSessionOpen] = useState(false);
+  const [staleCleanupOpen, setStaleCleanupOpen] = useState(false);
+  const [staleCleanupDays, setStaleCleanupDays] = useState(
+    readInitialStaleCleanupDays,
+  );
   const [initialGroupExpansionState] = useState(
     readInitialSessionGroupExpansionState,
   );
@@ -322,6 +345,13 @@ export function SessionManagerPage({ appId }: { appId: string }) {
       listViewMode,
     );
   }, [listViewMode]);
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      SESSION_STALE_CLEANUP_DAYS_STORAGE_KEY,
+      String(staleCleanupDays),
+    );
+  }, [staleCleanupDays]);
 
   useEffect(() => {
     window.localStorage.setItem(
@@ -1038,16 +1068,42 @@ export function SessionManagerPage({ appId }: { appId: string }) {
                   </div>
                 ) : (
                   <div className="flex flex-col gap-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 min-w-0">
+                    <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+                      <div className="flex items-center gap-2">
                         <CardTitle className="text-sm font-medium whitespace-nowrap">
                           {t("sessionManager.sessionList")}
                         </CardTitle>
-                        <Badge variant="secondary" className="text-xs">
+                        <Badge
+                          variant="secondary"
+                          className="shrink-0 text-xs tabular-nums"
+                        >
                           {filteredSessions.length}
                         </Badge>
                       </div>
-                      <div className="flex items-center gap-1 shrink-0">
+                      <div className="flex items-center justify-end gap-1">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-7"
+                              aria-label={t(
+                                "sessionManager.newSessionTooltip",
+                                {
+                                  defaultValue: "新建会话",
+                                },
+                              )}
+                              onClick={() => setNewSessionOpen(true)}
+                            >
+                              <Plus className="size-3.5" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {t("sessionManager.newSessionTooltip", {
+                              defaultValue: "新建会话",
+                            })}
+                          </TooltipContent>
+                        </Tooltip>
                         {(selectionMode ||
                           deletableFilteredSessions.length > 0) && (
                           <Tooltip>
@@ -1088,6 +1144,31 @@ export function SessionManagerPage({ appId }: { appId: string }) {
                                 : t("sessionManager.manageBatchTooltip", {
                                     defaultValue: "批量管理",
                                   })}
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+                        {filteredSessions.length > 0 && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="size-7"
+                                aria-label={t(
+                                  "sessionManager.staleCleanupTooltip",
+                                  {
+                                    defaultValue: "清理闲置会话",
+                                  },
+                                )}
+                                onClick={() => setStaleCleanupOpen(true)}
+                              >
+                                <CalendarClock className="size-3.5" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              {t("sessionManager.staleCleanupTooltip", {
+                                defaultValue: "清理闲置会话",
+                              })}
                             </TooltipContent>
                           </Tooltip>
                         )}
@@ -2064,6 +2145,64 @@ export function SessionManagerPage({ appId }: { appId: string }) {
           </div>
         </div>
       </div>
+      <NewSessionDialog
+        open={newSessionOpen}
+        onOpenChange={setNewSessionOpen}
+        sessions={sessions}
+        selectedSession={selectedSession}
+        providerFilter={providerFilter}
+        onLaunch={(launch) => {
+          setNewSessionOpen(false);
+          void (async () => {
+            if (!isMac()) {
+              await handleCopy(
+                launch.command,
+                t("sessionManager.resumeCommandCopied", {
+                  defaultValue: "已复制恢复命令",
+                }),
+              );
+              return;
+            }
+            try {
+              const result = await sessionsApi.launchTerminal({
+                command: launch.command,
+                cwd: launch.cwd,
+              });
+              if (result?.action === "launched") {
+                toast.success(
+                  t("sessionManager.terminalLaunched", {
+                    defaultValue: "终端已启动",
+                  }),
+                );
+              }
+            } catch (error) {
+              await handleCopy(
+                launch.command,
+                t("sessionManager.resumeFallbackCopied", {
+                  defaultValue: "已复制命令，请手动在终端中执行",
+                }),
+              );
+              toast.error(
+                extractErrorMessage(error) ||
+                  t("sessionManager.openFailed", {
+                    defaultValue: "打开失败",
+                  }),
+              );
+            }
+          })();
+        }}
+      />
+      <StaleSessionCleanupDialog
+        open={staleCleanupOpen}
+        onOpenChange={setStaleCleanupOpen}
+        sessions={filteredSessions}
+        initialDays={staleCleanupDays}
+        onConfirm={(targets, days) => {
+          setStaleCleanupDays(days);
+          setStaleCleanupOpen(false);
+          setDeleteTargets(targets);
+        }}
+      />
       <ConfirmDialog
         isOpen={Boolean(deleteTargets)}
         title={

@@ -9,12 +9,19 @@ struct CursorLauncherTerminalRequest {
     custom_config: Option<String>,
 }
 
-fn preferred_terminal_target(preferred: Option<&str>) -> String {
-    match preferred {
-        Some("iterm2") => "iterm".to_string(),
+pub fn resolve_session_terminal_target(
+    override_target: Option<&str>,
+    preferred: Option<&str>,
+) -> String {
+    match override_target.or(preferred) {
+        Some("iterm2") | Some("iterm") | Some("iTerm") => "iterm".to_string(),
         Some(target) => target.to_string(),
         None => "terminal".to_string(),
     }
+}
+
+fn preferred_terminal_target(preferred: Option<&str>) -> String {
+    resolve_session_terminal_target(None, preferred)
 }
 
 pub(crate) fn cursor_launcher_command(launcher_path: &Path) -> Result<String, String> {
@@ -211,29 +218,87 @@ fn is_executable_file(path: &std::path::Path) -> bool {
         .unwrap_or(false)
 }
 
-fn build_iterm_script(escaped_command: &str) -> String {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ItermOpenMode {
+    Tab,
+    Window,
+}
+
+impl ItermOpenMode {
+    pub fn parse(value: Option<&str>) -> Self {
+        match value {
+            Some("window") => Self::Window,
+            _ => Self::Tab,
+        }
+    }
+}
+
+fn iterm_new_window_bounds() -> &'static str {
     // Top inset clears the menu bar. Do not copy one machine's window x/y —
     // a left inset like 53 is that window's origin, not a portable dock/menu gap.
-    format!(
-        r#"tell application "Finder"
+    r#"set {x1, y1, x2, y2} to screenBounds
+    set bounds of current window to {x1, y1 + 33, x2, y2}"#
+}
+
+fn build_iterm_script(escaped_command: &str, mode: ItermOpenMode) -> String {
+    match mode {
+        ItermOpenMode::Window => format!(
+            r#"tell application "Finder"
     set screenBounds to bounds of window of desktop
 end tell
 tell application "iTerm"
     activate
     create window with default profile
-    set {{x1, y1, x2, y2}} to screenBounds
-    set bounds of current window to {{x1, y1 + 33, x2, y2}}
+    {bounds}
     tell current session of current window
         write text "{escaped_command}"
     end tell
-end tell"#
-    )
+end tell"#,
+            bounds = iterm_new_window_bounds(),
+        ),
+        ItermOpenMode::Tab => format!(
+            r#"tell application "Finder"
+    set screenBounds to bounds of window of desktop
+end tell
+set was_running to application "iTerm" is running
+tell application "iTerm"
+    if was_running then
+        activate
+        if (count of windows) = 0 then
+            create window with default profile
+            {bounds}
+        else
+            tell current window
+                create tab with default profile
+            end tell
+        end if
+    else
+        activate
+        set waited to 0
+        repeat while (count of windows) = 0
+            delay 0.1
+            set waited to waited + 1
+            if waited >= 30 then exit repeat
+        end repeat
+        if (count of windows) = 0 then
+            create window with default profile
+        end if
+        {bounds}
+    end if
+    tell current session of current window
+        write text "{escaped_command}"
+    end tell
+end tell"#,
+            bounds = iterm_new_window_bounds(),
+        ),
+    }
 }
 
 fn launch_iterm(command: &str, cwd: Option<&str>) -> Result<(), String> {
     let full_command = build_shell_command(command, cwd);
     let escaped = escape_osascript(&full_command);
-    let script = build_iterm_script(&escaped);
+    let mode = ItermOpenMode::parse(crate::settings::get_terminal_open_mode().as_deref());
+    let script = build_iterm_script(&escaped, mode);
 
     let status = Command::new("osascript")
         .arg("-e")
@@ -515,14 +580,43 @@ mod tests {
     use super::*;
 
     #[test]
+    fn new_session_override_targets_iterm_even_when_preferred_is_terminal() {
+        assert_eq!(
+            resolve_session_terminal_target(Some("iterm"), Some("terminal")),
+            "iterm"
+        );
+        assert_eq!(
+            resolve_session_terminal_target(Some("iterm2"), None),
+            "iterm"
+        );
+        assert_eq!(resolve_session_terminal_target(None, None), "terminal");
+    }
+
+    #[test]
     fn iterm_script_sizes_new_windows_to_the_desktop() {
-        let script = build_iterm_script("codex resume abc");
+        let script = build_iterm_script("codex resume abc", ItermOpenMode::Window);
 
         assert!(script.contains(r#"tell application "Finder""#));
         assert!(script.contains("bounds of window of desktop"));
         assert!(script.contains("set bounds of current window to {x1, y1 + 33, x2, y2}"));
         assert!(script.contains(r#"write text "codex resume abc""#));
+        assert!(script.contains("create window with default profile"));
+        assert!(!script.contains("create tab with default profile"));
         assert!(!script.contains("set fullscreen"));
+    }
+
+    #[test]
+    fn iterm_tab_mode_reuses_an_existing_window() {
+        assert_eq!(ItermOpenMode::parse(None), ItermOpenMode::Tab);
+        assert_eq!(ItermOpenMode::parse(Some("tab")), ItermOpenMode::Tab);
+        assert_eq!(ItermOpenMode::parse(Some("window")), ItermOpenMode::Window);
+
+        let script = build_iterm_script("codex resume abc", ItermOpenMode::Tab);
+        assert!(script.contains("if was_running then"));
+        assert!(script.contains("if (count of windows) = 0 then"));
+        assert!(script.contains("create tab with default profile"));
+        assert!(script.contains("create window with default profile"));
+        assert!(script.contains(r#"write text "codex resume abc""#));
     }
 
     #[test]
