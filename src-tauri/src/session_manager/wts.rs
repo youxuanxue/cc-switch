@@ -9,6 +9,17 @@ pub struct WtsWorkspace {
     pub path: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WtsProjectContext {
+    pub is_git_repo: bool,
+    pub workspaces: Vec<WtsWorkspace>,
+}
+
+pub fn is_git_checkout(project_dir: &Path) -> bool {
+    project_dir.join(".git").exists()
+}
+
 pub fn is_valid_wts_slug(slug: &str) -> bool {
     let bytes = slug.as_bytes();
     if bytes.is_empty() || bytes.len() > 64 {
@@ -20,7 +31,7 @@ pub fn is_valid_wts_slug(slug: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
 }
 
-pub fn list_wts_workspaces(project_dir: &Path) -> Result<Vec<WtsWorkspace>, String> {
+pub fn list_wts_workspaces(project_dir: &Path) -> Result<WtsProjectContext, String> {
     let project_dir = fs::canonicalize(project_dir)
         .map_err(|error| format!("项目目录不可用：{} ({error})", project_dir.display()))?;
     if !project_dir.is_dir() {
@@ -62,7 +73,10 @@ pub fn list_wts_workspaces(project_dir: &Path) -> Result<Vec<WtsWorkspace>, Stri
     }
 
     workspaces.sort_by(|left, right| left.slug.cmp(&right.slug));
-    Ok(workspaces)
+    Ok(WtsProjectContext {
+        is_git_repo: is_git_checkout(&project_dir),
+        workspaces,
+    })
 }
 
 #[cfg(test)]
@@ -91,12 +105,35 @@ mod tests {
         fs::create_dir(root.path().join("other-wt-nope")).expect("other");
         fs::write(root.path().join("cc-switch-wt-file"), "nope").expect("file");
 
-        let workspaces = list_wts_workspaces(&repo).expect("list");
-        let slugs: Vec<_> = workspaces.iter().map(|item| item.slug.as_str()).collect();
+        let context = list_wts_workspaces(&repo).expect("list");
+        let slugs: Vec<_> = context
+            .workspaces
+            .iter()
+            .map(|item| item.slug.as_str())
+            .collect();
+        assert!(!context.is_git_repo);
         assert_eq!(slugs, ["cursor-official", "prob"]);
-        assert!(workspaces
+        assert!(context
+            .workspaces
             .iter()
             .all(|item| item.path.ends_with(&format!("cc-switch-wt-{}", item.slug))));
+    }
+
+    #[test]
+    fn reports_git_checkout_only_when_dot_git_exists() {
+        let root = tempdir().expect("tempdir");
+        let repo = root.path().join("cc-switch");
+        fs::create_dir(&repo).expect("repo");
+        assert!(!super::is_git_checkout(&repo));
+
+        fs::create_dir(repo.join(".git")).expect("git dir");
+        assert!(super::is_git_checkout(&repo));
+        assert!(list_wts_workspaces(&repo).expect("list").is_git_repo);
+
+        let worktree = root.path().join("linked");
+        fs::create_dir(&worktree).expect("worktree");
+        fs::write(worktree.join(".git"), "gitdir: ../cc-switch/.git").expect("git file");
+        assert!(super::is_git_checkout(&worktree));
     }
 
     #[test]

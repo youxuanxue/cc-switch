@@ -462,6 +462,99 @@ describe("session utils", () => {
     ]);
   });
 
+  it("merges the same macOS path when only letter case differs", () => {
+    const sessions: SessionMeta[] = [
+      {
+        providerId: "cursor",
+        sessionId: "cursor-1",
+        projectDir: "/Users/feng/Codes/content-studio",
+      },
+      {
+        providerId: "codex",
+        sessionId: "codex-1",
+        projectDir: "/Users/feng/codes/content-studio",
+      },
+      {
+        providerId: "codex",
+        sessionId: "codex-wt",
+        projectDir: "/Users/feng/Codes/content-studio-wt-review",
+      },
+    ];
+
+    const groups = groupSessionsByProject(sessions, "未知目录", {
+      caseInsensitive: true,
+    });
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]).toMatchObject({
+      key: "/users/feng/codes/content-studio",
+      projectDir: "/Users/feng/Codes/content-studio",
+      label: "content-studio",
+      providerIds: ["cursor", "codex"],
+      workspaceDirs: [
+        "/Users/feng/Codes/content-studio",
+        "/Users/feng/Codes/content-studio-wt-review",
+      ],
+    });
+    expect(groups[0].sessions.map((session) => session.sessionId)).toEqual([
+      "cursor-1",
+      "codex-1",
+      "codex-wt",
+    ]);
+  });
+
+  it("keeps different parent paths separate even when case folding is on", () => {
+    const sessions: SessionMeta[] = [
+      {
+        providerId: "cursor",
+        sessionId: "main",
+        projectDir: "/Users/feng/Codes/cc-switch",
+      },
+      {
+        providerId: "codex",
+        sessionId: "old-checkout",
+        projectDir: "/Users/feng/Codes/dev/cc-switch",
+      },
+    ];
+
+    const groups = groupSessionsByProject(sessions, "未知目录", {
+      caseInsensitive: true,
+    });
+
+    expect(groups).toHaveLength(2);
+    expect(groups.map((group) => group.projectDir)).toEqual([
+      "/Users/feng/Codes/cc-switch",
+      "/Users/feng/Codes/dev/cc-switch",
+    ]);
+  });
+
+  it("keeps letter-case variants separate when case folding is off", () => {
+    const sessions: SessionMeta[] = [
+      {
+        providerId: "cursor",
+        sessionId: "codes",
+        projectDir: "/Users/feng/Codes/content-studio",
+      },
+      {
+        providerId: "codex",
+        sessionId: "codes-lower",
+        projectDir: "/Users/feng/codes/content-studio",
+      },
+    ];
+
+    const groups = groupSessionsByProject(sessions, "未知目录");
+
+    expect(groups).toHaveLength(2);
+    expect(
+      resolveWtsProjectIdentity("/Users/feng/Codes/content-studio"),
+    ).toEqual({
+      key: "/Users/feng/Codes/content-studio",
+      canonicalDir: "/Users/feng/Codes/content-studio",
+      label: "content-studio",
+      worktreeSlug: null,
+    });
+  });
+
   it("keeps deletion eligibility in one owner and only deletes Cursor Agent CLI chats", () => {
     expect(
       isSessionDeletable({

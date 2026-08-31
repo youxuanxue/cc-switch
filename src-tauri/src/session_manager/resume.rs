@@ -5,7 +5,17 @@ use std::process::Command;
 use serde::Serialize;
 
 const MAX_SESSION_ID_LEN: usize = 128;
-const SESSION_RUNNERS: &[&str] = &["claude", "codex", "gemini", "grok", "opencode"];
+const SESSION_RUNNERS: &[&str] = &[
+    "agent",
+    "claude",
+    "codex",
+    "cursor-agent",
+    "gemini",
+    "grok",
+    "hermes",
+    "opencode",
+    "pi",
+];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WriterKind {
@@ -180,7 +190,7 @@ pub fn command_basename(token: &str) -> &str {
 
 pub fn is_inspector_noise(command: &str) -> bool {
     let lower = command.to_ascii_lowercase();
-    if lower.contains("cc-switch") || lower.contains("cursor-agent") {
+    if lower.contains("cc-switch") {
         return true;
     }
     command.split_whitespace().next().is_some_and(|token| {
@@ -799,11 +809,24 @@ mod tests {
     }
 
     #[test]
-    fn live_gemini_grok_and_opencode_tui_reuse_the_same_decision() {
+    fn live_gemini_grok_opencode_pi_and_cursor_tui_reuse_the_same_decision() {
         for (session_id, command) in [
             ("gem-1", "gemini --resume gem-1"),
             ("grok-1", "grok --resume grok-1"),
             ("opc-1", "opencode -s opc-1"),
+            ("pi-1", "pi --session pi-1"),
+            (
+                "11111111-1111-4111-8111-111111111111",
+                "agent --workspace /tmp/app --resume 11111111-1111-4111-8111-111111111111",
+            ),
+            (
+                "22222222-2222-4222-8222-222222222222",
+                "/Users/feng/.local/bin/agent --use-system-ca /Users/feng/.local/share/cursor-agent/versions/2026.08.25-3e8eec8/index.js --workspace /tmp --resume 22222222-2222-4222-8222-222222222222",
+            ),
+            (
+                "33333333-3333-4333-8333-333333333333",
+                "cursor-agent --resume 33333333-3333-4333-8333-333333333333",
+            ),
         ] {
             let view = iterm_view(42, command);
             assert_eq!(
@@ -822,6 +845,7 @@ mod tests {
         let view = MapView::new(HashMap::from([
             proc(9, 1, None, "cc-switch --scan ses_abc123"),
             proc(10, 1, None, "rg ses_abc123 ~/.claude"),
+            proc(11, 1, None, "ps aux"),
         ]));
         assert_eq!(
             resume_decision_for_session("ses_abc123", None, None, &view),

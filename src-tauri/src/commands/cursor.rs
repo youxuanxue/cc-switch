@@ -158,5 +158,19 @@ mod tests {
             serde_json::to_value(CursorLaunchResult::WorkspaceRequired).unwrap(),
             json!({ "state": "workspaceRequired" })
         );
+        assert_eq!(
+            serde_json::to_value(CursorLaunchResult::Focused {
+                app: "iTerm".to_string(),
+            })
+            .unwrap(),
+            json!({ "state": "focused", "app": "iTerm" })
+        );
+        assert_eq!(
+            serde_json::to_value(CursorLaunchResult::Occupied {
+                holder: "CodeG".to_string(),
+            })
+            .unwrap(),
+            json!({ "state": "occupied", "holder": "CodeG" })
+        );
     }
 }

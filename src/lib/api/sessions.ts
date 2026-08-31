@@ -28,12 +28,17 @@ export interface WtsWorkspace {
   path: string;
 }
 
+export interface WtsProjectContext {
+  isGitRepo: boolean;
+  workspaces: WtsWorkspace[];
+}
+
 export const sessionsApi = {
   async list(): Promise<SessionMeta[]> {
     return await invoke("list_sessions");
   },
 
-  async listWtsWorkspaces(projectDir: string): Promise<WtsWorkspace[]> {
+  async listWtsWorkspaces(projectDir: string): Promise<WtsProjectContext> {
     return await invoke("list_wts_workspaces", { projectDir });
   },
 

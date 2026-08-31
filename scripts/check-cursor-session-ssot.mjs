@@ -132,15 +132,19 @@ requireImports(
 );
 requireImports(
   "src/components/sessions/CursorResumeGate.tsx",
-  ["deriveCursorResumeState"],
+  ["deriveCursorResumeState", "getSessionResumeI18nKeys"],
   FINDING_CODES.resume,
   "Cursor resume composition must use the shared state derivation",
 );
 requireImports(
   "src/components/sessions/SessionManagerPage.tsx",
-  ["CursorResumeGate"],
+  [
+    "CursorResumeGate",
+    "useSessionResumeStateQuery",
+    "getSessionResumeI18nKeys",
+  ],
   FINDING_CODES.resume,
-  "Session Manager must delegate Cursor resume to CursorResumeGate",
+  "Session Manager must delegate Cursor resume to CursorResumeGate and the shared resume-state owner",
 );
 requireImports(
   "src/components/sessions/SessionManagerPage.tsx",
@@ -186,18 +190,25 @@ if (sessionManagerSource !== undefined) {
   const genericResumeCalls = [
     ...sessionManagerSource.matchAll(/\buseSessionResumeStateQuery\s*\(/g),
   ];
-  const cursorGuardedGenericResumeQuery =
-    /^useSessionResumeStateQuery\s*\(\s*isCursorSession\s*\?\s*undefined\s*:\s*(?:selectedSession|session)\?\.providerId/;
+  if (genericResumeCalls.length === 0) {
+    addFinding(
+      FINDING_CODES.resume,
+      sessionManagerPath,
+      "Session Manager must consume the shared resume-state query",
+    );
+  }
+  const cursorDisabledGenericResumeQuery =
+    /^useSessionResumeStateQuery\s*\(\s*isCursorSession\s*\?\s*undefined/;
   for (const call of genericResumeCalls) {
     if (
-      !cursorGuardedGenericResumeQuery.test(
+      cursorDisabledGenericResumeQuery.test(
         sessionManagerSource.slice(call.index),
       )
     ) {
       addFinding(
         FINDING_CODES.resume,
         sessionManagerPath,
-        "Session Manager generic resume-state query must be disabled for Cursor",
+        "Session Manager shared resume-state query must stay enabled for Cursor",
         lineNumber(sessionManagerSource, call.index),
       );
     }

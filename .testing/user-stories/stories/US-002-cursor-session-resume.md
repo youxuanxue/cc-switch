@@ -43,7 +43,7 @@
 - tests/components/CursorResumeGate.test.tsx::US-002 resumes a ready session through dedicated Cursor IPC
 - tests/components/CursorResumeGate.test.tsx::US-002 retains one workspace override through authentication remediation
 - tests/components/CursorResumeGate.test.tsx::US-002 resets workspace override when the selected session changes
-- tests/components/SessionManagerPage.test.tsx::US-002/US-004 never polls generic resume state for Cursor
+- tests/components/SessionManagerPage.test.tsx::US-002/US-004 polls the shared resume state for Cursor
 - tests/e2e/cursor-official-sessions.spec.ts::US-002 resumes Cursor sessions through inline remediation
 
 Run:

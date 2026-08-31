@@ -1,8 +1,11 @@
-import type { WtsWorkspace } from "@/lib/api/sessions";
+import type { WtsProjectContext, WtsWorkspace } from "@/lib/api/sessions";
 import type { SessionMeta } from "@/types";
-import { resolveWtsProjectIdentity } from "./utils";
+import {
+  resolveWtsProjectIdentity,
+  type ProjectIdentityOptions,
+} from "./utils";
 
-export type { WtsWorkspace };
+export type { WtsProjectContext, WtsWorkspace };
 
 export const MAIN_WORKSPACE = "main";
 
@@ -27,7 +30,11 @@ export interface KnownProject {
 export type NewSessionLaunch =
   | { command: string; cwd: string }
   | {
-      error: "invalid-project" | "invalid-workspace" | "create-requires-wts";
+      error:
+        | "invalid-project"
+        | "invalid-workspace"
+        | "create-requires-wts"
+        | "requires-git";
     };
 
 const WTS_RUNTIME: Partial<Record<NewSessionProvider, string>> = {
@@ -56,15 +63,18 @@ export function normalizeWorkspaceSlug(value: string): string | null {
   return trimmed;
 }
 
-export function collectKnownProjects(sessions: SessionMeta[]): KnownProject[] {
+export function collectKnownProjects(
+  sessions: SessionMeta[],
+  options?: ProjectIdentityOptions,
+): KnownProject[] {
   const projects = new Map<string, KnownProject & { slugSet: Set<string> }>();
 
   for (const session of sessions) {
-    const identity = resolveWtsProjectIdentity(session.projectDir);
+    const identity = resolveWtsProjectIdentity(session.projectDir, options);
     if (!identity.canonicalDir) {
       continue;
     }
-    let project = projects.get(identity.canonicalDir);
+    let project = projects.get(identity.key);
     if (!project) {
       project = {
         dir: identity.canonicalDir,
@@ -72,7 +82,7 @@ export function collectKnownProjects(sessions: SessionMeta[]): KnownProject[] {
         slugs: [],
         slugSet: new Set<string>(),
       };
-      projects.set(identity.canonicalDir, project);
+      projects.set(identity.key, project);
     }
     if (identity.worktreeSlug) {
       project.slugSet.add(identity.worktreeSlug);
@@ -89,12 +99,16 @@ export function collectKnownProjects(sessions: SessionMeta[]): KnownProject[] {
 export function defaultNewSessionProjectDir(
   selectedSession: SessionMeta | null | undefined,
   sessions: SessionMeta[],
+  options?: ProjectIdentityOptions,
 ): string {
-  const selected = resolveWtsProjectIdentity(selectedSession?.projectDir);
+  const selected = resolveWtsProjectIdentity(
+    selectedSession?.projectDir,
+    options,
+  );
   if (selected.canonicalDir) {
     return selected.canonicalDir;
   }
-  return collectKnownProjects(sessions)[0]?.dir ?? "";
+  return collectKnownProjects(sessions, options)[0]?.dir ?? "";
 }
 
 export function defaultNewSessionProvider(
@@ -162,11 +176,16 @@ function newSessionCommand(
   }
 }
 
+export function canUseNamedWorkspace(isGitRepo: boolean | null): boolean {
+  return isGitRepo === true;
+}
+
 export function buildNewSessionLaunch(input: {
   providerId: string;
   projectDir: string;
   workspace: string;
   knownWorkspaces?: WtsWorkspace[];
+  isGitRepo?: boolean | null;
 }): NewSessionLaunch {
   const projectDir = input.projectDir.trim();
   if (!projectDir) {
@@ -186,6 +205,10 @@ export function buildNewSessionLaunch(input: {
       command: newSessionCommand(input.providerId, projectDir),
       cwd: projectDir,
     };
+  }
+
+  if (!canUseNamedWorkspace(input.isGitRepo ?? null)) {
+    return { error: "requires-git" };
   }
 
   const runtime = WTS_RUNTIME[input.providerId];

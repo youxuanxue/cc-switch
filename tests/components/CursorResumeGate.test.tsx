@@ -7,7 +7,7 @@ import {
   CursorResumeGate,
   type CursorResumePrimaryAction,
 } from "@/components/sessions/CursorResumeGate";
-import { sessionsApi } from "@/lib/api/sessions";
+import { sessionsApi, type SessionResumeAppearance } from "@/lib/api/sessions";
 import type { SessionMeta } from "@/types";
 
 const apiMocks = vi.hoisted(() => ({
@@ -111,7 +111,13 @@ function createWrapper() {
   return { queryClient, Wrapper };
 }
 
-function CursorResumeHarness({ session }: { session: SessionMeta }) {
+function CursorResumeHarness({
+  session,
+  appearance,
+}: {
+  session: SessionMeta;
+  appearance?: SessionResumeAppearance;
+}) {
   const [primaryAction, setPrimaryAction] =
     useState<CursorResumePrimaryAction | null>(null);
   const [resumeCommand, setResumeCommand] = useState<string | null>(null);
@@ -130,6 +136,7 @@ function CursorResumeHarness({ session }: { session: SessionMeta }) {
       {resumeCommand ? <pre>{resumeCommand}</pre> : null}
       <CursorResumeGate
         session={session}
+        appearance={appearance}
         onPrimaryActionChange={setPrimaryAction}
         onResumeCommandChange={setResumeCommand}
       />
@@ -137,11 +144,17 @@ function CursorResumeHarness({ session }: { session: SessionMeta }) {
   );
 }
 
-function renderGate(initialSession: SessionMeta = session) {
+function renderGate(
+  initialSession: SessionMeta = session,
+  appearance?: SessionResumeAppearance,
+) {
   const { queryClient, Wrapper } = createWrapper();
-  const view = render(<CursorResumeHarness session={initialSession} />, {
-    wrapper: Wrapper,
-  });
+  const view = render(
+    <CursorResumeHarness session={initialSession} appearance={appearance} />,
+    {
+      wrapper: Wrapper,
+    },
+  );
 
   return {
     queryClient,
@@ -198,6 +211,27 @@ describe("CursorResumeGate", () => {
     expect(
       screen.queryByText("在原项目目录中继续这段 Cursor Agent 会话。"),
     ).not.toBeInTheDocument();
+  });
+
+  it("uses the shared return label and focuses a live Agent CLI tab", async () => {
+    const user = userEvent.setup();
+    apiMocks.launchSession.mockResolvedValue({
+      state: "focused",
+      app: "iTerm",
+    });
+    renderGate(session, "return");
+
+    await user.click(await screen.findByRole("button", { name: "回到会话" }));
+
+    await waitFor(() =>
+      expect(apiMocks.launchSession).toHaveBeenCalledWith({
+        sessionId: "11111111-1111-4111-8111-111111111111",
+        workspaceOverride: undefined,
+      }),
+    );
+    expect(toastMocks.success).toHaveBeenCalledWith(
+      "已切换到已打开的会话窗口（iTerm）",
+    );
   });
 
   it("US-002 resumes a ready session through dedicated Cursor IPC", async () => {

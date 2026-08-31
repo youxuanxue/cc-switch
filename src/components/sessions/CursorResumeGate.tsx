@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
 import { AlertTriangle, FolderOpen, Loader2, RefreshCw } from "lucide-react";
 import { CursorOfficialAuthControl } from "@/components/cursor/CursorOfficialAuthControl";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,8 @@ import { isMac } from "@/lib/platform";
 import type { SessionMeta } from "@/types";
 import { extractErrorMessage } from "@/utils/errorUtils";
 import { deriveCursorResumeState } from "./cursorResumeState";
+import { getSessionResumeI18nKeys } from "./utils";
+import type { SessionResumeAppearance } from "@/lib/api/sessions";
 
 export interface CursorResumePrimaryAction {
   label: string;
@@ -20,6 +23,7 @@ export interface CursorResumePrimaryAction {
 
 interface CursorResumeGateProps {
   session: SessionMeta;
+  appearance?: SessionResumeAppearance;
   onPrimaryActionChange?: (action: CursorResumePrimaryAction | null) => void;
   onResumeCommandChange?: (command: string | null) => void;
 }
@@ -37,6 +41,7 @@ interface LaunchVariables {
 
 export function CursorResumeGate({
   session,
+  appearance,
   onPrimaryActionChange,
   onResumeCommandChange,
 }: CursorResumeGateProps) {
@@ -87,6 +92,24 @@ export function CursorResumeGate({
       setActionError(null);
     },
     onSuccess: (result, variables) => {
+      if (result.state === "focused") {
+        toast.success(
+          t("sessionManager.resumeFocused", {
+            defaultValue: "已切换到已打开的会话窗口（{{app}}）",
+            app: result.app,
+          }),
+        );
+        return;
+      }
+      if (result.state === "occupied") {
+        toast.error(
+          t("sessionManager.resumeOccupied", {
+            defaultValue: "该会话已在 {{holder}} 中打开，请先回到那个窗口",
+            holder: result.holder,
+          }),
+        );
+        return;
+      }
       if (result.state !== "workspaceRequired") return;
 
       setWorkspaceOverrideState((current) =>
@@ -178,9 +201,17 @@ export function CursorResumeGate({
     ? extractErrorMessage(official.error)
     : null;
 
+  const resumeCopy = getSessionResumeI18nKeys(appearance);
   const primaryLabel =
     resumeState === "ready"
-      ? t("sessionManager.resume", { defaultValue: "恢复会话" })
+      ? t(resumeCopy.labelKey, {
+          defaultValue:
+            resumeCopy.labelKey === "sessionManager.returnToSession"
+              ? "回到会话"
+              : resumeCopy.labelKey === "sessionManager.returnToCodeG"
+                ? "回到 CodeG"
+                : "恢复会话",
+        })
       : null;
   const primaryClickRef = useRef<() => void>(() => {});
   primaryClickRef.current = () => {

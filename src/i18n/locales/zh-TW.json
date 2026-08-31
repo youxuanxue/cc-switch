@@ -1149,6 +1149,8 @@
     "newSessionInvalidProject": "請選擇一個專案目錄。",
     "newSessionInvalidWorkspace": "工作區名稱只能使用字母、數字、點、底線和連字符。",
     "newSessionCreateRequiresWts": "新建命名工作區請改用 Cursor / Claude / Codex，或先關聯既有工作區。",
+    "newSessionRequiresGit": "這個目錄不是 git 倉庫，不能建立隔離工作區。可以在目前目錄開啟工作階段。",
+    "newSessionCheckingWorkspace": "正在檢查這個目錄能不能建立隔離工作區。",
     "newSessionConfirm": "開啟工作階段",
     "batchDeleting": "批次刪除中...",
     "loadingSessions": "載入工作階段中...",

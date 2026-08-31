@@ -61,7 +61,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { extractErrorMessage } from "@/utils/errorUtils";
-import { isMac } from "@/lib/platform";
+import { isCaseInsensitiveFs, isMac } from "@/lib/platform";
 import { useCursorSessionIndex } from "@/hooks/useCursorSessionIndex";
 import { ProviderIcon } from "@/components/ProviderIcon";
 import { SessionItem } from "./SessionItem";
@@ -318,9 +318,18 @@ export function SessionManagerPage({ appId }: { appId: string }) {
       ),
     [filteredSessions, unknownDirectoryLabel],
   );
+  const projectIdentityOptions = useMemo(
+    () => ({ caseInsensitive: isCaseInsensitiveFs() }),
+    [],
+  );
   const projectGroupedSessions = useMemo(
-    () => groupSessionsByProject(filteredSessions, unknownDirectoryLabel),
-    [filteredSessions, unknownDirectoryLabel],
+    () =>
+      groupSessionsByProject(
+        filteredSessions,
+        unknownDirectoryLabel,
+        projectIdentityOptions,
+      ),
+    [filteredSessions, unknownDirectoryLabel, projectIdentityOptions],
   );
 
   const validGroupExpansionKeys = useMemo(
@@ -333,11 +342,11 @@ export function SessionManagerPage({ appId }: { appId: string }) {
       ),
       projectKeys: new Set(
         sessions.map((session) =>
-          getSessionProjectGroupKey(session.projectDir),
+          getSessionProjectGroupKey(session.projectDir, projectIdentityOptions),
         ),
       ),
     }),
-    [sessions],
+    [projectIdentityOptions, sessions],
   );
 
   useEffect(() => {
@@ -439,9 +448,9 @@ export function SessionManagerPage({ appId }: { appId: string }) {
       sessionMessageSourcePath(selectedSession),
     );
   const { data: resumeState } = useSessionResumeStateQuery(
-    isCursorSession ? undefined : selectedSession?.providerId,
-    isCursorSession ? undefined : selectedSession?.sessionId,
-    isCursorSession ? undefined : selectedSession?.sourcePath,
+    selectedSession?.providerId,
+    selectedSession?.sessionId,
+    selectedSession?.sourcePath,
   );
   const resumeCopy = getSessionResumeI18nKeys(resumeState?.appearance);
   const deleteSessionMutation = useDeleteSessionMutation();
@@ -1969,7 +1978,7 @@ export function SessionManagerPage({ appId }: { appId: string }) {
                             <TooltipContent>
                               {isCursorSession
                                 ? cursorPrimaryAction
-                                  ? t("sessionManager.resumeTooltip")
+                                  ? t(resumeCopy.tooltipKey)
                                   : t("sessionManager.noResumeCommand", {
                                       defaultValue: "此会话无法恢复",
                                     })
@@ -2051,6 +2060,7 @@ export function SessionManagerPage({ appId }: { appId: string }) {
                     {isCursorSession ? (
                       <CursorResumeGate
                         session={selectedSession}
+                        appearance={resumeState?.appearance}
                         onPrimaryActionChange={setCursorPrimaryAction}
                         onResumeCommandChange={setCursorResumeCommand}
                       />

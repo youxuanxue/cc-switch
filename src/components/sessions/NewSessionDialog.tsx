@@ -4,7 +4,9 @@ import { FolderOpen } from "lucide-react";
 import type { SessionMeta } from "@/types";
 import { sessionsApi } from "@/lib/api";
 import { settingsApi } from "@/lib/api/settings";
+import { isCaseInsensitiveFs } from "@/lib/platform";
 import { extractErrorMessage } from "@/utils/errorUtils";
+import { getSessionProjectGroupKey } from "./utils";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -27,6 +29,7 @@ import {
   MAIN_WORKSPACE,
   NEW_SESSION_PROVIDERS,
   buildNewSessionLaunch,
+  canUseNamedWorkspace,
   collectKnownProjects,
   defaultNewSessionProjectDir,
   defaultNewSessionProvider,
@@ -63,15 +66,20 @@ export function NewSessionDialog({
   onLaunch: (launch: Extract<NewSessionLaunch, { command: string }>) => void;
 }) {
   const { t } = useTranslation();
+  const projectIdentityOptions = useMemo(
+    () => ({ caseInsensitive: isCaseInsensitiveFs() }),
+    [],
+  );
   const knownProjects = useMemo(
-    () => collectKnownProjects(sessions),
-    [sessions],
+    () => collectKnownProjects(sessions, projectIdentityOptions),
+    [projectIdentityOptions, sessions],
   );
   const [providerId, setProviderId] = useState<NewSessionProvider>("claude");
   const [projectDir, setProjectDir] = useState("");
   const [workspaceChoice, setWorkspaceChoice] = useState(MAIN_WORKSPACE);
   const [customSlug, setCustomSlug] = useState("");
   const [diskWorkspaces, setDiskWorkspaces] = useState<WtsWorkspace[]>([]);
+  const [isGitRepo, setIsGitRepo] = useState<boolean | null>(null);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -79,31 +87,48 @@ export function NewSessionDialog({
       return;
     }
     setProviderId(defaultNewSessionProvider(providerFilter, selectedSession));
-    setProjectDir(defaultNewSessionProjectDir(selectedSession, sessions));
+    setProjectDir(
+      defaultNewSessionProjectDir(
+        selectedSession,
+        sessions,
+        projectIdentityOptions,
+      ),
+    );
     setWorkspaceChoice(MAIN_WORKSPACE);
     setCustomSlug("");
+    setIsGitRepo(null);
     setWorkspaceError(null);
-  }, [open, providerFilter, selectedSession, sessions]);
+  }, [open, projectIdentityOptions, providerFilter, selectedSession, sessions]);
 
   useEffect(() => {
     if (!open || !projectDir.trim()) {
       setDiskWorkspaces([]);
+      setIsGitRepo(null);
       setWorkspaceError(null);
       return;
     }
 
     let cancelled = false;
+    setIsGitRepo(null);
     void sessionsApi
       .listWtsWorkspaces(projectDir.trim())
-      .then((workspaces) => {
+      .then((context) => {
         if (!cancelled) {
-          setDiskWorkspaces(workspaces);
+          setDiskWorkspaces(context.workspaces);
+          setIsGitRepo(context.isGitRepo);
           setWorkspaceError(null);
+          if (!context.isGitRepo) {
+            setWorkspaceChoice(MAIN_WORKSPACE);
+            setCustomSlug("");
+          }
         }
       })
       .catch((error) => {
         if (!cancelled) {
           setDiskWorkspaces([]);
+          setIsGitRepo(false);
+          setWorkspaceChoice(MAIN_WORKSPACE);
+          setCustomSlug("");
           setWorkspaceError(extractErrorMessage(error));
         }
       });
@@ -113,16 +138,27 @@ export function NewSessionDialog({
     };
   }, [open, projectDir]);
 
-  const sessionSlugs =
-    knownProjects.find((project) => project.dir === projectDir.trim())?.slugs ??
-    [];
-  const workspaces = mergeWorkspaceSlugs(sessionSlugs, diskWorkspaces);
-  const workspace = customSlug.trim() || workspaceChoice;
+  const namedWorkspaceAllowed = canUseNamedWorkspace(isGitRepo);
+  const matchingKnownProject = knownProjects.find(
+    (project) =>
+      getSessionProjectGroupKey(project.dir, projectIdentityOptions) ===
+      getSessionProjectGroupKey(projectDir.trim(), projectIdentityOptions),
+  );
+  const sessionSlugs = namedWorkspaceAllowed
+    ? (matchingKnownProject?.slugs ?? [])
+    : [];
+  const workspaces = namedWorkspaceAllowed
+    ? mergeWorkspaceSlugs(sessionSlugs, diskWorkspaces)
+    : [];
+  const workspace = namedWorkspaceAllowed
+    ? customSlug.trim() || workspaceChoice
+    : MAIN_WORKSPACE;
   const launch = buildNewSessionLaunch({
     providerId,
     projectDir,
     workspace,
     knownWorkspaces: workspaces,
+    isGitRepo,
   });
   const canLaunch = !("error" in launch);
 
@@ -137,10 +173,15 @@ export function NewSessionDialog({
               defaultValue:
                 "新建命名工作区请改用 Cursor / Claude / Codex，或先关联已有工作区。",
             })
-          : t("sessionManager.newSessionInvalidWorkspace", {
-              defaultValue:
-                "工作区名称只能使用字母、数字、点、下划线和连字符。",
-            })
+          : launch.error === "requires-git"
+            ? t("sessionManager.newSessionRequiresGit", {
+                defaultValue:
+                  "这个目录不是 git 仓库，不能创建隔离工作区。可以在当前目录打开会话。",
+              })
+            : t("sessionManager.newSessionInvalidWorkspace", {
+                defaultValue:
+                  "工作区名称只能使用字母、数字、点、下划线和连字符。",
+              })
       : null;
 
   return (
@@ -193,11 +234,7 @@ export function NewSessionDialog({
             </Label>
             {knownProjects.length > 0 ? (
               <Select
-                value={
-                  knownProjects.some((project) => project.dir === projectDir)
-                    ? projectDir
-                    : "__custom__"
-                }
+                value={matchingKnownProject?.dir ?? "__custom__"}
                 onValueChange={(value) => {
                   if (value !== "__custom__") {
                     setProjectDir(value);
@@ -264,39 +301,57 @@ export function NewSessionDialog({
                 defaultValue: "工作区",
               })}
             </Label>
-            <Select
-              value={workspaceChoice}
-              onValueChange={(value) => {
-                setWorkspaceChoice(value);
-                setCustomSlug("");
-              }}
-            >
-              <SelectTrigger id="new-session-workspace">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={MAIN_WORKSPACE}>
-                  {t("sessionManager.newSessionMainWorkspace", {
-                    defaultValue: "main（主仓库）",
+            {namedWorkspaceAllowed ? (
+              <>
+                <Select
+                  value={workspaceChoice}
+                  onValueChange={(value) => {
+                    setWorkspaceChoice(value);
+                    setCustomSlug("");
+                  }}
+                >
+                  <SelectTrigger id="new-session-workspace">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={MAIN_WORKSPACE}>
+                      {t("sessionManager.newSessionMainWorkspace", {
+                        defaultValue: "main（主仓库）",
+                      })}
+                    </SelectItem>
+                    {workspaces.map((item) => (
+                      <SelectItem key={item.slug} value={item.slug}>
+                        {item.slug}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  value={customSlug}
+                  onChange={(event) => setCustomSlug(event.target.value)}
+                  placeholder={t(
+                    "sessionManager.newSessionWorkspacePlaceholder",
+                    {
+                      defaultValue: "或输入工作区名称，例如 review",
+                    },
+                  )}
+                  aria-label={t("sessionManager.newSessionWorkspaceName", {
+                    defaultValue: "工作区名称",
                   })}
-                </SelectItem>
-                {workspaces.map((item) => (
-                  <SelectItem key={item.slug} value={item.slug}>
-                    {item.slug}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Input
-              value={customSlug}
-              onChange={(event) => setCustomSlug(event.target.value)}
-              placeholder={t("sessionManager.newSessionWorkspacePlaceholder", {
-                defaultValue: "或输入工作区名称，例如 review",
-              })}
-              aria-label={t("sessionManager.newSessionWorkspaceName", {
-                defaultValue: "工作区名称",
-              })}
-            />
+                />
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                {isGitRepo === false
+                  ? t("sessionManager.newSessionRequiresGit", {
+                      defaultValue:
+                        "这个目录不是 git 仓库，不能创建隔离工作区。可以在当前目录打开会话。",
+                    })
+                  : t("sessionManager.newSessionCheckingWorkspace", {
+                      defaultValue: "正在检查这个目录能不能创建隔离工作区。",
+                    })}
+              </p>
+            )}
             {workspaceError ? (
               <p className="text-sm text-muted-foreground">{workspaceError}</p>
             ) : null}

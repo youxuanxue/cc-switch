@@ -1148,6 +1148,8 @@
     "newSessionInvalidProject": "请选择一个项目目录。",
     "newSessionInvalidWorkspace": "工作区名称只能使用字母、数字、点、下划线和连字符。",
     "newSessionCreateRequiresWts": "新建命名工作区请改用 Cursor / Claude / Codex，或先关联已有工作区。",
+    "newSessionRequiresGit": "这个目录不是 git 仓库，不能创建隔离工作区。可以在当前目录打开会话。",
+    "newSessionCheckingWorkspace": "正在检查这个目录能不能创建隔离工作区。",
     "newSessionConfirm": "打开会话",
     "batchDeleting": "删除中...",
     "loadingSessions": "加载会话中...",

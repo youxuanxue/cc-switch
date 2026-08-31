@@ -73,9 +73,11 @@ function createConformingFixture() {
       'import { CursorOfficialAuthControl } from "../cursor/CursorOfficialAuthControl";',
       'import { useCursorOfficial } from "../../../hooks/useCursorOfficial";',
       'import { deriveCursorResumeState } from "./cursorResumeState";',
+      'import { getSessionResumeI18nKeys } from "./utils";',
       "export function CursorResumeGate() {",
       "  useCursorOfficial();",
       "  deriveCursorResumeState({ ready: true });",
+      "  getSessionResumeI18nKeys(undefined);",
       "  return <CursorOfficialAuthControl />;",
       "}",
     ].join("\n"),
@@ -97,14 +99,15 @@ function createConformingFixture() {
       'import { isSessionDeletable } from "./sessionCapabilities";',
       'import { useCursorSessionIndex } from "../../hooks/useCursorSessionIndex";',
       'import { useSessionResumeStateQuery } from "../../lib/query";',
+      'import { getSessionResumeI18nKeys } from "./utils";',
       "export function SessionManagerPage({ session, providerFilter }: { session: any; providerFilter: string }) {",
-      '  const isCursorSession = session?.providerId === "cursor";',
       '  useCursorSessionIndex(providerFilter === "cursor");',
       "  useSessionResumeStateQuery(",
-      "    isCursorSession ? undefined : session?.providerId,",
-      "    isCursorSession ? undefined : session?.sessionId,",
-      "    isCursorSession ? undefined : session?.sourcePath,",
+      "    session?.providerId,",
+      "    session?.sessionId,",
+      "    session?.sourcePath,",
       "  );",
+      "  getSessionResumeI18nKeys(undefined);",
       "  return isSessionDeletable(session) ? <CursorResumeGate /> : null;",
       "}",
     ].join("\n"),
@@ -167,35 +170,7 @@ describe("US-004 Cursor session SSOT checker", () => {
     expect(result.output).toContain("CursorResumeClone.tsx");
   });
 
-  it("rejects generic resume-state polling that remains enabled for Cursor", () => {
-    const root = createConformingFixture();
-    writeFixtureFile(
-      root,
-      "src/components/sessions/SessionManagerPage.tsx",
-      [
-        'import { CursorResumeGate } from "./CursorResumeGate";',
-        'import { isSessionDeletable } from "./sessionCapabilities";',
-        'import { useSessionResumeStateQuery } from "../../lib/query";',
-        "export function SessionManagerPage({ session }: { session: any }) {",
-        "  useSessionResumeStateQuery(",
-        "    session?.providerId,",
-        "    session?.sessionId,",
-        "    session?.sourcePath,",
-        "  );",
-        "  return isSessionDeletable(session) ? <CursorResumeGate /> : null;",
-        "}",
-      ].join("\n"),
-    );
-
-    const result = runChecker(root);
-
-    expect(result.status).toBe(1);
-    expect(result.output).toContain("CURSOR_RESUME_OWNER_BYPASS");
-    expect(result.output).toContain("SessionManagerPage.tsx");
-    expect(result.output).toContain("generic resume-state query");
-  });
-
-  it("rejects every unguarded generic resume query even when another call is guarded", () => {
+  it("rejects Session Manager that disables the shared resume-state query for Cursor", () => {
     const root = createConformingFixture();
     writeFixtureFile(
       root,
@@ -205,6 +180,7 @@ describe("US-004 Cursor session SSOT checker", () => {
         'import { isSessionDeletable } from "./sessionCapabilities";',
         'import { useCursorSessionIndex } from "../../hooks/useCursorSessionIndex";',
         'import { useSessionResumeStateQuery } from "../../lib/query";',
+        'import { getSessionResumeI18nKeys } from "./utils";',
         "export function SessionManagerPage({ session, providerFilter }: { session: any; providerFilter: string }) {",
         '  const isCursorSession = session?.providerId === "cursor";',
         '  useCursorSessionIndex(providerFilter === "cursor");',
@@ -218,6 +194,7 @@ describe("US-004 Cursor session SSOT checker", () => {
         "    session?.sessionId,",
         "    session?.sourcePath,",
         "  );",
+        "  getSessionResumeI18nKeys(undefined);",
         "  return isSessionDeletable(session) ? <CursorResumeGate /> : null;",
         "}",
       ].join("\n"),
@@ -227,7 +204,44 @@ describe("US-004 Cursor session SSOT checker", () => {
 
     expect(result.status).toBe(1);
     expect(result.output).toContain("CURSOR_RESUME_OWNER_BYPASS");
-    expect(result.output).toContain("generic resume-state query");
+    expect(result.output).toContain("must stay enabled for Cursor");
+  });
+
+  it("rejects every Cursor-disabled resume query even when another call stays shared", () => {
+    const root = createConformingFixture();
+    writeFixtureFile(
+      root,
+      "src/components/sessions/SessionManagerPage.tsx",
+      [
+        'import { CursorResumeGate } from "./CursorResumeGate";',
+        'import { isSessionDeletable } from "./sessionCapabilities";',
+        'import { useCursorSessionIndex } from "../../hooks/useCursorSessionIndex";',
+        'import { useSessionResumeStateQuery } from "../../lib/query";',
+        'import { getSessionResumeI18nKeys } from "./utils";',
+        "export function SessionManagerPage({ session, providerFilter }: { session: any; providerFilter: string }) {",
+        '  const isCursorSession = session?.providerId === "cursor";',
+        '  useCursorSessionIndex(providerFilter === "cursor");',
+        "  useSessionResumeStateQuery(",
+        "    session?.providerId,",
+        "    session?.sessionId,",
+        "    session?.sourcePath,",
+        "  );",
+        "  useSessionResumeStateQuery(",
+        "    isCursorSession ? undefined : session?.providerId,",
+        "    isCursorSession ? undefined : session?.sessionId,",
+        "    isCursorSession ? undefined : session?.sourcePath,",
+        "  );",
+        "  getSessionResumeI18nKeys(undefined);",
+        "  return isSessionDeletable(session) ? <CursorResumeGate /> : null;",
+        "}",
+      ].join("\n"),
+    );
+
+    const result = runChecker(root);
+
+    expect(result.status).toBe(1);
+    expect(result.output).toContain("CURSOR_RESUME_OWNER_BYPASS");
+    expect(result.output).toContain("must stay enabled for Cursor");
   });
 
   it("requires the Session Manager index query to be gated by the Cursor filter", () => {
