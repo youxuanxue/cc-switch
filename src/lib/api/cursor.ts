@@ -35,7 +35,9 @@ export type CursorSessionResumeContext =
 
 export type CursorLaunchResult =
   | { state: "launched" }
-  | { state: "workspaceRequired" };
+  | { state: "workspaceRequired" }
+  | { state: "focused"; app: string }
+  | { state: "occupied"; holder: string };
 
 export interface CursorOfficialAuthUpdate {
   authMode: CursorOfficialAuthMode;

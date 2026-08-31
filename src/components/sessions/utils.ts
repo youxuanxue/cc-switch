@@ -100,8 +100,22 @@ export interface WtsProjectIdentity {
   worktreeSlug: string | null;
 }
 
+export interface ProjectIdentityOptions {
+  caseInsensitive?: boolean;
+}
+
+const foldProjectGroupKey = (key: string) => key.toLowerCase();
+
+const sameWorkspaceDir = (
+  left: string,
+  right: string,
+  caseInsensitive?: boolean,
+) =>
+  caseInsensitive ? left.toLowerCase() === right.toLowerCase() : left === right;
+
 export const resolveWtsProjectIdentity = (
   projectDir?: string | null,
+  options?: ProjectIdentityOptions,
 ): WtsProjectIdentity => {
   const normalized = normalizeProjectDir(projectDir);
   if (!normalized) {
@@ -125,26 +139,32 @@ export const resolveWtsProjectIdentity = (
   const slug =
     markerIndex > 0 ? base.slice(markerIndex + WTS_WORKTREE_MARKER.length) : "";
 
-  if (repo && slug) {
-    const canonicalDir = parent ? `${parent}${sep}${repo}` : repo;
-    return {
-      key: canonicalDir,
-      canonicalDir,
-      label: repo,
-      worktreeSlug: slug,
-    };
+  const identity =
+    repo && slug
+      ? {
+          key: parent ? `${parent}${sep}${repo}` : repo,
+          canonicalDir: parent ? `${parent}${sep}${repo}` : repo,
+          label: repo,
+          worktreeSlug: slug,
+        }
+      : {
+          key: normalized,
+          canonicalDir: normalized,
+          label: base,
+          worktreeSlug: null,
+        };
+
+  if (options?.caseInsensitive) {
+    return { ...identity, key: foldProjectGroupKey(identity.key) };
   }
 
-  return {
-    key: normalized,
-    canonicalDir: normalized,
-    label: base,
-    worktreeSlug: null,
-  };
+  return identity;
 };
 
-export const getSessionProjectGroupKey = (projectDir?: string | null) =>
-  resolveWtsProjectIdentity(projectDir).key;
+export const getSessionProjectGroupKey = (
+  projectDir?: string | null,
+  options?: ProjectIdentityOptions,
+) => resolveWtsProjectIdentity(projectDir, options).key;
 
 export const getBaseName = (value?: string | null) => {
   if (!value) return "";
@@ -280,12 +300,13 @@ export const groupSessionsByProviderAndDirectory = (
 export const groupSessionsByProject = (
   sessions: SessionMeta[],
   unknownDirectoryLabel: string,
+  options?: ProjectIdentityOptions,
 ): SessionProjectGroup[] => {
   const projectGroups: SessionProjectGroup[] = [];
   const projectGroupMap = new Map<string, SessionProjectGroup>();
 
   sessions.forEach((session) => {
-    const identity = resolveWtsProjectIdentity(session.projectDir);
+    const identity = resolveWtsProjectIdentity(session.projectDir, options);
     const workspaceDir = normalizeProjectDir(session.projectDir);
     let projectGroup = projectGroupMap.get(identity.key);
 
@@ -306,7 +327,12 @@ export const groupSessionsByProject = (
     if (!projectGroup.providerIds.includes(session.providerId)) {
       projectGroup.providerIds.push(session.providerId);
     }
-    if (workspaceDir && !projectGroup.workspaceDirs.includes(workspaceDir)) {
+    if (
+      workspaceDir &&
+      !projectGroup.workspaceDirs.some((dir) =>
+        sameWorkspaceDir(dir, workspaceDir, options?.caseInsensitive),
+      )
+    ) {
       projectGroup.workspaceDirs.push(workspaceDir);
     }
   });

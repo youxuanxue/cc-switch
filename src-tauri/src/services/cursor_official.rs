@@ -9,6 +9,10 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::session_manager::providers::cursor::{self, CursorSessionRecord};
+use crate::session_manager::resume::{
+    apply_decision, resume_decision_for_session, LiveProcessView, ResumeDecision,
+    ResumeLaunchResult,
+};
 use crate::settings::{CursorOfficialAuthMode, CursorOfficialSettings};
 
 const OFFICIAL_ENV_REMOVALS: [&str; 5] = [
@@ -42,6 +46,28 @@ pub enum CursorResumeContext {
 pub enum CursorLaunchResult {
     Launched,
     WorkspaceRequired,
+    Focused { app: String },
+    Occupied { holder: String },
+}
+
+pub fn cursor_launch_result_from_resume(result: ResumeLaunchResult) -> CursorLaunchResult {
+    match result {
+        ResumeLaunchResult::Launched => CursorLaunchResult::Launched,
+        ResumeLaunchResult::Focused { app } => CursorLaunchResult::Focused { app },
+        ResumeLaunchResult::Occupied { holder } => CursorLaunchResult::Occupied { holder },
+    }
+}
+
+fn reuse_live_session(
+    session_id: &str,
+    source_path: Option<&Path>,
+) -> Result<Option<CursorLaunchResult>, String> {
+    let decision =
+        resume_decision_for_session(session_id, source_path, None, &LiveProcessView);
+    if matches!(decision, ResumeDecision::LaunchNew) {
+        return Ok(None);
+    }
+    apply_decision(decision).map(|result| Some(cursor_launch_result_from_resume(result)))
 }
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
@@ -1014,6 +1040,9 @@ fn launch_resume_with<L: CursorSessionLookup, R: CursorCommandRunner, T: CursorT
 ) -> Result<CursorLaunchResult, String> {
     validate_chat_id(session_id)?;
     let record = lookup.find_session(session_id)?;
+    if let Some(result) = reuse_live_session(session_id, Some(&record.metadata_path))? {
+        return Ok(result);
+    }
     let Some(workspace) = resolve_workspace(
         &record,
         workspace_override,
@@ -2127,5 +2156,25 @@ if [ "$1" = "login" ]; then exit "${CURSOR_TEST_LOGIN_EXIT:-0}"; fi
         assert!(result.is_err());
         std::thread::sleep(Duration::from_millis(300));
         assert!(!marker.exists(), "timed-out descendant must be terminated");
+    }
+
+    #[test]
+    fn live_writer_results_reuse_the_shared_resume_decision() {
+        assert_eq!(
+            cursor_launch_result_from_resume(ResumeLaunchResult::Focused {
+                app: "iTerm".to_string(),
+            }),
+            CursorLaunchResult::Focused {
+                app: "iTerm".to_string(),
+            }
+        );
+        assert_eq!(
+            cursor_launch_result_from_resume(ResumeLaunchResult::Occupied {
+                holder: "CodeG".to_string(),
+            }),
+            CursorLaunchResult::Occupied {
+                holder: "CodeG".to_string(),
+            }
+        );
     }
 }

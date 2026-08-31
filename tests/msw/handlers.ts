@@ -141,7 +141,9 @@ export const handlers = [
 
   http.post(`${TAURI_ENDPOINT}/list_sessions`, () => success(listSessions())),
 
-  http.post(`${TAURI_ENDPOINT}/list_wts_workspaces`, () => success([])),
+  http.post(`${TAURI_ENDPOINT}/list_wts_workspaces`, () =>
+    success({ isGitRepo: true, workspaces: [] }),
+  ),
 
   http.post(`${TAURI_ENDPOINT}/get_cursor_official_status`, () => {
     recordCursorIpcCall("get_cursor_official_status");

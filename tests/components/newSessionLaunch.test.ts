@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildNewSessionLaunch,
+  canUseNamedWorkspace,
   collectKnownProjects,
   defaultNewSessionProjectDir,
   defaultNewSessionProvider,
@@ -34,9 +35,9 @@ describe("newSessionLaunch", () => {
     );
     expect(defaultNewSessionProvider("all", selected)).toBe("codex");
     expect(defaultNewSessionProvider("cursor", selected)).toBe("cursor");
-    expect(collectKnownProjects(sessions).map((project) => project.dir)).toEqual(
-      ["/Users/feng/Codes/cc-switch", "/tmp/other"],
-    );
+    expect(
+      collectKnownProjects(sessions).map((project) => project.dir),
+    ).toEqual(["/Users/feng/Codes/cc-switch", "/tmp/other"]);
   });
 
   it("builds a main-workspace launch and a wts create-or-attach command", () => {
@@ -55,11 +56,47 @@ describe("newSessionLaunch", () => {
         providerId: "cursor",
         projectDir: "/Users/feng/Codes/cc-switch",
         workspace: "review",
+        isGitRepo: true,
       }),
     ).toEqual({
-      command: "WTS_HERE=1 wts --repo '/Users/feng/Codes/cc-switch' review agent",
+      command:
+        "WTS_HERE=1 wts --repo '/Users/feng/Codes/cc-switch' review agent",
       cwd: "/Users/feng/Codes/cc-switch",
     });
+  });
+
+  it("opens the current folder when the project is not a git repo", () => {
+    expect(canUseNamedWorkspace(true)).toBe(true);
+    expect(canUseNamedWorkspace(false)).toBe(false);
+    expect(canUseNamedWorkspace(null)).toBe(false);
+    expect(
+      buildNewSessionLaunch({
+        providerId: "cursor",
+        projectDir: "/Users/feng/Codes/challenge/agenthon2026",
+        workspace: "main",
+        isGitRepo: false,
+      }),
+    ).toEqual({
+      command:
+        "agent --workspace '/Users/feng/Codes/challenge/agenthon2026' --trust",
+      cwd: "/Users/feng/Codes/challenge/agenthon2026",
+    });
+    expect(
+      buildNewSessionLaunch({
+        providerId: "cursor",
+        projectDir: "/Users/feng/Codes/challenge/agenthon2026",
+        workspace: "t4",
+        isGitRepo: false,
+      }),
+    ).toEqual({ error: "requires-git" });
+    expect(
+      buildNewSessionLaunch({
+        providerId: "cursor",
+        projectDir: "/Users/feng/Codes/challenge/agenthon2026",
+        workspace: "t4",
+        isGitRepo: null,
+      }),
+    ).toEqual({ error: "requires-git" });
   });
 
   it("rejects empty projects, unsafe slugs, and non-wts workspace creation", () => {
@@ -77,6 +114,7 @@ describe("newSessionLaunch", () => {
         providerId: "gemini",
         projectDir: "/tmp/repo",
         workspace: "review",
+        isGitRepo: true,
       }),
     ).toEqual({ error: "create-requires-wts" });
     expect(
@@ -84,6 +122,7 @@ describe("newSessionLaunch", () => {
         providerId: "gemini",
         projectDir: "/tmp/repo",
         workspace: "review",
+        isGitRepo: true,
         knownWorkspaces: [{ slug: "review", path: "/tmp/repo-wt-review" }],
       }),
     ).toEqual({

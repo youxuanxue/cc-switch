@@ -115,7 +115,7 @@ pub async fn launch_session_terminal(
 #[tauri::command]
 pub async fn list_wts_workspaces(
     #[allow(non_snake_case)] projectDir: String,
-) -> Result<Vec<session_manager::wts::WtsWorkspace>, String> {
+) -> Result<session_manager::wts::WtsProjectContext, String> {
     let project_dir = projectDir.clone();
     tauri::async_runtime::spawn_blocking(move || {
         session_manager::wts::list_wts_workspaces(Path::new(&project_dir))

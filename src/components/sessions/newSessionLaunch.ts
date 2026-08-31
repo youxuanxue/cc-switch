@@ -1,8 +1,8 @@
-import type { WtsWorkspace } from "@/lib/api/sessions";
+import type { WtsProjectContext, WtsWorkspace } from "@/lib/api/sessions";
 import type { SessionMeta } from "@/types";
 import { resolveWtsProjectIdentity } from "./utils";
 
-export type { WtsWorkspace };
+export type { WtsProjectContext, WtsWorkspace };
 
 export const MAIN_WORKSPACE = "main";
 
@@ -27,7 +27,11 @@ export interface KnownProject {
 export type NewSessionLaunch =
   | { command: string; cwd: string }
   | {
-      error: "invalid-project" | "invalid-workspace" | "create-requires-wts";
+      error:
+        | "invalid-project"
+        | "invalid-workspace"
+        | "create-requires-wts"
+        | "requires-git";
     };
 
 const WTS_RUNTIME: Partial<Record<NewSessionProvider, string>> = {
@@ -162,11 +166,16 @@ function newSessionCommand(
   }
 }
 
+export function canUseNamedWorkspace(isGitRepo: boolean | null): boolean {
+  return isGitRepo === true;
+}
+
 export function buildNewSessionLaunch(input: {
   providerId: string;
   projectDir: string;
   workspace: string;
   knownWorkspaces?: WtsWorkspace[];
+  isGitRepo?: boolean | null;
 }): NewSessionLaunch {
   const projectDir = input.projectDir.trim();
   if (!projectDir) {
@@ -186,6 +195,10 @@ export function buildNewSessionLaunch(input: {
       command: newSessionCommand(input.providerId, projectDir),
       cwd: projectDir,
     };
+  }
+
+  if (!canUseNamedWorkspace(input.isGitRepo ?? null)) {
+    return { error: "requires-git" };
   }
 
   const runtime = WTS_RUNTIME[input.providerId];

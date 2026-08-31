@@ -666,7 +666,7 @@ describe("SessionManagerPage", () => {
     expect(launchTerminal).not.toHaveBeenCalled();
   });
 
-  it("US-002/US-004 never polls generic resume state for Cursor", async () => {
+  it("US-002/US-004 polls the shared resume state for Cursor", async () => {
     const getResumeState = vi.spyOn(sessionsApi, "getResumeState");
 
     try {
@@ -676,14 +676,35 @@ describe("SessionManagerPage", () => {
       expect(
         await screen.findByRole("heading", { name: "Cursor Alpha" }),
       ).toBeInTheDocument();
-      expect(
-        getResumeState.mock.calls.every(
-          ([providerId]) => providerId !== "cursor",
+      await waitFor(() =>
+        expect(getResumeState).toHaveBeenCalledWith(
+          "cursor",
+          "11111111-1111-4111-8111-111111111111",
+          expect.any(String),
         ),
-      ).toBe(true);
+      );
     } finally {
       getResumeState.mockRestore();
     }
+  });
+
+  it("renames the Cursor button to 回到会话 when the Agent CLI tab is already live", async () => {
+    vi.spyOn(platform, "isMac").mockReturnValue(true);
+    vi.spyOn(sessionsApi, "getResumeState").mockResolvedValue({
+      appearance: "return",
+    });
+
+    renderPage("cursor");
+    await filterToCursor();
+
+    expect(
+      await screen.findByRole("button", {
+        name: "回到会话",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "恢复会话" }),
+    ).not.toBeInTheDocument();
   });
 
   it("US-004 shows Cursor Agent CLI checkboxes in grouped batch mode", async () => {
@@ -1573,6 +1594,19 @@ describe("SessionManagerPage", () => {
   });
 
   it("does not launch a new session with an unsafe workspace name", async () => {
+    setSessionFixtures(
+      [
+        {
+          providerId: "codex",
+          sessionId: "only-session",
+          title: "Only Session",
+          projectDir: "/Users/feng/Codes/cc-switch",
+          lastActiveAt: Date.now(),
+          sourcePath: "/mock/codex/only.jsonl",
+        },
+      ],
+      {},
+    );
     const launch = vi.spyOn(sessionsApi, "launchTerminal");
 
     renderPage();
@@ -1585,6 +1619,41 @@ describe("SessionManagerPage", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /打开会话/i })).toBeDisabled();
     expect(launch).not.toHaveBeenCalled();
+    launch.mockRestore();
+  });
+
+  it("opens a session in a non-git folder without offering isolated workspaces", async () => {
+    const launch = vi
+      .spyOn(sessionsApi, "launchTerminal")
+      .mockResolvedValue({ action: "launched" });
+    const listWorkspaces = vi
+      .spyOn(sessionsApi, "listWtsWorkspaces")
+      .mockResolvedValue({ isGitRepo: false, workspaces: [] });
+
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: /新建会话/i }));
+
+    const projectInput = await screen.findByLabelText(/项目目录/i);
+    fireEvent.change(projectInput, {
+      target: { value: "/Users/feng/Codes/challenge/agenthon2026" },
+    });
+
+    expect(
+      await screen.findByText(
+        "这个目录不是 git 仓库，不能创建隔离工作区。可以在当前目录打开会话。",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText(/工作区名称/i)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /打开会话/i }));
+    await waitFor(() => {
+      expect(launch).toHaveBeenCalledWith({
+        command: "claude",
+        cwd: "/Users/feng/Codes/challenge/agenthon2026",
+      });
+    });
+
+    listWorkspaces.mockRestore();
     launch.mockRestore();
   });
 });

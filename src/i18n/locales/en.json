@@ -1148,6 +1148,8 @@
     "newSessionInvalidProject": "Choose a project directory.",
     "newSessionInvalidWorkspace": "Workspace names may only use letters, numbers, dots, underscores, and hyphens.",
     "newSessionCreateRequiresWts": "To create a named workspace, use Cursor / Claude / Codex, or attach an existing workspace.",
+    "newSessionRequiresGit": "This folder is not a git repository, so isolated workspaces cannot be created. You can still open a session in this folder.",
+    "newSessionCheckingWorkspace": "Checking whether this folder can create isolated workspaces.",
     "newSessionConfirm": "Open session",
     "batchDeleting": "Deleting...",
     "loadingSessions": "Loading sessions...",

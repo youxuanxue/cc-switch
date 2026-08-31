@@ -1148,6 +1148,8 @@
     "newSessionInvalidProject": "プロジェクトディレクトリを選択してください。",
     "newSessionInvalidWorkspace": "ワークスペース名には英数字、ドット、アンダースコア、ハイフンのみ使えます。",
     "newSessionCreateRequiresWts": "名前付きワークスペースを新規作成するには Cursor / Claude / Codex を使うか、既存ワークスペースを関連付けてください。",
+    "newSessionRequiresGit": "このフォルダーは git リポジトリではないため、隔離ワークスペースは作成できません。このフォルダーでセッションを開くことはできます。",
+    "newSessionCheckingWorkspace": "このフォルダーで隔離ワークスペースを作成できるか確認しています。",
     "newSessionConfirm": "セッションを開く",
     "batchDeleting": "削除中...",
     "loadingSessions": "セッションを読み込み中...",
