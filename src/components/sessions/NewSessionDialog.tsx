@@ -4,7 +4,9 @@ import { FolderOpen } from "lucide-react";
 import type { SessionMeta } from "@/types";
 import { sessionsApi } from "@/lib/api";
 import { settingsApi } from "@/lib/api/settings";
+import { isCaseInsensitiveFs } from "@/lib/platform";
 import { extractErrorMessage } from "@/utils/errorUtils";
+import { getSessionProjectGroupKey } from "./utils";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -64,9 +66,13 @@ export function NewSessionDialog({
   onLaunch: (launch: Extract<NewSessionLaunch, { command: string }>) => void;
 }) {
   const { t } = useTranslation();
+  const projectIdentityOptions = useMemo(
+    () => ({ caseInsensitive: isCaseInsensitiveFs() }),
+    [],
+  );
   const knownProjects = useMemo(
-    () => collectKnownProjects(sessions),
-    [sessions],
+    () => collectKnownProjects(sessions, projectIdentityOptions),
+    [projectIdentityOptions, sessions],
   );
   const [providerId, setProviderId] = useState<NewSessionProvider>("claude");
   const [projectDir, setProjectDir] = useState("");
@@ -81,12 +87,18 @@ export function NewSessionDialog({
       return;
     }
     setProviderId(defaultNewSessionProvider(providerFilter, selectedSession));
-    setProjectDir(defaultNewSessionProjectDir(selectedSession, sessions));
+    setProjectDir(
+      defaultNewSessionProjectDir(
+        selectedSession,
+        sessions,
+        projectIdentityOptions,
+      ),
+    );
     setWorkspaceChoice(MAIN_WORKSPACE);
     setCustomSlug("");
     setIsGitRepo(null);
     setWorkspaceError(null);
-  }, [open, providerFilter, selectedSession, sessions]);
+  }, [open, projectIdentityOptions, providerFilter, selectedSession, sessions]);
 
   useEffect(() => {
     if (!open || !projectDir.trim()) {
@@ -127,9 +139,13 @@ export function NewSessionDialog({
   }, [open, projectDir]);
 
   const namedWorkspaceAllowed = canUseNamedWorkspace(isGitRepo);
+  const matchingKnownProject = knownProjects.find(
+    (project) =>
+      getSessionProjectGroupKey(project.dir, projectIdentityOptions) ===
+      getSessionProjectGroupKey(projectDir.trim(), projectIdentityOptions),
+  );
   const sessionSlugs = namedWorkspaceAllowed
-    ? (knownProjects.find((project) => project.dir === projectDir.trim())
-        ?.slugs ?? [])
+    ? (matchingKnownProject?.slugs ?? [])
     : [];
   const workspaces = namedWorkspaceAllowed
     ? mergeWorkspaceSlugs(sessionSlugs, diskWorkspaces)
@@ -218,11 +234,7 @@ export function NewSessionDialog({
             </Label>
             {knownProjects.length > 0 ? (
               <Select
-                value={
-                  knownProjects.some((project) => project.dir === projectDir)
-                    ? projectDir
-                    : "__custom__"
-                }
+                value={matchingKnownProject?.dir ?? "__custom__"}
                 onValueChange={(value) => {
                   if (value !== "__custom__") {
                     setProjectDir(value);

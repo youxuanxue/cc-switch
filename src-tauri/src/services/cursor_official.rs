@@ -62,8 +62,7 @@ fn reuse_live_session(
     session_id: &str,
     source_path: Option<&Path>,
 ) -> Result<Option<CursorLaunchResult>, String> {
-    let decision =
-        resume_decision_for_session(session_id, source_path, None, &LiveProcessView);
+    let decision = resume_decision_for_session(session_id, source_path, None, &LiveProcessView);
     if matches!(decision, ResumeDecision::LaunchNew) {
         return Ok(None);
     }

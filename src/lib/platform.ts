@@ -18,6 +18,9 @@ export const isWindows = (): boolean => {
   }
 };
 
+// Default macOS and Windows volumes treat path letter-case as the same folder.
+export const isCaseInsensitiveFs = (): boolean => isMac() || isWindows();
+
 export const isLinux = (): boolean => {
   try {
     const ua = navigator.userAgent || "";

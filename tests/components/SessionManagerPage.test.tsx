@@ -29,6 +29,7 @@ const cursorApiMocks = vi.hoisted(() => ({
 
 const platformMocks = vi.hoisted(() => ({
   isMac: vi.fn(),
+  isWindows: vi.fn(),
 }));
 
 vi.mock("@/lib/api/cursor", () => ({
@@ -53,6 +54,9 @@ vi.mock("@/lib/api/cursor", () => ({
 
 vi.mock("@/lib/platform", () => ({
   isMac: () => platformMocks.isMac(),
+  isWindows: () => platformMocks.isWindows(),
+  isCaseInsensitiveFs: () =>
+    Boolean(platformMocks.isMac() || platformMocks.isWindows()),
 }));
 
 const toastSuccessMock = vi.fn();
@@ -256,6 +260,7 @@ describe("SessionManagerPage", () => {
     window.localStorage.removeItem("cc-switch.sessionManager.staleCleanupDays");
     window.localStorage.removeItem(GROUP_EXPANSION_STORAGE_KEY);
     platformMocks.isMac.mockReset().mockReturnValue(true);
+    platformMocks.isWindows.mockReset().mockReturnValue(false);
     cursorApiMocks.getOfficialStatus.mockReset().mockResolvedValue({
       installed: true,
       version: "agent 1.0.0",

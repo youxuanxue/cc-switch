@@ -40,6 +40,46 @@ describe("newSessionLaunch", () => {
     ).toEqual(["/Users/feng/Codes/cc-switch", "/tmp/other"]);
   });
 
+  it("merges known projects that differ only by letter case", () => {
+    const sessions = [
+      session({
+        providerId: "cursor",
+        sessionId: "codes",
+        projectDir: "/Users/feng/Codes/content-studio",
+      }),
+      session({
+        providerId: "codex",
+        sessionId: "codes-lower",
+        projectDir: "/Users/feng/codes/content-studio",
+      }),
+      session({
+        providerId: "codex",
+        sessionId: "codes-wt",
+        projectDir: "/Users/feng/Codes/content-studio-wt-review",
+      }),
+    ];
+
+    expect(
+      collectKnownProjects(sessions, { caseInsensitive: true }).map(
+        (project) => ({
+          dir: project.dir,
+          slugs: project.slugs,
+        }),
+      ),
+    ).toEqual([
+      {
+        dir: "/Users/feng/Codes/content-studio",
+        slugs: ["review"],
+      },
+    ]);
+    expect(
+      collectKnownProjects(sessions).map((project) => project.dir),
+    ).toEqual([
+      "/Users/feng/Codes/content-studio",
+      "/Users/feng/codes/content-studio",
+    ]);
+  });
+
   it("builds a main-workspace launch and a wts create-or-attach command", () => {
     expect(
       buildNewSessionLaunch({

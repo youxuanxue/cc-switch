@@ -61,7 +61,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { extractErrorMessage } from "@/utils/errorUtils";
-import { isMac } from "@/lib/platform";
+import { isCaseInsensitiveFs, isMac } from "@/lib/platform";
 import { useCursorSessionIndex } from "@/hooks/useCursorSessionIndex";
 import { ProviderIcon } from "@/components/ProviderIcon";
 import { SessionItem } from "./SessionItem";
@@ -319,7 +319,7 @@ export function SessionManagerPage({ appId }: { appId: string }) {
     [filteredSessions, unknownDirectoryLabel],
   );
   const projectIdentityOptions = useMemo(
-    () => ({ caseInsensitive: isMac() }),
+    () => ({ caseInsensitive: isCaseInsensitiveFs() }),
     [],
   );
   const projectGroupedSessions = useMemo(
