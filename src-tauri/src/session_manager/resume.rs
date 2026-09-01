@@ -71,6 +71,9 @@ pub struct SessionResumeState {
 
 pub trait ProcessView {
     fn lock_holder_pid(&self, path: &Path) -> Option<u32>;
+    fn lock_holder_pids(&self, path: &Path) -> Vec<u32> {
+        self.lock_holder_pid(path).into_iter().collect()
+    }
     fn process_info(&self, pid: u32) -> Option<ProcessInfo>;
     fn processes(&self) -> Vec<ProcessInfo>;
 }
@@ -79,17 +82,25 @@ pub struct LiveProcessView;
 
 impl ProcessView for LiveProcessView {
     fn lock_holder_pid(&self, lock_path: &Path) -> Option<u32> {
-        let output = Command::new("lsof")
+        self.lock_holder_pids(lock_path).into_iter().next()
+    }
+
+    fn lock_holder_pids(&self, lock_path: &Path) -> Vec<u32> {
+        let Some(output) = Command::new("lsof")
             .args(["-t", "--"])
             .arg(lock_path)
             .output()
-            .ok()?;
+            .ok()
+        else {
+            return Vec::new();
+        };
         if !output.status.success() {
-            return None;
+            return Vec::new();
         }
         String::from_utf8_lossy(&output.stdout)
             .lines()
-            .find_map(|line| line.trim().parse().ok())
+            .filter_map(|line| line.trim().parse().ok())
+            .collect()
     }
 
     fn process_info(&self, pid: u32) -> Option<ProcessInfo> {
@@ -284,6 +295,9 @@ pub fn holder_label(info: &WriterInfo) -> String {
     if info.app.as_deref() == Some("CodeG") {
         return "CodeG".to_string();
     }
+    if info.app.as_deref() == Some("CC Switch") {
+        return "CC Switch".to_string();
+    }
     let cmd = info.command.to_ascii_lowercase();
     if cmd.contains("app-server")
         || info
@@ -296,6 +310,50 @@ pub fn holder_label(info: &WriterInfo) -> String {
     info.app
         .clone()
         .unwrap_or_else(|| "another process".to_string())
+}
+
+fn is_cc_switch_descendant(pid: u32, view: &dyn ProcessView) -> bool {
+    let mut current = Some(pid);
+    let mut seen = HashSet::new();
+    while let Some(pid) = current {
+        if !seen.insert(pid) {
+            break;
+        }
+        let Some(info) = view.process_info(pid) else {
+            break;
+        };
+        if is_cc_switch_binary_command(&info.command) {
+            return true;
+        }
+        current = info.ppid.filter(|ppid| *ppid > 1);
+    }
+    false
+}
+
+fn annotate_in_app_host(writer: &mut WriterInfo, view: &dyn ProcessView) {
+    if is_cc_switch_descendant(writer.pid, view) {
+        writer.app = Some("CC Switch".to_string());
+    }
+}
+
+fn writer_preference(writer: &WriterInfo, session_id: &str) -> (u8, u8, u8) {
+    let focusable = u8::from(
+        writer.kind == WriterKind::TerminalTui
+            && writer.app.as_deref().is_some_and(can_focus_app),
+    );
+    let argv_match = u8::from(command_has_session_token(&writer.command, session_id));
+    let external = u8::from(writer.app.as_deref() != Some("CC Switch"));
+    (focusable, argv_match, external)
+}
+
+fn pick_preferred_writer(mut writers: Vec<WriterInfo>, session_id: &str) -> Option<WriterInfo> {
+    if writers.is_empty() {
+        return None;
+    }
+    writers.sort_by(|left, right| {
+        writer_preference(right, session_id).cmp(&writer_preference(left, session_id))
+    });
+    writers.into_iter().next()
 }
 
 pub fn inspect_pid(pid: u32, view: &dyn ProcessView) -> Option<WriterInfo> {
@@ -336,6 +394,10 @@ pub fn inspect_pid(pid: u32, view: &dyn ProcessView) -> Option<WriterInfo> {
         app,
         kind: classify_writer(&info.command, info.tty.as_deref()),
     })
+    .map(|mut writer| {
+        annotate_in_app_host(&mut writer, view);
+        writer
+    })
 }
 
 pub fn inspect_writer(path: &Path, view: &dyn ProcessView) -> Option<WriterInfo> {
@@ -343,13 +405,15 @@ pub fn inspect_writer(path: &Path, view: &dyn ProcessView) -> Option<WriterInfo>
 }
 
 fn collect_file_holder(path: &Path, view: &dyn ProcessView, pids: &mut Vec<u32>) {
-    let Some(writer) = inspect_writer(path, view) else {
-        return;
-    };
-    if writer.pid == std::process::id() || is_inspector_noise(&writer.command) {
-        return;
+    for pid in view.lock_holder_pids(path) {
+        let Some(writer) = inspect_pid(pid, view) else {
+            continue;
+        };
+        if writer.pid == std::process::id() || is_inspector_noise(&writer.command) {
+            continue;
+        }
+        pids.push(writer.pid);
     }
-    pids.push(writer.pid);
 }
 
 pub fn find_live_writer(
@@ -387,11 +451,7 @@ pub fn find_live_writer(
         .into_iter()
         .filter_map(|pid| inspect_pid(pid, view))
         .collect::<Vec<_>>();
-    writers
-        .iter()
-        .find(|writer| writer.kind == WriterKind::TerminalTui)
-        .cloned()
-        .or_else(|| writers.into_iter().next())
+    pick_preferred_writer(writers, session_id)
 }
 
 pub fn decide_resume(writer: Option<&WriterInfo>) -> ResumeDecision {
@@ -582,7 +642,7 @@ mod tests {
     use std::path::PathBuf;
 
     struct MapView {
-        holders: HashMap<PathBuf, u32>,
+        holders: HashMap<PathBuf, Vec<u32>>,
         procs: HashMap<u32, ProcessInfo>,
     }
 
@@ -595,14 +655,18 @@ mod tests {
         }
 
         fn with_holder(mut self, path: PathBuf, pid: u32) -> Self {
-            self.holders.insert(path, pid);
+            self.holders.entry(path).or_default().push(pid);
             self
         }
     }
 
     impl ProcessView for MapView {
         fn lock_holder_pid(&self, path: &Path) -> Option<u32> {
-            self.holders.get(path).copied()
+            self.lock_holder_pids(path).into_iter().next()
+        }
+
+        fn lock_holder_pids(&self, path: &Path) -> Vec<u32> {
+            self.holders.get(path).cloned().unwrap_or_default()
         }
 
         fn process_info(&self, pid: u32) -> Option<ProcessInfo> {
@@ -991,6 +1055,56 @@ mod tests {
         assert_eq!(procs[0].tty.as_deref(), Some("ttys019"));
         assert_eq!(procs[0].command, "claude --resume ses_abc123");
         assert_eq!(procs[1].tty, None);
+    }
+
+    #[test]
+    fn prefers_external_iterm_over_cc_switch_in_app_pty_for_store_db_holders() {
+        let session_id = "96213bcb-a72e-4e04-bc67-877ba1a8a1ca";
+        let store = PathBuf::from(format!("/tmp/cursor/{session_id}/store.db"));
+        let view = MapView::new(HashMap::from([
+            proc(
+                21424,
+                33263,
+                Some("ttys009"),
+                "/Users/feng/.local/bin/agent --use-system-ca /tmp/index.js",
+            ),
+            proc(33263, 33262, Some("ttys009"), "-zsh"),
+            proc(33262, 5090, Some("ttys009"), "login -fp feng"),
+            proc(
+                5090,
+                5089,
+                None,
+                "/Users/feng/Library/Application Support/iTerm2/iTermServer-3.6.11",
+            ),
+            proc(
+                5089,
+                1,
+                None,
+                "/Applications/iTerm.app/Contents/MacOS/iTerm2",
+            ),
+            proc(
+                95952,
+                20077,
+                Some("ttys013"),
+                "/Users/feng/.local/share/cursor-agent/versions/2026.08.31/cursor-agent --use-system-ca /tmp/index.js --workspace /tmp/sub2api --resume 96213bcb-a72e-4e04-bc67-877ba1a8a1ca",
+            ),
+            proc(
+                20077,
+                1,
+                None,
+                "/Applications/CC Switch.app/Contents/MacOS/cc-switch",
+            ),
+        ]))
+        .with_holder(store.clone(), 21424)
+        .with_holder(store.clone(), 95952);
+
+        assert_eq!(
+            resume_decision_for_session(session_id, Some(&store), None, &view),
+            ResumeDecision::Focus {
+                app: "iTerm".to_string(),
+                tty: Some("ttys009".to_string()),
+            }
+        );
     }
 
     #[test]
