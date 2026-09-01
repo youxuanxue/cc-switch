@@ -130,6 +130,7 @@ pub async fn list_wts_workspaces(
 ///
 /// Live sessions still Focus / Occupied on the external host — this never
 /// reattaches an existing iTerm tty. Cursor must use `spawn_cursor_session_pty`.
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn spawn_session_pty(
     app: AppHandle,
