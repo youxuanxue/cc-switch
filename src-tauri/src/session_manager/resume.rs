@@ -338,8 +338,7 @@ fn annotate_in_app_host(writer: &mut WriterInfo, view: &dyn ProcessView) {
 
 fn writer_preference(writer: &WriterInfo, session_id: &str) -> (u8, u8, u8) {
     let focusable = u8::from(
-        writer.kind == WriterKind::TerminalTui
-            && writer.app.as_deref().is_some_and(can_focus_app),
+        writer.kind == WriterKind::TerminalTui && writer.app.as_deref().is_some_and(can_focus_app),
     );
     let argv_match = u8::from(command_has_session_token(&writer.command, session_id));
     let external = u8::from(writer.app.as_deref() != Some("CC Switch"));
@@ -398,10 +397,6 @@ pub fn inspect_pid(pid: u32, view: &dyn ProcessView) -> Option<WriterInfo> {
         annotate_in_app_host(&mut writer, view);
         writer
     })
-}
-
-pub fn inspect_writer(path: &Path, view: &dyn ProcessView) -> Option<WriterInfo> {
-    inspect_pid(view.lock_holder_pid(path)?, view)
 }
 
 fn collect_file_holder(path: &Path, view: &dyn ProcessView, pids: &mut Vec<u32>) {
