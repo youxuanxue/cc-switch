@@ -2171,6 +2171,10 @@ export function SessionManagerPage({ appId }: { appId: string }) {
                             <TabsTrigger
                               value="terminal"
                               className="min-w-0 gap-1.5 px-2.5"
+                              title={t("sessionManager.liveTerminalTooltip", {
+                                defaultValue:
+                                  "在应用内打开 PTY（不接管已有 iTerm）",
+                              })}
                               disabled={
                                 isCursorSession
                                   ? !cursorPrimaryAction ||

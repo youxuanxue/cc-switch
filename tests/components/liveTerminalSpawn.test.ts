@@ -53,6 +53,17 @@ describe("liveTerminalSpawn", () => {
     ).resolves.toEqual({ kind: "occupied", holder: "CodeG" });
   });
 
+  it("maps Cursor focused live sessions without spawning a second PTY", async () => {
+    vi.mocked(cursorApi.spawnSessionPty).mockResolvedValue({
+      state: "focused",
+      app: "iTerm",
+    });
+
+    await expect(
+      spawnCursorLiveTerminal({ sessionId: "chat-1", cols: 80, rows: 24 }),
+    ).resolves.toEqual({ kind: "focused", app: "iTerm" });
+  });
+
   it("spawns non-Cursor providers through sessionsApi.spawnPty", async () => {
     vi.mocked(sessionsApi.spawnPty).mockResolvedValue({
       action: "launched",
@@ -82,6 +93,26 @@ describe("liveTerminalSpawn", () => {
     });
     expect(cursorApi.spawnSessionPty).not.toHaveBeenCalled();
     expect(result).toEqual({ kind: "launched", ptyId: "pty-claude-1" });
+  });
+
+  it("maps provider focused live sessions without spawning a second PTY", async () => {
+    vi.mocked(sessionsApi.spawnPty).mockResolvedValue({
+      action: "focused",
+      app: "iTerm",
+    });
+
+    await expect(
+      spawnProviderLiveTerminal({
+        session: {
+          providerId: "claude",
+          sessionId: "sess-1",
+          resumeCommand: "claude --resume sess-1",
+        },
+        cols: 80,
+        rows: 24,
+      }),
+    ).resolves.toEqual({ kind: "focused", app: "iTerm" });
+    expect(sessionsApi.spawnPty).toHaveBeenCalledOnce();
   });
 
   it("rejects non-Cursor sessions without resumeCommand", async () => {
