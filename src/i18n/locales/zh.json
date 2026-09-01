@@ -1226,7 +1226,20 @@
     "messageCopied": "已复制消息内容",
     "conversationHistory": "对话记录",
     "expandContent": "展开完整内容",
-    "collapseContent": "收起"
+    "collapseContent": "收起",
+    "liveTerminal": "站内终端",
+    "liveTerminalTooltip": "在应用内打开 PTY（不接管已有 iTerm）",
+    "liveTerminalStart": "启动",
+    "liveTerminalSpawning": "启动中…",
+    "liveTerminalLaunched": "站内终端已启动",
+    "liveTerminalRunning": "运行中",
+    "liveTerminalExited": "已退出",
+    "liveTerminalIdle": "未启动",
+    "liveTerminalSpawnFailed": "站内终端启动失败",
+    "liveTerminalWorkspaceRequired": "请先选择工作区目录后再打开站内终端",
+    "liveTerminalNoSession": "请先选择一个会话",
+    "liveTerminalMacOnly": "站内终端目前仅支持 macOS",
+    "liveTerminalAlreadyLive": "该会话已在 {{app}} 中打开，已切换到对应窗口，避免重复打开造成冲突"
   },
   "console": {
     "providerSwitchReceived": "收到供应商切换事件:",

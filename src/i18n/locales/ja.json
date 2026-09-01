@@ -1226,7 +1226,20 @@
     "messageCopied": "メッセージがコピーされました",
     "conversationHistory": "会話履歴",
     "expandContent": "全文を表示",
-    "collapseContent": "折りたたむ"
+    "collapseContent": "折りたたむ",
+    "liveTerminal": "アプリ内ターミナル",
+    "liveTerminalTooltip": "アプリ内で PTY を開く（既存の iTerm は引き継ぎません）",
+    "liveTerminalStart": "起動",
+    "liveTerminalSpawning": "起動中…",
+    "liveTerminalLaunched": "アプリ内ターミナルを起動しました",
+    "liveTerminalRunning": "実行中",
+    "liveTerminalExited": "終了",
+    "liveTerminalIdle": "未起動",
+    "liveTerminalSpawnFailed": "アプリ内ターミナルの起動に失敗しました",
+    "liveTerminalWorkspaceRequired": "アプリ内ターミナルを開く前にワークスペースを選択してください",
+    "liveTerminalNoSession": "先にセッションを選択してください",
+    "liveTerminalMacOnly": "アプリ内ターミナルは現在 macOS のみ対応です",
+    "liveTerminalAlreadyLive": "このセッションは既に {{app}} で開いています。重複起動を避けるため、該当ウィンドウに切り替えました。"
   },
   "console": {
     "providerSwitchReceived": "プロバイダー切り替えイベントを受信:",

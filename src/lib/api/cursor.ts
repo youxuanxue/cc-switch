@@ -39,6 +39,12 @@ export type CursorLaunchResult =
   | { state: "focused"; app: string }
   | { state: "occupied"; holder: string };
 
+export type CursorPtySpawnResult =
+  | { state: "launched"; ptyId: string }
+  | { state: "workspaceRequired" }
+  | { state: "focused"; app: string }
+  | { state: "occupied"; holder: string };
+
 export interface CursorOfficialAuthUpdate {
   authMode: CursorOfficialAuthMode;
   userApiKey?: string;
@@ -86,6 +92,17 @@ export const cursorApi = {
     return await invoke("launch_cursor_session", {
       sessionId: request.sessionId,
       workspaceOverride: request.workspaceOverride,
+    });
+  },
+
+  async spawnSessionPty(
+    request: CursorSessionRequest & { cols?: number; rows?: number },
+  ): Promise<CursorPtySpawnResult> {
+    return await invoke("spawn_cursor_session_pty", {
+      sessionId: request.sessionId,
+      workspaceOverride: request.workspaceOverride,
+      cols: request.cols,
+      rows: request.rows,
     });
   },
 

@@ -1227,7 +1227,20 @@
     "messageCopied": "已複製訊息內容",
     "conversationHistory": "對話紀錄",
     "expandContent": "展開完整內容",
-    "collapseContent": "收起"
+    "collapseContent": "收起",
+    "liveTerminal": "站內終端",
+    "liveTerminalTooltip": "在應用內開啟 PTY（不接管既有 iTerm）",
+    "liveTerminalStart": "啟動",
+    "liveTerminalSpawning": "啟動中…",
+    "liveTerminalLaunched": "站內終端已啟動",
+    "liveTerminalRunning": "執行中",
+    "liveTerminalExited": "已退出",
+    "liveTerminalIdle": "未啟動",
+    "liveTerminalSpawnFailed": "站內終端啟動失敗",
+    "liveTerminalWorkspaceRequired": "請先選擇工作區目錄後再開啟站內終端",
+    "liveTerminalNoSession": "請先選擇一個工作階段",
+    "liveTerminalMacOnly": "站內終端目前僅支援 macOS",
+    "liveTerminalAlreadyLive": "該工作階段已在 {{app}} 中開啟，已切換到對應視窗，避免重複開啟造成衝突"
   },
   "console": {
     "providerSwitchReceived": "收到供應商切換事件：",

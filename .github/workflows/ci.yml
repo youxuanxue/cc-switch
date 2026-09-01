@@ -46,6 +46,7 @@ jobs:
               - "playwright.config.ts"
               - "scripts/check-cursor-session-ssot.mjs"
               - "scripts/check-session-chrome-ssot.mjs"
+              - "scripts/check-session-live-ssot.mjs"
               - ".preflight/local-lint.conf"
               - "tailwind.config.cjs"
               - "postcss.config.cjs"
@@ -108,6 +109,9 @@ jobs:
 
       - name: Session chrome SSOT contract
         run: node scripts/check-session-chrome-ssot.mjs
+
+      - name: Session live-body SSOT contract
+        run: node scripts/check-session-live-ssot.mjs
 
       - name: Install Playwright Chromium
         run: pnpm exec playwright install --with-deps chromium

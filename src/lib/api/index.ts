@@ -16,6 +16,7 @@ export { openclawApi } from "./openclaw";
 export { sessionsApi } from "./sessions";
 export type {
   ResumeLaunchResult,
+  SessionPtySpawnResult,
   SessionResumeAppearance,
   SessionResumeState,
 } from "./sessions";
@@ -39,6 +40,7 @@ export type {
 } from "./auth";
 export type {
   CursorLaunchResult,
+  CursorPtySpawnResult,
   CursorOfficialAccount,
   CursorOfficialAuthMode,
   CursorOfficialAuthUpdate,

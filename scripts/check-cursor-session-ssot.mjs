@@ -222,6 +222,8 @@ const authOwnerFiles = new Set([
 const resumeOwnerFiles = new Set([
   "src/components/sessions/CursorResumeGate.tsx",
   "src/components/sessions/cursorResumeState.ts",
+  "src/components/sessions/liveTerminalSpawn.ts",
+  "src/components/sessions/SessionManagerPage.tsx",
   "src/lib/api/cursor.ts",
 ]);
 const indexHookConsumerFiles = new Set([
@@ -238,15 +240,15 @@ const authApiPattern =
 const authInvokePattern =
   /invoke\s*\(\s*["'](?:get_cursor_official_status|update_cursor_official_auth|clear_cursor_user_api_key|launch_cursor_login)["']/g;
 const resumeApiPattern =
-  /cursorApi\.(?:getSessionResumeContext|launchSession|launchLoginAndSession)\s*\(/g;
+  /cursorApi\.(?:getSessionResumeContext|launchSession|launchLoginAndSession|spawnSessionPty)\s*\(/g;
 const resumeInvokePattern =
-  /invoke\s*\(\s*["'](?:get_cursor_session_resume_context|launch_cursor_session|launch_cursor_login_and_session)["']/g;
+  /invoke\s*\(\s*["'](?:get_cursor_session_resume_context|launch_cursor_session|launch_cursor_login_and_session|spawn_cursor_session_pty)["']/g;
 const indexHookPattern = /\buseCursorSessionIndex\s*\(/g;
 const indexApiPattern = /cursorApi\.getSessionIndexStatus\s*\(/g;
 const indexInvokePattern =
   /invoke\s*\(\s*["']get_cursor_session_index_status["']/g;
 const genericTerminalPattern =
-  /sessionsApi\.launchTerminal\s*\(|invoke\s*\(\s*["']launch_session_terminal["']/g;
+  /sessionsApi\.(?:launchTerminal|spawnPty)\s*\(|invoke\s*\(\s*["'](?:launch_session_terminal|spawn_session_pty)["']/g;
 
 for (const [file, source] of sources) {
   if (!indexHookConsumerFiles.has(file)) {
@@ -352,7 +354,7 @@ for (const [file, source] of sources) {
   const terminalMatch = genericTerminalPattern.exec(source);
   if (terminalMatch) {
     const nearbyCursorBranch =
-      /(?:providerId|isCursorSession)[\s\S]{0,240}(?:===|!==|==|!=)[\s\S]{0,80}["']cursor["'][\s\S]{0,500}(?:sessionsApi\.launchTerminal\s*\(|invoke\s*\(\s*["']launch_session_terminal["'])/.test(
+      /(?:providerId|isCursorSession)[\s\S]{0,240}(?:===|!==|==|!=)[\s\S]{0,80}["']cursor["'][\s\S]{0,500}(?:sessionsApi\.(?:launchTerminal|spawnPty)\s*\(|invoke\s*\(\s*["'](?:launch_session_terminal|spawn_session_pty)["'])/.test(
         source,
       );
     if (cursorOwnedPath(file) || nearbyCursorBranch) {

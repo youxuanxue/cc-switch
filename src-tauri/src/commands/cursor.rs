@@ -1,10 +1,11 @@
 #![allow(non_snake_case)]
 
 use crate::services::cursor_official::{
-    self, CursorLaunchResult, CursorOfficialStatus, CursorResumeContext,
+    self, CursorLaunchResult, CursorOfficialStatus, CursorPtySpawnResult, CursorResumeContext,
 };
 use crate::session_manager::providers::cursor::CursorIndexStatus;
 use crate::settings::CursorOfficialAuthMode;
+use tauri::AppHandle;
 
 fn parse_cursor_auth_update(
     auth_mode: &str,
@@ -89,6 +90,28 @@ pub async fn launch_cursor_session(
 ) -> Result<CursorLaunchResult, String> {
     run_cursor_blocking(move || {
         cursor_official::launch_session(&sessionId, workspaceOverride.as_deref())
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn spawn_cursor_session_pty(
+    app: AppHandle,
+    sessionId: String,
+    workspaceOverride: Option<String>,
+    cols: Option<u16>,
+    rows: Option<u16>,
+) -> Result<CursorPtySpawnResult, String> {
+    let cols = cols.unwrap_or(100);
+    let rows = rows.unwrap_or(28);
+    run_cursor_blocking(move || {
+        cursor_official::launch_session_pty(
+            app,
+            &sessionId,
+            workspaceOverride.as_deref(),
+            cols,
+            rows,
+        )
     })
     .await
 }

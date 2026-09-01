@@ -189,8 +189,10 @@ pub fn command_basename(token: &str) -> &str {
 }
 
 pub fn is_inspector_noise(command: &str) -> bool {
-    let lower = command.to_ascii_lowercase();
-    if lower.contains("cc-switch") {
+    // Only treat the cc-switch binary itself as noise. Matching "cc-switch"
+    // anywhere would hide live agent sessions whose --workspace path contains
+    // the repo name (e.g. .../Codes/cc-switch --resume <id>).
+    if is_cc_switch_binary_command(command) {
         return true;
     }
     command.split_whitespace().next().is_some_and(|token| {
@@ -208,6 +210,24 @@ pub fn is_inspector_noise(command: &str) -> bool {
                 | "tail"
         )
     })
+}
+
+fn is_cc_switch_binary_command(command: &str) -> bool {
+    let trimmed = command.trim();
+    if trimmed.is_empty() {
+        return false;
+    }
+    // Common case: argv0 has no spaces.
+    let first = trimmed.split_whitespace().next().unwrap_or("");
+    if command_basename(first) == "cc-switch" {
+        return true;
+    }
+    // macOS app bundle paths include spaces: ".../CC Switch.app/Contents/MacOS/cc-switch".
+    if let Some(idx) = trimmed.find("/Contents/MacOS/cc-switch") {
+        let after = &trimmed[idx + "/Contents/MacOS/cc-switch".len()..];
+        return after.is_empty() || after.starts_with(char::is_whitespace);
+    }
+    false
 }
 
 pub fn is_session_runner_command(command: &str) -> bool {
@@ -851,6 +871,91 @@ mod tests {
             resume_decision_for_session("ses_abc123", None, None, &view),
             ResumeDecision::LaunchNew
         );
+    }
+
+    #[test]
+    fn live_agent_with_cc_switch_workspace_path_is_still_detected() {
+        // Regression: workspace path containing "cc-switch" must not be treated
+        // as inspector noise, or in-app PTY would spawn a conflicting second resume.
+        let view = iterm_view(
+            42,
+            "/Users/feng/.local/share/cursor-agent/versions/2026.08.25-3e8eec8/cursor-agent --use-system-ca /Users/feng/.local/share/cursor-agent/versions/2026.08.25-3e8eec8/index.js --workspace /Users/feng/Codes/cc-switch --resume 619f3d4a-0a40-47c9-aae6-253f7052d311",
+        );
+        assert_eq!(
+            resume_decision_for_session("619f3d4a-0a40-47c9-aae6-253f7052d311", None, None, &view),
+            ResumeDecision::Focus {
+                app: "iTerm".to_string(),
+                tty: Some("ttys019".to_string()),
+            }
+        );
+    }
+
+    #[test]
+    fn one_live_body_invariant_holds_for_every_session_runner_with_cc_switch_workspace() {
+        // Product invariant: one session => at most one live body.
+        // A live TUI whose argv mentions .../cc-switch must Focus, never LaunchNew.
+        for (session_id, command) in [
+            (
+                "claude-live-1",
+                "claude --resume claude-live-1 --workspace /Users/feng/Codes/cc-switch",
+            ),
+            (
+                "01a04642-3684-7963-b9cf-d0db978ce131",
+                "codex resume 01a04642-3684-7963-b9cf-d0db978ce131",
+            ),
+            (
+                "gem-live-1",
+                "gemini --resume gem-live-1",
+            ),
+            (
+                "grok-live-1",
+                "grok --resume grok-live-1",
+            ),
+            (
+                "opc-live-1",
+                "opencode -s opc-live-1",
+            ),
+            (
+                "pi-live-1",
+                "pi --session pi-live-1",
+            ),
+            (
+                "11111111-1111-4111-8111-111111111111",
+                "agent --workspace /Users/feng/Codes/cc-switch --resume 11111111-1111-4111-8111-111111111111",
+            ),
+            (
+                "22222222-2222-4222-8222-222222222222",
+                "/Users/feng/.local/bin/agent --use-system-ca /tmp/index.js --workspace /Users/feng/Codes/cc-switch --resume 22222222-2222-4222-8222-222222222222",
+            ),
+            (
+                "33333333-3333-4333-8333-333333333333",
+                "cursor-agent --workspace /Users/feng/Codes/cc-switch --resume 33333333-3333-4333-8333-333333333333",
+            ),
+        ] {
+            let view = iterm_view(42, command);
+            assert_eq!(
+                resume_decision_for_session(session_id, None, None, &view),
+                ResumeDecision::Focus {
+                    app: "iTerm".to_string(),
+                    tty: Some("ttys019".to_string()),
+                },
+                "runner command must stay Focus (one live body): {command}"
+            );
+        }
+    }
+
+    #[test]
+    fn is_inspector_noise_only_matches_cc_switch_binary_basename() {
+        assert!(is_inspector_noise("cc-switch --scan ses_abc"));
+        assert!(is_inspector_noise(
+            "/Applications/CC Switch.app/Contents/MacOS/cc-switch"
+        ));
+        assert!(!is_inspector_noise(
+            "agent --workspace /Users/feng/Codes/cc-switch --resume abc"
+        ));
+        assert!(!is_inspector_noise(
+            "claude --resume abc --add-dir /tmp/cc-switch-notes"
+        ));
     }
 
     #[test]
