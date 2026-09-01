@@ -1633,6 +1633,10 @@ pub fn run() {
             commands::delete_session,
             commands::delete_sessions,
             commands::launch_session_terminal,
+            commands::spawn_session_pty,
+            commands::session_pty_write,
+            commands::session_pty_resize,
+            commands::session_pty_kill,
             commands::get_session_resume_state,
             // Cursor Official auth and session recovery
             commands::get_cursor_official_status,
@@ -1641,6 +1645,7 @@ pub fn run() {
             commands::get_cursor_session_index_status,
             commands::get_cursor_session_resume_context,
             commands::launch_cursor_session,
+            commands::spawn_cursor_session_pty,
             commands::launch_cursor_login,
             commands::launch_cursor_login_and_session,
             commands::get_tool_versions,

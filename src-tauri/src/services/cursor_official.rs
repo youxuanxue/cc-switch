@@ -50,6 +50,24 @@ pub enum CursorLaunchResult {
     Occupied { holder: String },
 }
 
+/// In-app PTY spawn result for Cursor. Same live-session Focus/Occupied
+/// semantics as external launch; `Launched` always includes a new `ptyId`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "state", rename_all = "camelCase")]
+pub enum CursorPtySpawnResult {
+    Launched {
+        #[serde(rename = "ptyId")]
+        pty_id: String,
+    },
+    WorkspaceRequired,
+    Focused {
+        app: String,
+    },
+    Occupied {
+        holder: String,
+    },
+}
+
 pub fn cursor_launch_result_from_resume(result: ResumeLaunchResult) -> CursorLaunchResult {
     match result {
         ResumeLaunchResult::Launched => CursorLaunchResult::Launched,
@@ -1138,6 +1156,70 @@ pub fn launch_session(
         workspace_override,
         false,
     )
+}
+
+/// Resume a Cursor session inside an in-app PTY (does not reattach a live tty).
+pub fn launch_session_pty(
+    app: tauri::AppHandle,
+    session_id: &str,
+    workspace_override: Option<&str>,
+    cols: u16,
+    rows: u16,
+) -> Result<CursorPtySpawnResult, String> {
+    struct PtyCursorTerminalLauncher {
+        app: tauri::AppHandle,
+        cols: u16,
+        rows: u16,
+        pty_id: std::sync::Mutex<Option<String>>,
+    }
+
+    impl CursorTerminalLauncher for PtyCursorTerminalLauncher {
+        fn launch(&self, launcher_path: &Path, workspace: &Path) -> Result<(), String> {
+            let pty_id = crate::session_manager::pty::spawn_executable(
+                self.app.clone(),
+                launcher_path,
+                Some(workspace),
+                self.cols,
+                self.rows,
+            )?;
+            *self
+                .pty_id
+                .lock()
+                .map_err(|_| "PTY id lock poisoned".to_string())? = Some(pty_id);
+            Ok(())
+        }
+    }
+
+    let launcher = PtyCursorTerminalLauncher {
+        app,
+        cols,
+        rows,
+        pty_id: std::sync::Mutex::new(None),
+    };
+    let result = launch_resume_with(
+        &SystemCursorSessionLookup,
+        &SystemCursorCommandRunner,
+        &launcher,
+        &crate::settings::get_cursor_official_settings(),
+        &std::env::temp_dir(),
+        session_id,
+        workspace_override,
+        false,
+    )?;
+    match result {
+        CursorLaunchResult::Launched => {
+            let pty_id = launcher
+                .pty_id
+                .lock()
+                .map_err(|_| "PTY id lock poisoned".to_string())?
+                .clone()
+                .ok_or_else(|| "Cursor PTY launched without pty id".to_string())?;
+            Ok(CursorPtySpawnResult::Launched { pty_id })
+        }
+        CursorLaunchResult::WorkspaceRequired => Ok(CursorPtySpawnResult::WorkspaceRequired),
+        CursorLaunchResult::Focused { app } => Ok(CursorPtySpawnResult::Focused { app }),
+        CursorLaunchResult::Occupied { holder } => Ok(CursorPtySpawnResult::Occupied { holder }),
+    }
 }
 
 pub fn launch_login() -> Result<CursorLaunchResult, String> {

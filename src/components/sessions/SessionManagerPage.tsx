@@ -25,6 +25,7 @@ import {
   ChevronDown,
   ChevronRight,
   ChevronsDownUp,
+  TerminalSquare,
 } from "lucide-react";
 import {
   piKeys,
@@ -38,8 +39,14 @@ import { piApi, sessionsApi } from "@/lib/api";
 import type { SessionMeta } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { LiveTerminalPane } from "./LiveTerminalPane";
+import {
+  spawnCursorLiveTerminal,
+  spawnProviderLiveTerminal,
+} from "./liveTerminalSpawn";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -280,6 +287,8 @@ export function SessionManagerPage({ appId }: { appId: string }) {
     readInitialSessionListViewMode,
   );
   const [newSessionOpen, setNewSessionOpen] = useState(false);
+  const [detailTab, setDetailTab] = useState<"history" | "terminal">("history");
+  const [terminalVisited, setTerminalVisited] = useState(false);
   const [staleCleanupOpen, setStaleCleanupOpen] = useState(false);
   const [staleCleanupDays, setStaleCleanupDays] = useState(
     readInitialStaleCleanupDays,
@@ -434,6 +443,71 @@ export function SessionManagerPage({ appId }: { appId: string }) {
         `agent --workspace ${selectedSession.projectDir?.trim() || "<workspace>"} --resume ${selectedSession.sessionId}`)
       : selectedSession.resumeCommand
     : undefined;
+
+  useEffect(() => {
+    setDetailTab("history");
+    setTerminalVisited(false);
+  }, [selectedKey]);
+
+  const openLiveTerminalTab = useCallback(() => {
+    setTerminalVisited(true);
+    setDetailTab("terminal");
+  }, []);
+
+  const handleLiveTerminalSpawn = useCallback(
+    async ({ cols, rows }: { cols: number; rows: number }) => {
+      if (!selectedSession) {
+        return {
+          kind: "unavailable" as const,
+          reason: t("sessionManager.liveTerminalNoSession", {
+            defaultValue: "请先选择一个会话",
+          }),
+        };
+      }
+      if (!isMac()) {
+        return {
+          kind: "unavailable" as const,
+          reason: t("sessionManager.liveTerminalMacOnly", {
+            defaultValue: "站内终端目前仅支持 macOS",
+          }),
+        };
+      }
+
+      if (selectedSession.providerId === "cursor") {
+        return spawnCursorLiveTerminal({
+          sessionId: selectedSession.sessionId,
+          cols,
+          rows,
+        });
+      }
+
+      if (!selectedSession.resumeCommand) {
+        return {
+          kind: "unavailable" as const,
+          reason: t("sessionManager.noResumeCommand", {
+            defaultValue: "此会话无法恢复",
+          }),
+        };
+      }
+
+      const result = await spawnProviderLiveTerminal({
+        session: selectedSession,
+        cols,
+        rows,
+      });
+      if (result.kind === "unavailable") {
+        return {
+          kind: "unavailable" as const,
+          reason: t("sessionManager.noResumeCommand", {
+            defaultValue: "此会话无法恢复",
+          }),
+        };
+      }
+      return result;
+    },
+    [selectedSession, t],
+  );
+
   const cursorIndexUnavailableReason =
     providerFilter === "cursor" &&
     cursorSessionIndex.status?.state === "indexUnavailable"
@@ -2065,90 +2139,154 @@ export function SessionManagerPage({ appId }: { appId: string }) {
                         onResumeCommandChange={setCursorResumeCommand}
                       />
                     ) : null}
-                    <div className="flex min-h-0 flex-1 min-w-0">
-                      {/* 消息列表 */}
-                      <div className="flex-1 min-w-0 flex flex-col">
-                        <div className="px-4 pt-4 pb-2 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <MessageSquare className="size-4 text-muted-foreground" />
-                            <span className="text-sm font-medium">
-                              {t("sessionManager.conversationHistory", {
-                                defaultValue: "对话记录",
-                              })}
-                            </span>
-                            <Badge variant="secondary" className="text-xs">
+                    <Tabs
+                      value={detailTab}
+                      onValueChange={(value) => {
+                        if (value === "terminal") {
+                          openLiveTerminalTab();
+                          return;
+                        }
+                        setDetailTab("history");
+                      }}
+                      className="flex min-h-0 flex-1 flex-col"
+                    >
+                      <div className="flex items-center gap-2 px-4 pt-3 pb-2 min-w-0">
+                        <TabsList className="h-8">
+                          <TabsTrigger
+                            value="history"
+                            className="min-w-0 gap-1.5 px-2.5"
+                          >
+                            <MessageSquare className="size-3.5" />
+                            {t("sessionManager.conversationHistory", {
+                              defaultValue: "对话记录",
+                            })}
+                            <Badge
+                              variant="secondary"
+                              className="text-[10px] px-1.5 py-0"
+                            >
                               {displayMessages.length}
                             </Badge>
-                          </div>
-                        </div>
-                        <div
-                          ref={scrollContainerRef}
-                          className="flex-1 overflow-y-auto px-4 pb-4 min-w-0"
-                        >
-                          {isLoadingMessages ? (
-                            <div className="flex items-center justify-center py-12">
-                              <RefreshCw className="size-5 animate-spin text-muted-foreground" />
-                            </div>
-                          ) : displayMessages.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center py-12 text-center">
-                              <MessageSquare className="size-8 text-muted-foreground/50 mb-2" />
-                              <p className="text-sm text-muted-foreground">
-                                {t("sessionManager.emptySession")}
-                              </p>
-                            </div>
-                          ) : (
-                            <div
-                              style={{
-                                height: virtualizer.getTotalSize(),
-                                position: "relative",
-                              }}
+                          </TabsTrigger>
+                          {isMac() ? (
+                            <TabsTrigger
+                              value="terminal"
+                              className="min-w-0 gap-1.5 px-2.5"
+                              title={t("sessionManager.liveTerminalTooltip", {
+                                defaultValue:
+                                  "在应用内打开 PTY（不接管已有 iTerm）",
+                              })}
+                              disabled={
+                                isCursorSession
+                                  ? !cursorPrimaryAction ||
+                                    cursorPrimaryAction.disabled
+                                  : !selectedSession.resumeCommand
+                              }
                             >
-                              {virtualizer
-                                .getVirtualItems()
-                                .map((virtualRow) => (
-                                  <div
-                                    key={virtualRow.key}
-                                    data-index={virtualRow.index}
-                                    ref={virtualizer.measureElement}
-                                    style={{
-                                      position: "absolute",
-                                      top: 0,
-                                      left: 0,
-                                      width: "100%",
-                                      transform: `translateY(${virtualRow.start}px)`,
-                                    }}
-                                  >
-                                    <SessionMessageItem
-                                      message={
-                                        displayMessages[virtualRow.index]
-                                      }
-                                      isActive={
-                                        activeMessageIndex === virtualRow.index
-                                      }
-                                      searchQuery={search}
-                                      onCopy={handleMessageCopy}
-                                    />
-                                  </div>
-                                ))}
-                            </div>
-                          )}
-                        </div>
+                              <TerminalSquare className="size-3.5" />
+                              {t("sessionManager.liveTerminal", {
+                                defaultValue: "站内终端",
+                              })}
+                            </TabsTrigger>
+                          ) : null}
+                        </TabsList>
                       </div>
 
-                      {/* 右侧目录 - 类似少数派 (大屏幕) */}
-                      <SessionTocSidebar
-                        items={userMessagesToc}
-                        onItemClick={scrollToMessage}
-                      />
-                    </div>
+                      <TabsContent
+                        value="history"
+                        className="mt-0 flex min-h-0 flex-1 flex-col data-[state=inactive]:hidden"
+                      >
+                        <div className="flex min-h-0 flex-1 min-w-0">
+                          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+                            <div
+                              ref={scrollContainerRef}
+                              className="flex-1 overflow-y-auto px-4 pb-4 min-w-0"
+                            >
+                              {isLoadingMessages ? (
+                                <div className="flex items-center justify-center py-12">
+                                  <RefreshCw className="size-5 animate-spin text-muted-foreground" />
+                                </div>
+                              ) : displayMessages.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center py-12 text-center">
+                                  <MessageSquare className="size-8 text-muted-foreground/50 mb-2" />
+                                  <p className="text-sm text-muted-foreground">
+                                    {t("sessionManager.emptySession")}
+                                  </p>
+                                </div>
+                              ) : (
+                                <div
+                                  style={{
+                                    height: virtualizer.getTotalSize(),
+                                    position: "relative",
+                                  }}
+                                >
+                                  {virtualizer
+                                    .getVirtualItems()
+                                    .map((virtualRow) => (
+                                      <div
+                                        key={virtualRow.key}
+                                        data-index={virtualRow.index}
+                                        ref={virtualizer.measureElement}
+                                        style={{
+                                          position: "absolute",
+                                          top: 0,
+                                          left: 0,
+                                          width: "100%",
+                                          transform: `translateY(${virtualRow.start}px)`,
+                                        }}
+                                      >
+                                        <SessionMessageItem
+                                          message={
+                                            displayMessages[virtualRow.index]
+                                          }
+                                          isActive={
+                                            activeMessageIndex ===
+                                            virtualRow.index
+                                          }
+                                          searchQuery={search}
+                                          onCopy={handleMessageCopy}
+                                        />
+                                      </div>
+                                    ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
 
-                    {/* 浮动目录按钮 (小屏幕) */}
-                    <SessionTocDialog
-                      items={userMessagesToc}
-                      onItemClick={scrollToMessage}
-                      open={tocDialogOpen}
-                      onOpenChange={setTocDialogOpen}
-                    />
+                          <SessionTocSidebar
+                            items={userMessagesToc}
+                            onItemClick={scrollToMessage}
+                          />
+                        </div>
+
+                        <SessionTocDialog
+                          items={userMessagesToc}
+                          onItemClick={scrollToMessage}
+                          open={tocDialogOpen}
+                          onOpenChange={setTocDialogOpen}
+                        />
+                      </TabsContent>
+
+                      {isMac() ? (
+                        <TabsContent
+                          value="terminal"
+                          forceMount={terminalVisited || undefined}
+                          className="mt-0 flex min-h-0 flex-1 flex-col data-[state=inactive]:hidden"
+                        >
+                          {terminalVisited ? (
+                            <LiveTerminalPane
+                              active={detailTab === "terminal"}
+                              onSpawn={handleLiveTerminalSpawn}
+                              onBlocked={() => setDetailTab("history")}
+                              sessionKey={
+                                selectedSession
+                                  ? getSessionKey(selectedSession)
+                                  : "none"
+                              }
+                            />
+                          ) : null}
+                        </TabsContent>
+                      ) : null}
+                    </Tabs>
                   </CardContent>
                 </>
               )}

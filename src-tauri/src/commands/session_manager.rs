@@ -2,11 +2,13 @@
 
 use crate::codex_config::get_codex_config_dir;
 use crate::session_manager;
+use crate::session_manager::pty::SessionPtySpawnResult;
 use crate::session_manager::resume::{
     apply_decision, resume_decision_for_session, resume_state_for_session, LiveProcessView,
     ResumeDecision, ResumeLaunchResult, SessionResumeState,
 };
 use std::path::Path;
+use tauri::AppHandle;
 
 #[tauri::command]
 pub async fn list_sessions() -> Result<Vec<session_manager::SessionMeta>, String> {
@@ -122,6 +124,71 @@ pub async fn list_wts_workspaces(
     })
     .await
     .map_err(|e| format!("Failed to list workspaces: {e}"))?
+}
+
+/// Spawn an in-app PTY for a non-Cursor session resume/new command.
+///
+/// Live sessions still Focus / Occupied on the external host — this never
+/// reattaches an existing iTerm tty. Cursor must use `spawn_cursor_session_pty`.
+#[allow(clippy::too_many_arguments)]
+#[tauri::command]
+pub async fn spawn_session_pty(
+    app: AppHandle,
+    command: String,
+    cwd: Option<String>,
+    cols: Option<u16>,
+    rows: Option<u16>,
+    sessionId: Option<String>,
+    providerId: Option<String>,
+    sourcePath: Option<String>,
+) -> Result<SessionPtySpawnResult, String> {
+    let cols = cols.unwrap_or(100);
+    let rows = rows.unwrap_or(28);
+
+    if let Some(session_id) = sessionId.as_deref() {
+        let lock_dir = (providerId.as_deref() == Some("codex")).then(get_codex_config_dir);
+        let decision = resume_decision_for_session(
+            session_id,
+            sourcePath.as_deref().map(Path::new),
+            lock_dir.as_deref(),
+            &LiveProcessView,
+        );
+        match decision {
+            ResumeDecision::LaunchNew => {}
+            other => {
+                return match apply_decision(other)? {
+                    ResumeLaunchResult::Focused { app } => {
+                        Ok(SessionPtySpawnResult::Focused { app })
+                    }
+                    ResumeLaunchResult::Occupied { holder } => {
+                        Ok(SessionPtySpawnResult::Occupied { holder })
+                    }
+                    ResumeLaunchResult::Launched => {
+                        Err("Unexpected launched result without PTY spawn".to_string())
+                    }
+                };
+            }
+        }
+    }
+
+    let pty_id =
+        session_manager::pty::spawn_shell_command(app, &command, cwd.as_deref(), cols, rows)?;
+    Ok(SessionPtySpawnResult::Launched { pty_id })
+}
+
+#[tauri::command]
+pub async fn session_pty_write(ptyId: String, data: String) -> Result<(), String> {
+    session_manager::pty::write_pty(&ptyId, &data)
+}
+
+#[tauri::command]
+pub async fn session_pty_resize(ptyId: String, cols: u16, rows: u16) -> Result<(), String> {
+    session_manager::pty::resize_pty(&ptyId, cols, rows)
+}
+
+#[tauri::command]
+pub async fn session_pty_kill(ptyId: String) -> Result<(), String> {
+    session_manager::pty::kill_pty(&ptyId)
 }
 
 #[tauri::command]

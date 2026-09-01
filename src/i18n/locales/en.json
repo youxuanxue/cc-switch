@@ -1226,7 +1226,20 @@
     "messageCopied": "Message copied",
     "conversationHistory": "Conversation History",
     "expandContent": "Expand full content",
-    "collapseContent": "Collapse"
+    "collapseContent": "Collapse",
+    "liveTerminal": "In-app terminal",
+    "liveTerminalTooltip": "Open a PTY in the app (does not take over an existing iTerm tab)",
+    "liveTerminalStart": "Start",
+    "liveTerminalSpawning": "Starting…",
+    "liveTerminalLaunched": "In-app terminal started",
+    "liveTerminalRunning": "Running",
+    "liveTerminalExited": "Exited",
+    "liveTerminalIdle": "Idle",
+    "liveTerminalSpawnFailed": "Failed to start in-app terminal",
+    "liveTerminalWorkspaceRequired": "Pick a workspace before opening the in-app terminal",
+    "liveTerminalNoSession": "Select a session first",
+    "liveTerminalMacOnly": "In-app terminal is currently macOS-only",
+    "liveTerminalAlreadyLive": "This session is already open in {{app}}. Switched to that window to avoid a conflicting second resume."
   },
   "console": {
     "providerSwitchReceived": "Received provider switch event:",

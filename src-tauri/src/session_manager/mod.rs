@@ -1,4 +1,5 @@
 pub mod providers;
+pub mod pty;
 pub mod resume;
 pub mod terminal;
 pub mod wts;

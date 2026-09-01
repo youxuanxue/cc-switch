@@ -17,6 +17,11 @@ export type ResumeLaunchResult =
   | { action: "focused"; app: string }
   | { action: "occupied"; holder: string };
 
+export type SessionPtySpawnResult =
+  | { action: "launched"; ptyId: string }
+  | { action: "focused"; app: string }
+  | { action: "occupied"; holder: string };
+
 export type SessionResumeAppearance = "resume" | "return" | "returnToCodeG";
 
 export interface SessionResumeState {
@@ -103,5 +108,39 @@ export const sessionsApi = {
       sourcePath,
       terminal,
     });
+  },
+
+  async spawnPty(options: {
+    command: string;
+    cwd?: string | null;
+    cols?: number;
+    rows?: number;
+    sessionId?: string | null;
+    providerId?: string | null;
+    sourcePath?: string | null;
+  }): Promise<SessionPtySpawnResult> {
+    const { command, cwd, cols, rows, sessionId, providerId, sourcePath } =
+      options;
+    return await invoke("spawn_session_pty", {
+      command,
+      cwd,
+      cols,
+      rows,
+      sessionId,
+      providerId,
+      sourcePath,
+    });
+  },
+
+  async ptyWrite(ptyId: string, data: string): Promise<void> {
+    return await invoke("session_pty_write", { ptyId, data });
+  },
+
+  async ptyResize(ptyId: string, cols: number, rows: number): Promise<void> {
+    return await invoke("session_pty_resize", { ptyId, cols, rows });
+  },
+
+  async ptyKill(ptyId: string): Promise<void> {
+    return await invoke("session_pty_kill", { ptyId });
   },
 };
