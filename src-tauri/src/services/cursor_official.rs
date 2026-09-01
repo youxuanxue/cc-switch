@@ -1057,7 +1057,8 @@ fn launch_resume_with<L: CursorSessionLookup, R: CursorCommandRunner, T: CursorT
 ) -> Result<CursorLaunchResult, String> {
     validate_chat_id(session_id)?;
     let record = lookup.find_session(session_id)?;
-    if let Some(result) = reuse_live_session(session_id, Some(&record.metadata_path))? {
+    let live_source = cursor::live_writer_source_path(&record.metadata_path);
+    if let Some(result) = reuse_live_session(session_id, Some(&live_source))? {
         return Ok(result);
     }
     let Some(workspace) = resolve_workspace(

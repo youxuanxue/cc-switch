@@ -279,6 +279,17 @@ pub fn find_session(session_id: &str) -> Result<CursorSessionRecord, String> {
     find_session_in(&cursor_chats_root(), session_id)
 }
 
+/// Path passed to live-session detection for Cursor. The active agent holds
+/// `store.db`, not `meta.json`; lsof on the transcript DB catches live bodies
+/// even when `ps` visibility is limited inside the packaged app.
+pub fn live_writer_source_path(metadata_path: &Path) -> PathBuf {
+    metadata_path
+        .parent()
+        .map(|dir| dir.join("store.db"))
+        .filter(|store| store.is_file())
+        .unwrap_or_else(|| metadata_path.to_path_buf())
+}
+
 fn store_path_if_present(metadata_path: &Path) -> Option<String> {
     let store = metadata_path.parent()?.join("store.db");
     store
@@ -536,6 +547,23 @@ mod tests {
         }
         std::fs::write(&path, serde_json::to_vec(&value).unwrap()).unwrap();
         path
+    }
+
+    #[test]
+    fn live_writer_source_path_prefers_store_db() {
+        let root = tempdir().unwrap();
+        let meta = write_meta(
+            root.path(),
+            "workspace-a",
+            CHAT_ID,
+            Some(20),
+            Some(true),
+            Some("/workspace/app"),
+        );
+        let store = meta.parent().unwrap().join("store.db");
+        std::fs::write(&store, b"store").unwrap();
+
+        assert_eq!(live_writer_source_path(&meta), store);
     }
 
     #[test]

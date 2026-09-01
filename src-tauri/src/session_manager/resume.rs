@@ -994,6 +994,43 @@ mod tests {
     }
 
     #[test]
+    fn cursor_store_db_holder_detects_live_session_without_argv_token() {
+        let session_id = "619f3d4a-0a40-47c9-aae6-253f7052d311";
+        let store = PathBuf::from(format!("/tmp/cursor/{session_id}/store.db"));
+        let view = MapView::new(HashMap::from([
+            proc(
+                87066,
+                87035,
+                Some("ttys002"),
+                "/Users/feng/.local/share/cursor-agent/versions/2026.08.25-3e8eec8/cursor-agent --use-system-ca index.js --workspace /tmp/app",
+            ),
+            proc(87035, 87034, Some("ttys002"), "-zsh"),
+            proc(87034, 5090, Some("ttys002"), "login -fp feng"),
+            proc(
+                5090,
+                5089,
+                None,
+                "/Users/feng/Library/Application Support/iTerm2/iTermServer-3.6.11",
+            ),
+            proc(
+                5089,
+                1,
+                None,
+                "/Applications/iTerm.app/Contents/MacOS/iTerm2",
+            ),
+        ]))
+        .with_holder(store.clone(), 87066);
+
+        assert_eq!(
+            resume_decision_for_session(session_id, Some(&store), None, &view),
+            ResumeDecision::Focus {
+                app: "iTerm".to_string(),
+                tty: Some("ttys002".to_string()),
+            }
+        );
+    }
+
+    #[test]
     fn a_codex_lock_does_not_occupy_a_claude_session() {
         let session_id = "ses_shared";
         let lock = writer_lock_path(Path::new("/tmp/codex"), session_id).expect("lock");

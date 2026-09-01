@@ -232,6 +232,14 @@ if (!cursorOfficial.missing) {
     FINDING_CODES.launchConsumer,
     "Cursor launch_resume_with must consult reuse_live_session before preparing a launcher",
   );
+  requireContains(
+    findings,
+    cursorOfficial.relativePath,
+    cursorOfficial.source,
+    /live_writer_source_path\s*\(\s*&record\.metadata_path\s*\)/,
+    FINDING_CODES.launchConsumer,
+    "Cursor live-session probe must use store.db (live_writer_source_path), not meta.json",
+  );
 }
 
 if (!liveTerminalPane.missing) {

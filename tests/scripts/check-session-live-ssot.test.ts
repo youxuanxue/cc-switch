@@ -52,7 +52,8 @@ fn reuse_live_session() {
     let decision = resume_decision_for_session();
 }
 fn launch_resume_with() {
-    if let Some(result) = reuse_live_session() {}
+    let live_source = live_writer_source_path(&record.metadata_path);
+    if let Some(result) = reuse_live_session(session_id, Some(&live_source)) {}
 }
 `,
     "src/components/sessions/LiveTerminalPane.tsx": `
