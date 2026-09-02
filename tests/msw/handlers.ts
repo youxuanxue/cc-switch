@@ -235,6 +235,38 @@ export const handlers = [
     success({ appearance: "resume" }),
   ),
 
+  http.post(`${TAURI_ENDPOINT}/classify_stale_registered_wts_worktrees`, () =>
+    success({ removable: [], skipped: [] }),
+  ),
+
+  http.post(`${TAURI_ENDPOINT}/remove_stale_registered_wts_worktrees`, () =>
+    success({ removed: 0, failed: [] }),
+  ),
+
+  http.post(`${TAURI_ENDPOINT}/prune_empty_cursor_agent_cli_buckets`, () =>
+    success({
+      cursor: {
+        bucketsRemoved: 0,
+        staleChatsRemoved: 0,
+        orphanDirsRemoved: 0,
+        bucketsRetained: 0,
+        scannableChatsRetained: 0,
+      },
+      claudePartitionsRemoved: 0,
+      codexEmptyDirsRemoved: 0,
+      geminiPartitionsRemoved: 0,
+      grokPartitionsRemoved: 0,
+      cursorDesktopWorkspacesRemoved: 0,
+      cursorDesktopWorkspacesRetained: 0,
+      wtsWorktrees: {
+        removed: 0,
+        gitRemoved: 0,
+        retained: 0,
+        skippedDirty: 0,
+      },
+    }),
+  ),
+
   http.post(`${TAURI_ENDPOINT}/classify_session_live_states`, async ({ request }) => {
     const { items = [] } = await withJson<{
       items?: {

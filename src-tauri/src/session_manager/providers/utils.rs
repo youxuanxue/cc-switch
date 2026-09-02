@@ -1,6 +1,7 @@
+use std::fs;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, Seek, SeekFrom};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, FixedOffset};
 use serde_json::Value;
@@ -157,6 +158,112 @@ pub fn path_basename(value: &str) -> Option<String> {
         .next_back()
         .filter(|segment| !segment.is_empty())?;
     Some(last.to_string())
+}
+
+pub fn is_not_found(error: &io::Error) -> bool {
+    error.kind() == io::ErrorKind::NotFound
+}
+
+pub fn remove_dir_if_present(path: &Path, label: &str) -> Result<bool, String> {
+    if !path.exists() {
+        return Ok(false);
+    }
+    match fs::remove_dir_all(path) {
+        Ok(()) => Ok(true),
+        Err(error) if is_not_found(&error) => Ok(false),
+        Err(error) => Err(format!(
+            "Failed to remove {label} {}: {error}",
+            path.display()
+        )),
+    }
+}
+
+/// Remove empty directories under `root`, deepest first. Never removes `root` itself.
+pub fn remove_empty_dirs_under(root: &Path, label: &str) -> Result<u32, String> {
+    if !root.is_dir() {
+        return Ok(0);
+    }
+
+    let mut dirs: Vec<PathBuf> = Vec::new();
+    collect_dirs(root, &mut dirs)?;
+    dirs.sort_by_key(|path| std::cmp::Reverse(path.components().count()));
+
+    let mut removed = 0u32;
+    for dir in dirs {
+        if dir == root {
+            continue;
+        }
+        if !dir.is_dir() {
+            continue;
+        }
+        if fs::read_dir(&dir)
+            .map_err(|error| format!("Failed to read {}: {error}", dir.display()))?
+            .next()
+            .is_none()
+            && remove_dir_if_present(&dir, label)?
+        {
+            removed += 1;
+        }
+    }
+    Ok(removed)
+}
+
+fn collect_dirs(path: &Path, dirs: &mut Vec<PathBuf>) -> Result<(), String> {
+    if !path.is_dir() {
+        return Ok(());
+    }
+    for entry in fs::read_dir(path)
+        .map_err(|error| format!("Failed to read directory {}: {error}", path.display()))?
+    {
+        let entry = entry.map_err(|error| {
+            format!(
+                "Failed to read directory entry under {}: {error}",
+                path.display()
+            )
+        })?;
+        if entry
+            .file_type()
+            .map_err(|error| {
+                format!(
+                    "Failed to inspect directory entry under {}: {error}",
+                    path.display()
+                )
+            })?
+            .is_dir()
+        {
+            let child = entry.path();
+            collect_dirs(&child, dirs)?;
+            dirs.push(child);
+        }
+    }
+    Ok(())
+}
+
+pub fn dir_has_files_with_extension(path: &Path, extension: &str) -> Result<bool, String> {
+    if !path.is_dir() {
+        return Ok(false);
+    }
+    for entry in fs::read_dir(path)
+        .map_err(|error| format!("Failed to read directory {}: {error}", path.display()))?
+    {
+        let entry = entry.map_err(|error| {
+            format!(
+                "Failed to read directory entry under {}: {error}",
+                path.display()
+            )
+        })?;
+        let entry_path = entry.path();
+        if entry_path.is_dir() {
+            if dir_has_files_with_extension(&entry_path, extension)? {
+                return Ok(true);
+            }
+            continue;
+        }
+        if entry_path.extension().and_then(|value| value.to_str()) == Some(extension) {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 #[cfg(test)]

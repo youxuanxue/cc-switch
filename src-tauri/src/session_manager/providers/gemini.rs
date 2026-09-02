@@ -137,6 +137,35 @@ pub fn delete_session(_root: &Path, path: &Path, session_id: &str) -> Result<boo
     Ok(true)
 }
 
+/// Remove Gemini tmp project directories whose `chats/` folder has no session JSON files.
+pub fn prune_empty_partitions() -> Result<u32, String> {
+    use super::utils::{dir_has_files_with_extension, remove_dir_if_present};
+
+    let tmp_dir = crate::gemini_config::get_gemini_dir().join("tmp");
+    if !tmp_dir.is_dir() {
+        return Ok(0);
+    }
+
+    let mut removed = 0u32;
+    for entry in std::fs::read_dir(&tmp_dir)
+        .map_err(|error| format!("Failed to read Gemini tmp root: {error}"))?
+        .flatten()
+    {
+        if !entry.file_type().is_ok_and(|kind| kind.is_dir()) {
+            continue;
+        }
+        let project_dir = entry.path();
+        let chats_dir = project_dir.join("chats");
+        if chats_dir.is_dir() && dir_has_files_with_extension(&chats_dir, "json")? {
+            continue;
+        }
+        if remove_dir_if_present(&project_dir, "Gemini tmp project directory")? {
+            removed += 1;
+        }
+    }
+    Ok(removed)
+}
+
 fn parse_session(path: &Path) -> Option<SessionMeta> {
     let data = std::fs::read_to_string(path).ok()?;
     let value: Value = serde_json::from_str(&data).ok()?;

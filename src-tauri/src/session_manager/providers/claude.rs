@@ -1,4 +1,4 @@
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 
@@ -118,6 +118,34 @@ pub fn delete_session(_root: &Path, path: &Path, session_id: &str) -> Result<boo
     })?;
 
     Ok(true)
+}
+
+/// Remove Claude project partitions that no longer contain any `.jsonl` session files.
+pub fn prune_empty_partitions() -> Result<u32, String> {
+    use super::utils::{dir_has_files_with_extension, remove_dir_if_present};
+
+    let root = get_claude_config_dir().join("projects");
+    if !root.is_dir() {
+        return Ok(0);
+    }
+
+    let mut removed = 0u32;
+    for entry in fs::read_dir(&root)
+        .map_err(|error| format!("Failed to read Claude projects root: {error}"))?
+        .flatten()
+    {
+        if !entry.file_type().is_ok_and(|kind| kind.is_dir()) {
+            continue;
+        }
+        let partition = entry.path();
+        if dir_has_files_with_extension(&partition, "jsonl")? {
+            continue;
+        }
+        if remove_dir_if_present(&partition, "Claude project partition")? {
+            removed += 1;
+        }
+    }
+    Ok(removed)
 }
 
 fn parse_session(path: &Path) -> Option<SessionMeta> {

@@ -133,6 +133,35 @@ pub fn delete_session(root: &Path, path: &Path, session_id: &str) -> Result<bool
     Ok(true)
 }
 
+/// Remove Grok Build cwd partitions that no longer contain session directories.
+pub fn prune_empty_partitions() -> Result<u32, String> {
+    use super::utils::{dir_has_files_with_extension, remove_dir_if_present};
+
+    let mut removed = 0u32;
+    for root in session_roots() {
+        if !root.is_dir() {
+            continue;
+        }
+        for entry in std::fs::read_dir(&root)
+            .map_err(|error| format!("Failed to read Grok Build sessions root: {error}"))?
+            .flatten()
+        {
+            if !entry.file_type().is_ok_and(|kind| kind.is_dir()) {
+                continue;
+            }
+            let partition = entry.path();
+            if dir_has_files_with_extension(&partition, "json")? {
+                continue;
+            }
+            if remove_dir_if_present(&partition, "Grok Build project partition")? {
+                removed += 1;
+            }
+        }
+        removed += super::utils::remove_empty_dirs_under(&root, "Grok Build session directory")?;
+    }
+    Ok(removed)
+}
+
 fn collect_summary_files(root: &Path, files: &mut Vec<PathBuf>) {
     let Ok(entries) = std::fs::read_dir(root) else {
         return;

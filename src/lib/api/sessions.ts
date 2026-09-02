@@ -50,6 +50,54 @@ export interface SessionLiveProbe {
   sourcePath?: string | null;
 }
 
+export interface CursorPruneResult {
+  bucketsRemoved: number;
+  staleChatsRemoved: number;
+  orphanDirsRemoved: number;
+  bucketsRetained: number;
+  scannableChatsRetained: number;
+}
+
+export interface WtsWorktreePruneResult {
+  removed: number;
+  gitRemoved: number;
+  retained: number;
+  skippedDirty: number;
+}
+
+export interface SessionStoragePruneResult {
+  cursor: CursorPruneResult;
+  claudePartitionsRemoved: number;
+  codexEmptyDirsRemoved: number;
+  geminiPartitionsRemoved: number;
+  grokPartitionsRemoved: number;
+  cursorDesktopWorkspacesRemoved: number;
+  cursorDesktopWorkspacesRetained: number;
+  wtsWorktrees: WtsWorktreePruneResult;
+}
+
+export interface WtsRegisteredWorktreeAssessment {
+  path: string;
+  repoPath: string;
+  slug: string;
+  branch?: string | null;
+  sessionCount: number;
+  merged: boolean;
+  clean: boolean;
+  removable: boolean;
+  skipReason?: string | null;
+}
+
+export interface ClassifyStaleRegisteredWtsResult {
+  removable: WtsRegisteredWorktreeAssessment[];
+  skipped: WtsRegisteredWorktreeAssessment[];
+}
+
+export interface RemoveStaleRegisteredWtsResult {
+  removed: number;
+  failed: Array<{ path: string; error: string }>;
+}
+
 export const sessionsApi = {
   async list(): Promise<SessionMeta[]> {
     return await invoke("list_sessions");
@@ -82,6 +130,20 @@ export const sessionsApi = {
     items: SessionLiveProbe[],
   ): Promise<SessionLiveState[]> {
     return await invoke("classify_session_live_states", { items });
+  },
+
+  async pruneEmptyCursorBuckets(): Promise<SessionStoragePruneResult> {
+    return await invoke("prune_empty_cursor_agent_cli_buckets");
+  },
+
+  async classifyStaleRegisteredWtsWorktrees(): Promise<ClassifyStaleRegisteredWtsResult> {
+    return await invoke("classify_stale_registered_wts_worktrees");
+  },
+
+  async removeStaleRegisteredWtsWorktrees(
+    paths: string[],
+  ): Promise<RemoveStaleRegisteredWtsResult> {
+    return await invoke("remove_stale_registered_wts_worktrees", { paths });
   },
 
   async delete(options: DeleteSessionOptions): Promise<boolean> {

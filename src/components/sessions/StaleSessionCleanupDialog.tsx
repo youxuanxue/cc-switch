@@ -37,6 +37,8 @@ export function StaleSessionCleanupDialog({
   initialDays,
   now,
   onConfirm,
+  onPruneEmptyCursorBuckets,
+  onCleanupStaleWtsWorktrees,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -48,6 +50,8 @@ export function StaleSessionCleanupDialog({
     mode: SessionCleanupMode,
     days: number,
   ) => void;
+  onPruneEmptyCursorBuckets?: () => void | Promise<void>;
+  onCleanupStaleWtsWorktrees?: () => void | Promise<void>;
 }) {
   const { t } = useTranslation();
   const [mode, setMode] = useState<SessionCleanupMode>("stale");
@@ -146,8 +150,8 @@ export function StaleSessionCleanupDialog({
     !liveProbeError &&
     targets.length > 0 &&
     (mode === "inactive" || normalizedDays !== null);
-  const hasCursorSessions = sessions.some(
-    (session) => session.providerId === "cursor",
+  const showStorageCleanupHint = Boolean(
+    onPruneEmptyCursorBuckets || onCleanupStaleWtsWorktrees,
   );
 
   const previewMessage = (() => {
@@ -257,37 +261,61 @@ export function StaleSessionCleanupDialog({
           >
             {previewMessage}
           </p>
-          {hasCursorSessions ? (
+          {showStorageCleanupHint ? (
             <p className="text-sm text-muted-foreground">
               {t("sessionManager.staleCleanupCursorHint", {
                 defaultValue:
-                  "将删除 Cursor Agent CLI 的本地会话目录（~/.cursor/chats/…），不会动 Cursor Desktop 的聊天库，也不会删除工作区。",
+                  "「清理空会话目录」会清理各工具遗留空目录与失效元数据；「清理旧 worktree」会移除已无会话或已合并的 git worktree。均不会删除仍有效的会话或含未提交改动的目录。",
               })}
             </p>
           ) : null}
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            {t("common.cancel", { defaultValue: "取消" })}
-          </Button>
-          <Button
-            variant="destructive"
-            disabled={!canConfirm}
-            onClick={() => {
-              if (!canConfirm) {
-                return;
-              }
-              onConfirm(
-                targets,
-                mode,
-                mode === "stale" ? (normalizedDays as number) : initialDays,
-              );
-            }}
-          >
-            {t("sessionManager.staleCleanupConfirm", {
-              defaultValue: "继续删除",
-            })}
-          </Button>
+        <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-between">
+          <div className="flex flex-col gap-2 sm:mr-auto sm:flex-row">
+            {onPruneEmptyCursorBuckets ? (
+              <Button
+                variant="outline"
+                onClick={() => void onPruneEmptyCursorBuckets()}
+              >
+                {t("sessionManager.pruneSessionStorage", {
+                  defaultValue: "清理空会话目录",
+                })}
+              </Button>
+            ) : null}
+            {onCleanupStaleWtsWorktrees ? (
+              <Button
+                variant="outline"
+                onClick={() => void onCleanupStaleWtsWorktrees()}
+              >
+                {t("sessionManager.wtsCleanupAction", {
+                  defaultValue: "清理旧 worktree",
+                })}
+              </Button>
+            ) : null}
+          </div>
+          <div className="flex w-full justify-end gap-2 sm:w-auto">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              {t("common.cancel", { defaultValue: "取消" })}
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={!canConfirm}
+              onClick={() => {
+                if (!canConfirm) {
+                  return;
+                }
+                onConfirm(
+                  targets,
+                  mode,
+                  mode === "stale" ? (normalizedDays as number) : initialDays,
+                );
+              }}
+            >
+              {t("sessionManager.staleCleanupConfirm", {
+                defaultValue: "继续删除",
+              })}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
