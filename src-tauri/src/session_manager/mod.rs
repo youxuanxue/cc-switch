@@ -226,27 +226,21 @@ pub fn delete_session(
     let deleted =
         delete_session_with_roots(provider_id, session_id, Path::new(source_path), &roots)?;
     if provider_id == "cursor" && deleted {
-        let _ = prune::prune_session_storage();
+        // Only tidy Cursor Agent CLI empty buckets after a chat delete.
+        // Cross-tool / Desktop / WTS prune stays behind the explicit cleanup action.
+        let _ = cursor::prune_empty_agent_cli_buckets();
     }
     Ok(deleted)
 }
 
 pub fn delete_sessions(requests: &[DeleteSessionRequest]) -> Vec<DeleteSessionOutcome> {
-    let outcomes = collect_delete_session_outcomes(requests, |request| {
+    collect_delete_session_outcomes(requests, |request| {
         delete_session(
             &request.provider_id,
             &request.session_id,
             &request.source_path,
         )
-    });
-    if !requests.is_empty()
-        && requests
-            .iter()
-            .any(|request| request.provider_id == "cursor")
-    {
-        let _ = prune::prune_session_storage();
-    }
-    outcomes
+    })
 }
 
 fn delete_session_with_roots(

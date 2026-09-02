@@ -661,7 +661,7 @@ export function SessionManagerPage({ appId }: { appId: string }) {
 
   const handlePruneEmptyCursorBuckets = async () => {
     try {
-      const result = await sessionsApi.pruneEmptyCursorBuckets();
+      const result = await sessionsApi.pruneSessionStorage();
       await queryClient.invalidateQueries({ queryKey: ["sessions"] });
       const total =
         result.cursor.bucketsRemoved +

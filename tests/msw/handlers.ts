@@ -243,7 +243,7 @@ export const handlers = [
     success({ removed: 0, failed: [] }),
   ),
 
-  http.post(`${TAURI_ENDPOINT}/prune_empty_cursor_agent_cli_buckets`, () =>
+  http.post(`${TAURI_ENDPOINT}/prune_session_storage`, () =>
     success({
       cursor: {
         bucketsRemoved: 0,

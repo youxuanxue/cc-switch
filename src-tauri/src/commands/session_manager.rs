@@ -192,7 +192,7 @@ pub async fn session_pty_kill(ptyId: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn prune_empty_cursor_agent_cli_buckets(
+pub async fn prune_session_storage(
 ) -> Result<session_manager::prune::SessionStoragePruneResult, String> {
     tauri::async_runtime::spawn_blocking(session_manager::prune::prune_session_storage)
         .await

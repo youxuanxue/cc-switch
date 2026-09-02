@@ -132,8 +132,8 @@ export const sessionsApi = {
     return await invoke("classify_session_live_states", { items });
   },
 
-  async pruneEmptyCursorBuckets(): Promise<SessionStoragePruneResult> {
-    return await invoke("prune_empty_cursor_agent_cli_buckets");
+  async pruneSessionStorage(): Promise<SessionStoragePruneResult> {
+    return await invoke("prune_session_storage");
   },
 
   async classifyStaleRegisteredWtsWorktrees(): Promise<ClassifyStaleRegisteredWtsResult> {
