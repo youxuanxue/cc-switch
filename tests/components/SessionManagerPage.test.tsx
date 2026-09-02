@@ -1517,7 +1517,15 @@ describe("SessionManagerPage", () => {
         "将删除 2 个会话，跳过 0 个不可删，0 个仍活跃。",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByText(/Agent CLI 的本地会话目录/)).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /清理空会话目录/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /清理旧 worktree/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/清理空会话目录.*清理旧 worktree|清理各工具遗留空目录/),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /继续删除/i }));
 

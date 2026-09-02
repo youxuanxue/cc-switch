@@ -192,6 +192,36 @@ pub async fn session_pty_kill(ptyId: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub async fn prune_session_storage(
+) -> Result<session_manager::prune::SessionStoragePruneResult, String> {
+    tauri::async_runtime::spawn_blocking(session_manager::prune::prune_session_storage)
+        .await
+        .map_err(|e| format!("Failed to prune session storage: {e}"))?
+}
+
+#[tauri::command]
+pub async fn classify_stale_registered_wts_worktrees(
+) -> Result<session_manager::wts::ClassifyStaleRegisteredWtsResult, String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        let sessions = session_manager::scan_sessions();
+        session_manager::wts::classify_stale_registered_wts_worktrees(&sessions)
+    })
+    .await
+    .map_err(|e| format!("Failed to classify stale registered WTS worktrees: {e}"))?
+}
+
+#[tauri::command]
+pub async fn remove_stale_registered_wts_worktrees(
+    paths: Vec<String>,
+) -> Result<session_manager::wts::RemoveStaleRegisteredWtsResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        session_manager::wts::remove_stale_registered_wts_worktrees(&paths)
+    })
+    .await
+    .map_err(|e| format!("Failed to remove stale registered WTS worktrees: {e}"))?
+}
+
+#[tauri::command]
 pub async fn classify_session_live_states(
     items: Vec<session_manager::SessionLiveProbe>,
 ) -> Result<Vec<session_manager::SessionLiveState>, String> {

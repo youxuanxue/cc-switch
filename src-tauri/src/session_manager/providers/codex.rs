@@ -289,6 +289,17 @@ pub fn delete_session(_root: &Path, path: &Path, session_id: &str) -> Result<boo
     Ok(true)
 }
 
+/// Remove empty date directories left behind after Codex session file deletion.
+pub fn prune_empty_date_dirs() -> Result<u32, String> {
+    use super::utils::remove_empty_dirs_under;
+
+    let mut removed = 0u32;
+    for root in session_roots() {
+        removed += remove_empty_dirs_under(&root, "Codex session directory")?;
+    }
+    Ok(removed)
+}
+
 fn parse_session(path: &Path) -> Option<SessionMeta> {
     parse_session_with_titles(path, &HashMap::new())
 }

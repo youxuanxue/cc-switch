@@ -84,6 +84,7 @@ import {
 } from "./sessionCapabilities";
 import { NewSessionDialog } from "./NewSessionDialog";
 import { StaleSessionCleanupDialog } from "./StaleSessionCleanupDialog";
+import { StaleWtsWorktreeCleanupDialog } from "./StaleWtsWorktreeCleanupDialog";
 import { SessionMessageItem } from "./SessionMessageItem";
 import { SessionTocDialog, SessionTocSidebar } from "./SessionToc";
 import {
@@ -290,6 +291,7 @@ export function SessionManagerPage({ appId }: { appId: string }) {
   const [detailTab, setDetailTab] = useState<"history" | "terminal">("history");
   const [terminalVisited, setTerminalVisited] = useState(false);
   const [staleCleanupOpen, setStaleCleanupOpen] = useState(false);
+  const [wtsCleanupOpen, setWtsCleanupOpen] = useState(false);
   const [staleCleanupDays, setStaleCleanupDays] = useState(
     readInitialStaleCleanupDays,
   );
@@ -654,6 +656,82 @@ export function SessionManagerPage({ appId }: { appId: string }) {
       const fallback = selectedSession.resumeCommand;
       await handleCopy(fallback, t("sessionManager.resumeFallbackCopied"));
       toast.error(extractErrorMessage(error) || t("sessionManager.openFailed"));
+    }
+  };
+
+  const handlePruneEmptyCursorBuckets = async () => {
+    try {
+      const result = await sessionsApi.pruneSessionStorage();
+      await queryClient.invalidateQueries({ queryKey: ["sessions"] });
+      const total =
+        result.cursor.bucketsRemoved +
+        result.cursor.staleChatsRemoved +
+        result.cursor.orphanDirsRemoved +
+        result.claudePartitionsRemoved +
+        result.codexEmptyDirsRemoved +
+        result.geminiPartitionsRemoved +
+        result.grokPartitionsRemoved +
+        result.cursorDesktopWorkspacesRemoved +
+        result.wtsWorktrees.removed +
+        result.wtsWorktrees.gitRemoved;
+      if (total === 0) {
+        if (
+          result.cursor.bucketsRetained > 0 ||
+          result.cursor.scannableChatsRetained > 0 ||
+          result.cursorDesktopWorkspacesRetained > 0 ||
+          result.wtsWorktrees.retained > 0
+        ) {
+          toast.success(
+            t("sessionManager.pruneSessionStorageRetained", {
+              defaultValue:
+                "未发现可清理的空目录。Cursor 仍有 {{cursorBuckets}} 个 Agent CLI 分区 / {{cursorChats}} 个有效会话；Cursor Desktop 仍保留 {{desktopWorkspaces}} 个工作区元数据；git 仍注册 {{wtsWorktrees}} 个 WTS worktree。若要删除会话本身，请使用「全部未活跃」。",
+              cursorBuckets: result.cursor.bucketsRetained,
+              cursorChats: result.cursor.scannableChatsRetained,
+              desktopWorkspaces: result.cursorDesktopWorkspacesRetained,
+              wtsWorktrees: result.wtsWorktrees.retained,
+            }),
+          );
+          return;
+        }
+        toast.success(
+          t("sessionManager.pruneSessionStorageNone", {
+            defaultValue: "没有可清理的空会话目录",
+          }),
+        );
+        return;
+      }
+      toast.success(
+        t("sessionManager.pruneSessionStorageSuccess", {
+          defaultValue:
+            "已清理 Cursor {{cursorBuckets}} 分区 / {{cursorStale}} 无效会话 / {{cursorOrphans}} 孤儿目录，Claude {{claude}}，Codex {{codex}}，Gemini {{gemini}}，Grok {{grok}}，Cursor Desktop {{desktop}} 个工作区元数据，WTS worktree {{wtsRemoved}}（git 移除 {{wtsGitRemoved}}）",
+          cursorBuckets: result.cursor.bucketsRemoved,
+          cursorStale: result.cursor.staleChatsRemoved,
+          cursorOrphans: result.cursor.orphanDirsRemoved,
+          claude: result.claudePartitionsRemoved,
+          codex: result.codexEmptyDirsRemoved,
+          gemini: result.geminiPartitionsRemoved,
+          grok: result.grokPartitionsRemoved,
+          desktop: result.cursorDesktopWorkspacesRemoved,
+          wtsRemoved: result.wtsWorktrees.removed,
+          wtsGitRemoved: result.wtsWorktrees.gitRemoved,
+        }),
+      );
+      if (result.wtsWorktrees.skippedDirty > 0) {
+        toast.message(
+          t("sessionManager.pruneWtsWorktreesSkippedDirty", {
+            defaultValue:
+              "跳过 {{count}} 个含未提交改动的 WTS worktree，未删除。",
+            count: result.wtsWorktrees.skippedDirty,
+          }),
+        );
+      }
+    } catch (error) {
+      toast.error(
+        extractErrorMessage(error) ||
+          t("sessionManager.pruneSessionStorageFailed", {
+            defaultValue: "清理空会话目录失败",
+          }),
+      );
     }
   };
 
@@ -2352,6 +2430,24 @@ export function SessionManagerPage({ appId }: { appId: string }) {
           }
           setStaleCleanupOpen(false);
           setDeleteTargets(targets);
+        }}
+        onPruneEmptyCursorBuckets={handlePruneEmptyCursorBuckets}
+        onCleanupStaleWtsWorktrees={() => {
+          setStaleCleanupOpen(false);
+          setWtsCleanupOpen(true);
+        }}
+      />
+      <StaleWtsWorktreeCleanupDialog
+        open={wtsCleanupOpen}
+        onOpenChange={setWtsCleanupOpen}
+        onCompleted={async (removed) => {
+          await queryClient.invalidateQueries({ queryKey: ["sessions"] });
+          toast.success(
+            t("sessionManager.wtsCleanupSuccess", {
+              defaultValue: "已移除 {{count}} 个旧 WTS worktree",
+              count: removed,
+            }),
+          );
         }}
       />
       <ConfirmDialog

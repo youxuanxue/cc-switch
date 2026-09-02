@@ -9,7 +9,8 @@ use uuid::Uuid;
 
 use crate::session_manager::{SessionMessage, SessionMeta};
 
-use super::utils::{extract_text, truncate_summary, TITLE_MAX_CHARS};
+use super::utils::{extract_text, remove_dir_if_present, truncate_summary, TITLE_MAX_CHARS};
+use crate::session_manager::resume::{is_session_live, LiveProcessView};
 
 const PROVIDER_ID: &str = "cursor";
 const INDEX_REASON_MAX_CHARS: usize = 240;
@@ -59,6 +60,22 @@ struct CursorMetadataLocation {
 
 struct CursorIndexLayout {
     metadata_locations: Vec<CursorMetadataLocation>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct CursorPruneResult {
+    pub buckets_removed: u32,
+    pub stale_chats_removed: u32,
+    pub orphan_dirs_removed: u32,
+    pub buckets_retained: u32,
+    pub scannable_chats_retained: u32,
+}
+
+impl CursorPruneResult {
+    pub fn total_removed(&self) -> u32 {
+        self.buckets_removed + self.stale_chats_removed + self.orphan_dirs_removed
+    }
 }
 
 fn cursor_chats_root() -> PathBuf {
@@ -356,6 +373,97 @@ fn resolve_agent_cli_chat_dir(root: &Path, path: &Path) -> Result<PathBuf, Strin
     Ok(chat_dir)
 }
 
+fn read_chat_has_conversation(chat_dir: &Path) -> Option<bool> {
+    let meta_path = chat_dir.join("meta.json");
+    if !meta_path.is_file() {
+        return None;
+    }
+    let metadata: CursorMetadata = serde_json::from_slice(&fs::read(&meta_path).ok()?).ok()?;
+    Some(metadata.has_conversation)
+}
+
+fn is_scannable_agent_cli_chat(chat_dir: &Path) -> bool {
+    read_chat_has_conversation(chat_dir) == Some(true)
+}
+
+fn chat_dir_is_live(session_id: &str, chat_dir: &Path) -> bool {
+    let meta_path = chat_dir.join("meta.json");
+    let source_path = meta_path
+        .is_file()
+        .then(|| live_writer_source_path(&meta_path));
+    is_session_live(session_id, source_path.as_deref(), None, &LiveProcessView)
+}
+
+fn bucket_has_scannable_agent_cli_chats(bucket: &Path) -> bool {
+    let Ok(entries) = fs::read_dir(bucket) else {
+        return false;
+    };
+
+    for entry in entries.flatten() {
+        if !entry.file_type().is_ok_and(|kind| kind.is_dir()) {
+            continue;
+        }
+        let Some(chat_id) = entry.file_name().to_str().map(str::to_owned) else {
+            continue;
+        };
+        if Uuid::parse_str(&chat_id).is_err() {
+            continue;
+        }
+        if is_scannable_agent_cli_chat(&entry.path()) {
+            return true;
+        }
+    }
+
+    false
+}
+
+fn remove_chat_dir_if_not_live(chat_dir: &Path, session_id: &str) -> Result<bool, String> {
+    if !chat_dir.exists() {
+        return Ok(false);
+    }
+    if chat_dir_is_live(session_id, chat_dir) {
+        return Ok(false);
+    }
+    remove_dir_if_present(chat_dir, "Cursor Agent CLI chat")
+}
+
+fn cleanup_bucket_after_chat_removal(root: &Path, bucket: &Path) -> Result<(), String> {
+    if bucket == root || bucket.parent() != Some(root) {
+        return Ok(());
+    }
+
+    for chat in fs::read_dir(bucket).into_iter().flatten().flatten() {
+        if !chat.file_type().is_ok_and(|kind| kind.is_dir()) {
+            continue;
+        }
+        let Some(chat_id) = chat.file_name().to_str().map(str::to_owned) else {
+            continue;
+        };
+        if Uuid::parse_str(&chat_id).is_err() {
+            continue;
+        }
+
+        let chat_dir = chat.path();
+        match read_chat_has_conversation(&chat_dir) {
+            None | Some(false) => {
+                let _ = remove_chat_dir_if_not_live(&chat_dir, &chat_id)?;
+            }
+            Some(true) => {}
+        }
+    }
+
+    if bucket_has_scannable_agent_cli_chats(bucket) {
+        return Ok(());
+    }
+
+    remove_dir_if_present(bucket, "Cursor Agent CLI project bucket")?;
+    Ok(())
+}
+
+fn remove_empty_bucket_if_needed(root: &Path, bucket: &Path) -> Result<(), String> {
+    cleanup_bucket_after_chat_removal(root, bucket)
+}
+
 pub fn delete_session(root: &Path, path: &Path, session_id: &str) -> Result<bool, String> {
     if !is_cursor_chat_id(session_id) {
         return Err(format!("Invalid Cursor chat ID: {session_id}"));
@@ -368,6 +476,15 @@ pub fn delete_session(root: &Path, path: &Path, session_id: &str) -> Result<bool
     }
 
     let chat_dir = resolve_agent_cli_chat_dir(root, path)?;
+    let bucket = chat_dir
+        .parent()
+        .ok_or_else(|| {
+            format!(
+                "Invalid Cursor Agent CLI session directory: {}",
+                chat_dir.display()
+            )
+        })?
+        .to_path_buf();
     if chat_dir.file_name().and_then(|name| name.to_str()) != Some(session_id) {
         return Err(format!(
             "Cursor session directory does not match session ID: {}",
@@ -387,7 +504,77 @@ pub fn delete_session(root: &Path, path: &Path, session_id: &str) -> Result<bool
             chat_dir.display()
         )
     })?;
+    remove_empty_bucket_if_needed(root, &bucket)?;
     Ok(true)
+}
+
+/// Remove stale Agent CLI chat dirs and empty project buckets under `~/.cursor/chats`.
+pub fn prune_empty_agent_cli_buckets() -> Result<CursorPruneResult, String> {
+    prune_empty_agent_cli_buckets_in(&cursor_chats_root())
+}
+
+fn prune_empty_agent_cli_buckets_in(root: &Path) -> Result<CursorPruneResult, String> {
+    let mut result = CursorPruneResult {
+        buckets_removed: 0,
+        stale_chats_removed: 0,
+        orphan_dirs_removed: 0,
+        buckets_retained: 0,
+        scannable_chats_retained: 0,
+    };
+
+    if !root.is_dir() {
+        return Ok(result);
+    }
+
+    for bucket in fs::read_dir(root).into_iter().flatten().flatten() {
+        if !bucket.file_type().is_ok_and(|kind| kind.is_dir()) {
+            continue;
+        }
+        let bucket_path = bucket.path();
+        if bucket_path == root || bucket_path.parent() != Some(root) {
+            continue;
+        }
+
+        for chat in fs::read_dir(&bucket_path).into_iter().flatten().flatten() {
+            if !chat.file_type().is_ok_and(|kind| kind.is_dir()) {
+                continue;
+            }
+            let Some(chat_id) = chat.file_name().to_str().map(str::to_owned) else {
+                continue;
+            };
+            if Uuid::parse_str(&chat_id).is_err() {
+                continue;
+            }
+
+            let chat_dir = chat.path();
+            match read_chat_has_conversation(&chat_dir) {
+                None => {
+                    if remove_chat_dir_if_not_live(&chat_dir, &chat_id)? {
+                        result.orphan_dirs_removed += 1;
+                    }
+                }
+                Some(false) => {
+                    if remove_chat_dir_if_not_live(&chat_dir, &chat_id)? {
+                        result.stale_chats_removed += 1;
+                    }
+                }
+                Some(true) => {
+                    result.scannable_chats_retained += 1;
+                }
+            }
+        }
+
+        if bucket_has_scannable_agent_cli_chats(&bucket_path) {
+            result.buckets_retained += 1;
+            continue;
+        }
+
+        if remove_dir_if_present(&bucket_path, "Cursor Agent CLI project bucket")? {
+            result.buckets_removed += 1;
+        }
+    }
+
+    Ok(result)
 }
 
 fn decode_hex(value: &str) -> Result<Vec<u8>, String> {
@@ -881,6 +1068,53 @@ mod tests {
     }
 
     #[test]
+    fn removes_empty_project_bucket_after_last_chat_is_deleted() {
+        let root = tempdir().unwrap();
+        let meta = write_meta(
+            root.path(),
+            "workspace-a",
+            CHAT_ID,
+            Some(20),
+            Some(true),
+            Some("/workspace/app"),
+        );
+        let chat_dir = meta.parent().unwrap().to_path_buf();
+        let bucket = root.path().join("workspace-a");
+
+        let deleted =
+            delete_session(root.path(), &meta, CHAT_ID).expect("delete last agent cli chat");
+
+        assert!(deleted);
+        assert!(!chat_dir.exists());
+        assert!(!bucket.exists());
+        assert!(root.path().is_dir());
+    }
+
+    #[test]
+    fn removes_project_bucket_when_only_orphan_chat_dirs_remain() {
+        let root = tempdir().unwrap();
+        let meta = write_meta(
+            root.path(),
+            "workspace-a",
+            CHAT_ID,
+            Some(20),
+            Some(true),
+            Some("/workspace/app"),
+        );
+        let chat_dir = meta.parent().unwrap().to_path_buf();
+        let bucket = root.path().join("workspace-a");
+        let orphan = bucket.join("11111111-1111-4111-8111-111111111111");
+        fs::create_dir_all(&orphan).unwrap();
+
+        let deleted = delete_session(root.path(), &meta, CHAT_ID).expect("delete chat");
+
+        assert!(deleted);
+        assert!(!chat_dir.exists());
+        assert!(!orphan.exists());
+        assert!(!bucket.exists());
+    }
+
+    #[test]
     fn deletes_agent_cli_chat_directory_from_meta_json_when_store_is_absent() {
         let root = tempdir().unwrap();
         let meta = write_meta(
@@ -899,8 +1133,60 @@ mod tests {
 
         assert!(deleted);
         assert!(!chat_dir.exists());
-        assert!(bucket.is_dir());
+        assert!(!bucket.exists());
         assert!(root.path().is_dir());
+    }
+
+    #[test]
+    fn remove_chat_dir_if_not_live_ignores_already_removed_dirs() {
+        let root = tempdir().unwrap();
+        let missing = root.path().join("missing-chat");
+        assert!(!remove_chat_dir_if_not_live(&missing, CHAT_ID).expect("missing dir is noop"));
+    }
+
+    #[test]
+    fn prune_empty_agent_cli_buckets_removes_stale_chats_and_empty_buckets() {
+        let root = tempdir().unwrap();
+        write_meta(
+            root.path(),
+            "still-active",
+            CHAT_ID,
+            Some(20),
+            Some(true),
+            Some("/workspace/app"),
+        );
+        write_meta(
+            root.path(),
+            "dead-only",
+            SECOND_CHAT_ID,
+            Some(10),
+            Some(false),
+            Some("/workspace/dead"),
+        );
+        fs::create_dir_all(root.path().join("already-empty")).unwrap();
+        fs::create_dir_all(
+            root.path()
+                .join("orphan-chat-dirs")
+                .join("11111111-1111-4111-8111-111111111111"),
+        )
+        .unwrap();
+
+        let removed = super::prune_empty_agent_cli_buckets_in(root.path()).expect("prune buckets");
+
+        assert_eq!(
+            removed,
+            CursorPruneResult {
+                buckets_removed: 3,
+                stale_chats_removed: 1,
+                orphan_dirs_removed: 1,
+                buckets_retained: 1,
+                scannable_chats_retained: 1,
+            }
+        );
+        assert!(root.path().join("still-active").join(CHAT_ID).is_dir());
+        assert!(!root.path().join("dead-only").exists());
+        assert!(!root.path().join("already-empty").exists());
+        assert!(!root.path().join("orphan-chat-dirs").exists());
     }
 
     #[test]

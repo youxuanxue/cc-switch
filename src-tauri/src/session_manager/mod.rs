@@ -1,4 +1,5 @@
 pub mod providers;
+pub mod prune;
 pub mod pty;
 pub mod resume;
 pub mod terminal;
@@ -222,7 +223,14 @@ pub fn delete_session(
     }
 
     let roots = provider_roots(provider_id)?;
-    delete_session_with_roots(provider_id, session_id, Path::new(source_path), &roots)
+    let deleted =
+        delete_session_with_roots(provider_id, session_id, Path::new(source_path), &roots)?;
+    if provider_id == "cursor" && deleted {
+        // Only tidy Cursor Agent CLI empty buckets after a chat delete.
+        // Cross-tool / Desktop / WTS prune stays behind the explicit cleanup action.
+        let _ = cursor::prune_empty_agent_cli_buckets();
+    }
+    Ok(deleted)
 }
 
 pub fn delete_sessions(requests: &[DeleteSessionRequest]) -> Vec<DeleteSessionOutcome> {
