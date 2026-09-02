@@ -683,13 +683,49 @@ mod tests {
             ("user.email", "test@example.com"),
             ("user.name", "Test User"),
         ] {
-            std::process::Command::new("git")
+            let status = std::process::Command::new("git")
                 .arg("-C")
                 .arg(repo)
                 .args(["config", key, value])
                 .status()
                 .expect("git config");
+            assert!(
+                status.success(),
+                "git config {key} failed in {}",
+                repo.display()
+            );
         }
+    }
+
+    fn init_git_repo(repo: &Path, default_branch: &str) {
+        fs::create_dir_all(repo).expect("repo");
+        let status = std::process::Command::new("git")
+            .arg("-C")
+            .arg(repo)
+            .args(["init", "-b", default_branch])
+            .status()
+            .expect("git init");
+        assert!(status.success(), "git init failed in {}", repo.display());
+        configure_git(repo);
+    }
+
+    fn seed_main_repo(repo: &Path) {
+        init_git_repo(repo, "main");
+        fs::write(repo.join("README.md"), "seed").expect("seed");
+        let add = std::process::Command::new("git")
+            .arg("-C")
+            .arg(repo)
+            .args(["add", "README.md"])
+            .status()
+            .expect("git add");
+        assert!(add.success(), "git add failed in {}", repo.display());
+        let commit = std::process::Command::new("git")
+            .arg("-C")
+            .arg(repo)
+            .args(["commit", "-m", "seed"])
+            .status()
+            .expect("git commit");
+        assert!(commit.success(), "git commit failed in {}", repo.display());
     }
 
     fn git_available() -> bool {
@@ -708,27 +744,7 @@ mod tests {
 
         let root = tempdir().expect("tempdir");
         let repo = root.path().join("sub2api");
-        fs::create_dir_all(&repo).expect("repo");
-        configure_git(&repo);
-        std::process::Command::new("git")
-            .arg("-C")
-            .arg(&repo)
-            .args(["init"])
-            .status()
-            .expect("git init");
-        fs::write(repo.join("README.md"), "seed").expect("seed");
-        std::process::Command::new("git")
-            .arg("-C")
-            .arg(&repo)
-            .args(["add", "README.md"])
-            .status()
-            .expect("git add");
-        std::process::Command::new("git")
-            .arg("-C")
-            .arg(&repo)
-            .args(["commit", "-m", "seed"])
-            .status()
-            .expect("git commit");
+        seed_main_repo(&repo);
 
         let orphan = root.path().join("sub2api-wt-orphan");
         fs::create_dir_all(&orphan).expect("orphan");
@@ -747,27 +763,7 @@ mod tests {
 
         let root = tempdir().expect("tempdir");
         let repo = root.path().join("sub2api");
-        fs::create_dir_all(&repo).expect("repo");
-        configure_git(&repo);
-        std::process::Command::new("git")
-            .arg("-C")
-            .arg(&repo)
-            .args(["init"])
-            .status()
-            .expect("git init");
-        fs::write(repo.join("README.md"), "seed").expect("seed");
-        std::process::Command::new("git")
-            .arg("-C")
-            .arg(&repo)
-            .args(["add", "README.md"])
-            .status()
-            .expect("git add");
-        std::process::Command::new("git")
-            .arg("-C")
-            .arg(&repo)
-            .args(["commit", "-m", "seed"])
-            .status()
-            .expect("git commit");
+        seed_main_repo(&repo);
 
         let alive = root.path().join("sub2api-wt-alive");
         std::process::Command::new("git")
@@ -797,27 +793,7 @@ mod tests {
 
         let root = tempdir().expect("tempdir");
         let repo = root.path().join("sub2api");
-        fs::create_dir_all(&repo).expect("repo");
-        configure_git(&repo);
-        std::process::Command::new("git")
-            .arg("-C")
-            .arg(&repo)
-            .args(["init", "-b", "main"])
-            .status()
-            .expect("git init");
-        fs::write(repo.join("README.md"), "seed").expect("seed");
-        std::process::Command::new("git")
-            .arg("-C")
-            .arg(&repo)
-            .args(["add", "README.md"])
-            .status()
-            .expect("git add");
-        std::process::Command::new("git")
-            .arg("-C")
-            .arg(&repo)
-            .args(["commit", "-m", "seed"])
-            .status()
-            .expect("git commit");
+        seed_main_repo(&repo);
 
         let stale = root.path().join("sub2api-wt-stale");
         std::process::Command::new("git")
@@ -848,27 +824,7 @@ mod tests {
 
         let root = tempdir().expect("tempdir");
         let repo = root.path().join("sub2api");
-        fs::create_dir_all(&repo).expect("repo");
-        configure_git(&repo);
-        std::process::Command::new("git")
-            .arg("-C")
-            .arg(&repo)
-            .args(["init", "-b", "main"])
-            .status()
-            .expect("git init");
-        fs::write(repo.join("README.md"), "seed").expect("seed");
-        std::process::Command::new("git")
-            .arg("-C")
-            .arg(&repo)
-            .args(["add", "README.md"])
-            .status()
-            .expect("git add");
-        std::process::Command::new("git")
-            .arg("-C")
-            .arg(&repo)
-            .args(["commit", "-m", "seed"])
-            .status()
-            .expect("git commit");
+        seed_main_repo(&repo);
 
         let active = root.path().join("sub2api-wt-active");
         std::process::Command::new("git")
@@ -927,27 +883,7 @@ mod tests {
 
         let root = tempdir().expect("tempdir");
         let repo = root.path().join("sub2api");
-        fs::create_dir_all(&repo).expect("repo");
-        configure_git(&repo);
-        std::process::Command::new("git")
-            .arg("-C")
-            .arg(&repo)
-            .args(["init", "-b", "main"])
-            .status()
-            .expect("git init");
-        fs::write(repo.join("README.md"), "seed").expect("seed");
-        std::process::Command::new("git")
-            .arg("-C")
-            .arg(&repo)
-            .args(["add", "README.md"])
-            .status()
-            .expect("git add");
-        std::process::Command::new("git")
-            .arg("-C")
-            .arg(&repo)
-            .args(["commit", "-m", "seed"])
-            .status()
-            .expect("git commit");
+        seed_main_repo(&repo);
 
         let active = root.path().join("sub2api-wt-active");
         std::process::Command::new("git")
@@ -1014,27 +950,7 @@ mod tests {
 
         let root = tempdir().expect("tempdir");
         let repo = root.path().join("sub2api");
-        fs::create_dir_all(&repo).expect("repo");
-        configure_git(&repo);
-        std::process::Command::new("git")
-            .arg("-C")
-            .arg(&repo)
-            .args(["init", "-b", "main"])
-            .status()
-            .expect("git init");
-        fs::write(repo.join("README.md"), "seed").expect("seed");
-        std::process::Command::new("git")
-            .arg("-C")
-            .arg(&repo)
-            .args(["add", "README.md"])
-            .status()
-            .expect("git add");
-        std::process::Command::new("git")
-            .arg("-C")
-            .arg(&repo)
-            .args(["commit", "-m", "seed"])
-            .status()
-            .expect("git commit");
+        seed_main_repo(&repo);
 
         let dirty = root.path().join("sub2api-wt-dirty");
         std::process::Command::new("git")
@@ -1087,27 +1003,7 @@ mod tests {
 
         let root = tempdir().expect("tempdir");
         let repo = root.path().join("sub2api");
-        fs::create_dir_all(&repo).expect("repo");
-        configure_git(&repo);
-        std::process::Command::new("git")
-            .arg("-C")
-            .arg(&repo)
-            .args(["init", "-b", "main"])
-            .status()
-            .expect("git init");
-        fs::write(repo.join("README.md"), "seed").expect("seed");
-        std::process::Command::new("git")
-            .arg("-C")
-            .arg(&repo)
-            .args(["add", "README.md"])
-            .status()
-            .expect("git add");
-        std::process::Command::new("git")
-            .arg("-C")
-            .arg(&repo)
-            .args(["commit", "-m", "seed"])
-            .status()
-            .expect("git commit");
+        seed_main_repo(&repo);
 
         let stale = root.path().join("sub2api-wt-stale");
         std::process::Command::new("git")
