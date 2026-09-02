@@ -1238,9 +1238,12 @@ export function SessionManagerPage({ appId }: { appId: string }) {
                                 variant="ghost"
                                 size="icon"
                                 className="size-7"
-                                aria-label={t("sessionManager.staleCleanupTooltip", {
-                                  defaultValue: "清理会话",
-                                })}
+                                aria-label={t(
+                                  "sessionManager.staleCleanupTooltip",
+                                  {
+                                    defaultValue: "清理会话",
+                                  },
+                                )}
                                 onClick={() => setStaleCleanupOpen(true)}
                               >
                                 <CalendarClock className="size-3.5" />

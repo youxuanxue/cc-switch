@@ -88,10 +88,7 @@ pub fn classify_session_live_states(
         .collect()
 }
 
-pub fn session_live_probe_source_path(
-    provider_id: &str,
-    source_path: &str,
-) -> Option<PathBuf> {
+pub fn session_live_probe_source_path(provider_id: &str, source_path: &str) -> Option<PathBuf> {
     let path = Path::new(source_path);
     match provider_id {
         "cursor" => {
@@ -215,12 +212,7 @@ pub fn delete_session(
     session_id: &str,
     source_path: &str,
 ) -> Result<bool, String> {
-    reject_if_session_live(
-        provider_id,
-        session_id,
-        source_path,
-        &LiveProcessView,
-    )?;
+    reject_if_session_live(provider_id, session_id, source_path, &LiveProcessView)?;
     // SQLite sessions bypass the file-based deletion path
     if provider_id == "opencode" && source_path.starts_with("sqlite:") {
         return opencode::delete_session_sqlite(session_id, source_path);

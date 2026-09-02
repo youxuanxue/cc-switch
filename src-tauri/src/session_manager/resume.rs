@@ -1188,13 +1188,8 @@ mod tests {
             None,
             "claude --resume ses_abc123",
         )]));
-        let error = reject_if_session_live(
-            "claude",
-            "ses_abc123",
-            "/tmp/session.jsonl",
-            &view,
-        )
-        .expect_err("active session must be rejected");
+        let error = reject_if_session_live("claude", "ses_abc123", "/tmp/session.jsonl", &view)
+            .expect_err("active session must be rejected");
         assert!(error.contains("still active"));
         reject_if_session_live("claude", "other-session", "/tmp/session.jsonl", &view)
             .expect("idle session can be deleted");
