@@ -1124,8 +1124,8 @@ mod tests {
             .expect("git worktree add");
 
         let path = stale.to_string_lossy().replace('\\', "/");
-        let result =
-            super::remove_stale_registered_wts_worktrees_in(root.path(), &[path], &[]).expect("remove");
+        let result = super::remove_stale_registered_wts_worktrees_in(root.path(), &[path], &[])
+            .expect("remove");
         assert_eq!(result.removed, 1);
         assert!(result.failed.is_empty());
         assert!(!stale.exists());
