@@ -239,7 +239,11 @@ pub fn delete_sessions(requests: &[DeleteSessionRequest]) -> Vec<DeleteSessionOu
             &request.source_path,
         )
     });
-    if !requests.is_empty() {
+    if !requests.is_empty()
+        && requests
+            .iter()
+            .any(|request| request.provider_id == "cursor")
+    {
         let _ = prune::prune_session_storage();
     }
     outcomes

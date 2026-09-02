@@ -1148,7 +1148,7 @@
     "pruneWtsWorktreesSkippedDirty": "Skipped {{count}} WTS worktrees with uncommitted changes.",
     "wtsCleanupAction": "Clean old worktrees",
     "wtsCleanupTitle": "Clean old WTS worktrees",
-    "wtsCleanupDescription": "Remove registered ~/Codes/*-wt-* worktrees that have no sessions or whose HEAD is merged into main/master. Dirty worktrees, or worktrees with linked sessions that are not merged, are skipped.",
+    "wtsCleanupDescription": "Remove registered ~/Codes/*-wt-* worktrees that have no sessions or whose HEAD is merged into main/master (currently scans ~/Codes only). Dirty worktrees, or worktrees with linked sessions that are not merged, are skipped.",
     "wtsCleanupLoading": "Scanning WTS worktrees under ~/Codes…",
     "wtsCleanupFailed": "Scan failed: {{error}}",
     "wtsCleanupEmpty": "No old worktrees to remove. Registered worktrees with unmerged linked sessions are skipped.",

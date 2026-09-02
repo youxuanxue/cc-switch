@@ -118,22 +118,17 @@ fn decode_cursor_desktop_workspace_path(home: &Path, encoded: &str) -> Option<Pa
 
 fn resolve_path_from_dashed_segments(base: &Path, rest: &str) -> Option<PathBuf> {
     let segments: Vec<&str> = rest.split('-').collect();
-    resolve_path_segments(base, &segments, 0, base.to_path_buf())
+    resolve_path_segments(&segments, 0, base.to_path_buf())
 }
 
-fn resolve_path_segments(
-    base: &Path,
-    segments: &[&str],
-    index: usize,
-    current: PathBuf,
-) -> Option<PathBuf> {
+fn resolve_path_segments(segments: &[&str], index: usize, current: PathBuf) -> Option<PathBuf> {
     if index >= segments.len() {
         return current.is_dir().then_some(current);
     }
     for end in (index + 1)..=segments.len() {
         let name = segments[index..end].join("-");
         let next = current.join(&name);
-        if let Some(path) = resolve_path_segments(base, segments, end, next) {
+        if let Some(path) = resolve_path_segments(segments, end, next) {
             return Some(path);
         }
     }

@@ -1148,7 +1148,7 @@
     "pruneWtsWorktreesSkippedDirty": "跳过 {{count}} 个含未提交改动的 WTS worktree，未删除。",
     "wtsCleanupAction": "清理旧 worktree",
     "wtsCleanupTitle": "清理旧 WTS worktree",
-    "wtsCleanupDescription": "移除 ~/Codes/*-wt-* 中仍被 git 注册、但已无会话或分支已合并进 main/master 的 worktree。含未提交改动，或仍有关联会话且未合并的 worktree 会被跳过。",
+    "wtsCleanupDescription": "移除 ~/Codes/*-wt-* 中仍被 git 注册、但已无会话或分支已合并进 main/master 的 worktree（当前仅扫描 ~/Codes）。含未提交改动，或仍有关联会话且未合并的 worktree 会被跳过。",
     "wtsCleanupLoading": "正在扫描 ~/Codes 下的 WTS worktree…",
     "wtsCleanupFailed": "扫描失败：{{error}}",
     "wtsCleanupEmpty": "没有可移除的旧 worktree。仍注册且含未合并会话的 worktree 会被跳过。",

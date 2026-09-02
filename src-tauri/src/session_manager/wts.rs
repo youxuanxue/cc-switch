@@ -256,11 +256,13 @@ fn git_worktree_paths(repo: &Path) -> Result<HashSet<PathBuf>, String> {
 
 fn git_working_tree_clean(path: &Path) -> Result<bool, String> {
     if !path.join(".git").exists() {
+        // Orphan directories without git metadata are treated as removable shells.
         return Ok(true);
     }
     let output = run_git(path, &["status", "--porcelain"])?;
     if !output.status.success() {
-        return Ok(true);
+        // Fail closed: unknown dirty state must not authorize deletion.
+        return Ok(false);
     }
     Ok(output.stdout.is_empty())
 }
@@ -419,17 +421,24 @@ fn classify_stale_registered_wts_worktrees_in(
 pub fn remove_stale_registered_wts_worktrees(
     paths: &[String],
 ) -> Result<RemoveStaleRegisteredWtsResult, String> {
-    remove_stale_registered_wts_worktrees_in(&default_codes_dir(), paths)
+    let sessions = crate::session_manager::scan_sessions();
+    remove_stale_registered_wts_worktrees_in(&default_codes_dir(), paths, &sessions)
 }
 
 fn remove_stale_registered_wts_worktrees_in(
     codes_dir: &Path,
     paths: &[String],
+    sessions: &[SessionMeta],
 ) -> Result<RemoveStaleRegisteredWtsResult, String> {
     let mut result = RemoveStaleRegisteredWtsResult {
         removed: 0,
         failed: Vec::new(),
     };
+    if paths.is_empty() {
+        return Ok(result);
+    }
+
+    let session_counts = session_counts_by_project_dir(sessions);
 
     for path in paths {
         let worktree = PathBuf::from(path);
@@ -440,6 +449,30 @@ fn remove_stale_registered_wts_worktrees_in(
             });
             continue;
         };
+
+        match assess_registered_wts_worktree(&main_repo, &worktree, &session_counts)? {
+            Some(assessment) if assessment.removable => {}
+            Some(assessment) => {
+                result.failed.push(WtsWorktreeRemovalFailure {
+                    path: path.clone(),
+                    error: format!(
+                        "Refusing to remove worktree that is no longer removable ({})",
+                        assessment
+                            .skip_reason
+                            .unwrap_or_else(|| "not_removable".to_string())
+                    ),
+                });
+                continue;
+            }
+            None => {
+                result.failed.push(WtsWorktreeRemovalFailure {
+                    path: path.clone(),
+                    error: "Path is not a sibling WTS worktree under Codes".to_string(),
+                });
+                continue;
+            }
+        }
+
         match git_worktree_remove(&main_repo, &worktree) {
             Ok(()) => result.removed += 1,
             Err(error) => result.failed.push(WtsWorktreeRemovalFailure {
@@ -884,5 +917,217 @@ mod tests {
             result.skipped[0].skip_reason.as_deref(),
             Some("has_sessions")
         );
+    }
+
+    #[test]
+    fn remove_stale_registered_wts_worktrees_refuses_unmerged_worktrees_with_sessions() {
+        if !git_available() {
+            return;
+        }
+
+        let root = tempdir().expect("tempdir");
+        let repo = root.path().join("sub2api");
+        fs::create_dir_all(&repo).expect("repo");
+        configure_git(&repo);
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(&repo)
+            .args(["init", "-b", "main"])
+            .status()
+            .expect("git init");
+        fs::write(repo.join("README.md"), "seed").expect("seed");
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(&repo)
+            .args(["add", "README.md"])
+            .status()
+            .expect("git add");
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(&repo)
+            .args(["commit", "-m", "seed"])
+            .status()
+            .expect("git commit");
+
+        let active = root.path().join("sub2api-wt-active");
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(&repo)
+            .args([
+                "worktree",
+                "add",
+                active.to_str().expect("path"),
+                "-b",
+                "feature/active",
+            ])
+            .status()
+            .expect("git worktree add");
+        fs::write(active.join("change.txt"), "delta").expect("change");
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(&active)
+            .args(["add", "change.txt"])
+            .status()
+            .expect("git add");
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(&active)
+            .args(["commit", "-m", "active change"])
+            .status()
+            .expect("git commit");
+
+        let sessions = vec![SessionMeta {
+            provider_id: "codex".to_string(),
+            session_id: "sess-1".to_string(),
+            title: None,
+            summary: None,
+            project_dir: Some(active.to_string_lossy().replace('\\', "/")),
+            created_at: None,
+            last_active_at: None,
+            source_path: None,
+            resume_command: None,
+        }];
+        let path = active.to_string_lossy().replace('\\', "/");
+
+        let result = super::remove_stale_registered_wts_worktrees_in(
+            root.path(),
+            &[path.clone()],
+            &sessions,
+        )
+        .expect("remove");
+        assert_eq!(result.removed, 0);
+        assert_eq!(result.failed.len(), 1);
+        assert_eq!(result.failed[0].path, path);
+        assert!(
+            result.failed[0].error.contains("has_sessions"),
+            "expected has_sessions refusal, got {}",
+            result.failed[0].error
+        );
+        assert!(active.is_dir());
+    }
+
+    #[test]
+    fn remove_stale_registered_wts_worktrees_refuses_dirty_worktrees() {
+        if !git_available() {
+            return;
+        }
+
+        let root = tempdir().expect("tempdir");
+        let repo = root.path().join("sub2api");
+        fs::create_dir_all(&repo).expect("repo");
+        configure_git(&repo);
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(&repo)
+            .args(["init", "-b", "main"])
+            .status()
+            .expect("git init");
+        fs::write(repo.join("README.md"), "seed").expect("seed");
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(&repo)
+            .args(["add", "README.md"])
+            .status()
+            .expect("git add");
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(&repo)
+            .args(["commit", "-m", "seed"])
+            .status()
+            .expect("git commit");
+
+        let dirty = root.path().join("sub2api-wt-dirty");
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(&repo)
+            .args([
+                "worktree",
+                "add",
+                dirty.to_str().expect("path"),
+                "-b",
+                "feature/dirty",
+            ])
+            .status()
+            .expect("git worktree add");
+        fs::write(dirty.join("scratch.txt"), "uncommitted").expect("dirty file");
+
+        let path = dirty.to_string_lossy().replace('\\', "/");
+        let result =
+            super::remove_stale_registered_wts_worktrees_in(root.path(), &[path.clone()], &[])
+                .expect("remove");
+        assert_eq!(result.removed, 0);
+        assert_eq!(result.failed.len(), 1);
+        assert!(
+            result.failed[0].error.contains("dirty"),
+            "expected dirty refusal, got {}",
+            result.failed[0].error
+        );
+        assert!(dirty.is_dir());
+    }
+
+    #[test]
+    fn git_working_tree_clean_fail_closed_when_status_fails() {
+        if !git_available() {
+            return;
+        }
+
+        let root = tempdir().expect("tempdir");
+        let repo = root.path().join("broken");
+        fs::create_dir_all(&repo).expect("repo");
+        // .git exists but is not a valid repository → status fails → treat as dirty.
+        fs::create_dir(repo.join(".git")).expect("git dir");
+        assert!(!super::git_working_tree_clean(&repo).expect("clean check"));
+    }
+
+    #[test]
+    fn remove_stale_registered_wts_worktrees_removes_no_session_worktrees() {
+        if !git_available() {
+            return;
+        }
+
+        let root = tempdir().expect("tempdir");
+        let repo = root.path().join("sub2api");
+        fs::create_dir_all(&repo).expect("repo");
+        configure_git(&repo);
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(&repo)
+            .args(["init", "-b", "main"])
+            .status()
+            .expect("git init");
+        fs::write(repo.join("README.md"), "seed").expect("seed");
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(&repo)
+            .args(["add", "README.md"])
+            .status()
+            .expect("git add");
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(&repo)
+            .args(["commit", "-m", "seed"])
+            .status()
+            .expect("git commit");
+
+        let stale = root.path().join("sub2api-wt-stale");
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(&repo)
+            .args([
+                "worktree",
+                "add",
+                stale.to_str().expect("path"),
+                "-b",
+                "feature/stale",
+            ])
+            .status()
+            .expect("git worktree add");
+
+        let path = stale.to_string_lossy().replace('\\', "/");
+        let result =
+            super::remove_stale_registered_wts_worktrees_in(root.path(), &[path], &[]).expect("remove");
+        assert_eq!(result.removed, 1);
+        assert!(result.failed.is_empty());
+        assert!(!stale.exists());
     }
 }

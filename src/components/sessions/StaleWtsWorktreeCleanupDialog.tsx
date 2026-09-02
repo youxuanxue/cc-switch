@@ -214,7 +214,7 @@ export function StaleWtsWorktreeCleanupDialog({
           <DialogDescription>
             {t("sessionManager.wtsCleanupDescription", {
               defaultValue:
-                "移除 ~/Codes/*-wt-* 中仍被 git 注册、但已无会话或分支已合并进 main/master 的 worktree。含未提交改动，或仍有关联会话且未合并的 worktree 会被跳过。",
+                "移除 ~/Codes/*-wt-* 中仍被 git 注册、但已无会话或分支已合并进 main/master 的 worktree（当前仅扫描 ~/Codes）。含未提交改动，或仍有关联会话且未合并的 worktree 会被跳过。",
             })}
           </DialogDescription>
         </DialogHeader>
