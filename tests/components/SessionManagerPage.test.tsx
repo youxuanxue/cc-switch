@@ -8,13 +8,17 @@ import {
   within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { http, HttpResponse } from "msw";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SessionManagerPage } from "@/components/sessions/SessionManagerPage";
 import { piApi } from "@/lib/api/pi";
 import { sessionsApi } from "@/lib/api/sessions";
 import * as platform from "@/lib/platform";
 import type { SessionMessage, SessionMeta } from "@/types";
+import { server } from "../msw/server";
 import { setSessionFixtures } from "../msw/state";
+
+const TAURI_ENDPOINT = "http://tauri.local";
 
 const cursorApiMocks = vi.hoisted(() => ({
   getOfficialStatus: vi.fn(),
@@ -1504,12 +1508,14 @@ describe("SessionManagerPage", () => {
 
     renderPage();
     const cleanupButton = await screen.findByRole("button", {
-      name: /清理闲置会话/i,
+      name: /清理会话/i,
     });
     fireEvent.click(cleanupButton);
 
     expect(
-      await screen.findByText("将删除 2 个会话，跳过 0 个不可删。"),
+      await screen.findByText(
+        "将删除 2 个会话，跳过 0 个不可删，0 个仍活跃。",
+      ),
     ).toBeInTheDocument();
     expect(screen.getByText(/Agent CLI 的本地会话目录/)).toBeInTheDocument();
 
@@ -1539,7 +1545,7 @@ describe("SessionManagerPage", () => {
 
     renderPage();
     const cleanupButton = await screen.findByRole("button", {
-      name: /清理闲置会话/i,
+      name: /清理会话/i,
     });
     fireEvent.click(cleanupButton);
 
@@ -1561,6 +1567,105 @@ describe("SessionManagerPage", () => {
     ).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /继续删除/i })).toBeDisabled();
     expect(screen.queryByTestId("confirm-dialog")).not.toBeInTheDocument();
+  });
+
+  it("blocks cleanup when live detection fails", async () => {
+    const now = Date.now();
+    setSessionFixtures(
+      [
+        {
+          providerId: "codex",
+          sessionId: "stale-session",
+          title: "Stale Session",
+          projectDir: "/mock/codex",
+          lastActiveAt: now - 40 * 86_400_000,
+          sourcePath: "/mock/codex/stale.jsonl",
+        },
+      ],
+      {},
+    );
+    server.use(
+      http.post(`${TAURI_ENDPOINT}/classify_session_live_states`, () =>
+        HttpResponse.error(),
+      ),
+    );
+
+    renderPage();
+    await userEvent.click(
+      await screen.findByRole("button", { name: /清理会话/i }),
+    );
+
+    expect(
+      await screen.findByText(/无法检测活跃会话/),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /继续删除/i })).toBeDisabled();
+    expect(screen.queryByTestId("confirm-dialog")).not.toBeInTheDocument();
+  });
+
+  it("cleans all inactive sessions and skips live ones", async () => {
+    const now = Date.now();
+    const day = 86_400_000;
+    setSessionFixtures(
+      [
+        {
+          providerId: "codex",
+          sessionId: "stale-session",
+          title: "Stale Session",
+          projectDir: "/mock/codex",
+          lastActiveAt: now - 40 * day,
+          sourcePath: "/mock/codex/stale.jsonl",
+        },
+        {
+          providerId: "codex",
+          sessionId: "fresh-session",
+          title: "Fresh Session",
+          projectDir: "/mock/codex",
+          lastActiveAt: now - 2 * day,
+          sourcePath: "/mock/codex/fresh.jsonl",
+        },
+      ],
+      {},
+    );
+    server.use(
+      http.post(
+        `${TAURI_ENDPOINT}/classify_session_live_states`,
+        async ({ request }) => {
+          const body = (await request.json()) as {
+            items?: { providerId: string; sessionId: string }[];
+          };
+          const items = body.items ?? [];
+          return HttpResponse.json(
+            items.map((item) => ({
+              providerId: item.providerId,
+              sessionId: item.sessionId,
+              isLive: item.sessionId === "fresh-session",
+            })),
+          );
+        },
+      ),
+    );
+
+    renderPage();
+    await userEvent.click(
+      await screen.findByRole("button", { name: /清理会话/i }),
+    );
+    await userEvent.click(
+      await screen.findByRole("tab", { name: /全部未活跃/i }),
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          "将删除 1 个未活跃会话，跳过 0 个不可删，1 个仍活跃。",
+        ),
+      ).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /继续删除/i }));
+
+    const confirm = await screen.findByTestId("confirm-dialog");
+    expect(confirm).toHaveTextContent("Stale Session");
+    expect(confirm).not.toHaveTextContent("Fresh Session");
   });
 
   it("starts a new session in the selected project's main workspace", async () => {

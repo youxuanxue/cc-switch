@@ -1638,6 +1638,7 @@ pub fn run() {
             commands::session_pty_resize,
             commands::session_pty_kill,
             commands::get_session_resume_state,
+            commands::classify_session_live_states,
             // Cursor Official auth and session recovery
             commands::get_cursor_official_status,
             commands::update_cursor_official_auth,

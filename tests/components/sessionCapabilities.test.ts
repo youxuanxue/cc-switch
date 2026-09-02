@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   MS_PER_DAY,
+  excludeLiveSessions,
   getSessionActivityAt,
+  getSessionLiveKey,
   normalizeStaleCleanupDays,
   sessionMessageSourcePath,
+  summarizeCleanupCandidates,
   summarizeStaleCleanup,
 } from "@/components/sessions/sessionCapabilities";
 import type { SessionMeta } from "@/types";
@@ -130,5 +133,49 @@ describe("stale session cleanup", () => {
       targets: [],
       skipped: 0,
     });
+  });
+});
+
+describe("inactive session cleanup", () => {
+  it("selects all deletable sessions in inactive mode", () => {
+    const sessions = [
+      session({
+        sessionId: "old",
+        sourcePath: "/tmp/old.jsonl",
+        lastActiveAt: NOW - 40 * MS_PER_DAY,
+      }),
+      session({
+        sessionId: "fresh",
+        sourcePath: "/tmp/fresh.jsonl",
+        lastActiveAt: NOW - MS_PER_DAY,
+      }),
+      session({
+        sessionId: "no-source",
+        lastActiveAt: NOW - 40 * MS_PER_DAY,
+      }),
+    ];
+
+    const { candidates, skippedNotDeletable } = summarizeCleanupCandidates(
+      sessions,
+      "inactive",
+      30,
+      NOW,
+    );
+
+    expect(candidates.map((item) => item.sessionId)).toEqual(["old", "fresh"]);
+    expect(skippedNotDeletable).toBe(1);
+  });
+
+  it("excludes live sessions from cleanup targets", () => {
+    const sessions = [
+      session({ sessionId: "idle", sourcePath: "/tmp/idle.jsonl" }),
+      session({ sessionId: "live", sourcePath: "/tmp/live.jsonl" }),
+    ];
+    const liveKeys = new Set([getSessionLiveKey(sessions[1])]);
+
+    const { targets, skippedLive } = excludeLiveSessions(sessions, liveKeys);
+
+    expect(targets.map((item) => item.sessionId)).toEqual(["idle"]);
+    expect(skippedLive).toBe(1);
   });
 });

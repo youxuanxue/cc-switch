@@ -54,6 +54,61 @@ export function getSessionActivityAt(session: SessionMeta): number | undefined {
   return session.lastActiveAt || session.createdAt || undefined;
 }
 
+export type SessionCleanupMode = "stale" | "inactive";
+
+export function getSessionLiveKey(
+  session: Pick<SessionMeta, "providerId" | "sessionId">,
+): string {
+  return `${session.providerId}:${session.sessionId}`;
+}
+
+export function sessionLiveProbeSourcePath(
+  session: SessionMeta,
+): string | undefined {
+  return sessionMessageSourcePath(session) ?? session.sourcePath ?? undefined;
+}
+
+export function summarizeCleanupCandidates(
+  sessions: SessionMeta[],
+  mode: SessionCleanupMode,
+  days: number,
+  now = Date.now(),
+): { candidates: SessionMeta[]; skippedNotDeletable: number } {
+  if (mode === "inactive") {
+    const candidates: SessionMeta[] = [];
+    let skippedNotDeletable = 0;
+    for (const session of sessions) {
+      if (isSessionDeletable(session)) {
+        candidates.push(session);
+      } else {
+        skippedNotDeletable += 1;
+      }
+    }
+    return { candidates, skippedNotDeletable };
+  }
+
+  const { targets, skipped } = summarizeStaleCleanup(sessions, days, now);
+  return { candidates: targets, skippedNotDeletable: skipped };
+}
+
+export function excludeLiveSessions(
+  candidates: SessionMeta[],
+  liveKeys: ReadonlySet<string>,
+): { targets: SessionMeta[]; skippedLive: number } {
+  const targets: SessionMeta[] = [];
+  let skippedLive = 0;
+
+  for (const session of candidates) {
+    if (liveKeys.has(getSessionLiveKey(session))) {
+      skippedLive += 1;
+    } else {
+      targets.push(session);
+    }
+  }
+
+  return { targets, skippedLive };
+}
+
 export function summarizeStaleCleanup(
   sessions: SessionMeta[],
   days: number,

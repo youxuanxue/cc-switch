@@ -7,7 +7,9 @@ pub mod wts;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
+use crate::codex_config::get_codex_config_dir;
 use providers::{claude, codex, cursor, gemini, grokbuild, hermes, openclaw, opencode, pi};
+use resume::{is_session_live, LiveProcessView, ProcessView};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -45,6 +47,88 @@ pub struct DeleteSessionRequest {
     pub provider_id: String,
     pub session_id: String,
     pub source_path: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionLiveProbe {
+    pub provider_id: String,
+    pub session_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionLiveState {
+    pub provider_id: String,
+    pub session_id: String,
+    pub is_live: bool,
+}
+
+pub fn classify_session_live_states(
+    probes: &[SessionLiveProbe],
+    view: &dyn ProcessView,
+) -> Vec<SessionLiveState> {
+    probes
+        .iter()
+        .map(|probe| {
+            let lock_dir = (probe.provider_id == "codex").then(get_codex_config_dir);
+            SessionLiveState {
+                provider_id: probe.provider_id.clone(),
+                session_id: probe.session_id.clone(),
+                is_live: is_session_live(
+                    &probe.session_id,
+                    probe.source_path.as_deref().map(Path::new),
+                    lock_dir.as_deref(),
+                    view,
+                ),
+            }
+        })
+        .collect()
+}
+
+pub fn session_live_probe_source_path(
+    provider_id: &str,
+    source_path: &str,
+) -> Option<PathBuf> {
+    let path = Path::new(source_path);
+    match provider_id {
+        "cursor" => {
+            if path.file_name().and_then(|name| name.to_str()) == Some("store.db") {
+                Some(path.to_path_buf())
+            } else {
+                Some(cursor::live_writer_source_path(path))
+            }
+        }
+        _ => Some(path.to_path_buf()),
+    }
+}
+
+pub fn reject_if_session_live(
+    provider_id: &str,
+    session_id: &str,
+    source_path: &str,
+    view: &dyn ProcessView,
+) -> Result<(), String> {
+    if (provider_id == "opencode" || provider_id == "hermes") && source_path.starts_with("sqlite:")
+    {
+        return Ok(());
+    }
+
+    let lock_dir = (provider_id == "codex").then(get_codex_config_dir);
+    let probe_path = session_live_probe_source_path(provider_id, source_path);
+    if is_session_live(
+        session_id,
+        probe_path.as_deref().map(Path::new),
+        lock_dir.as_deref(),
+        view,
+    ) {
+        return Err(format!(
+            "Session {session_id} is still active and cannot be deleted"
+        ));
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -131,6 +215,12 @@ pub fn delete_session(
     session_id: &str,
     source_path: &str,
 ) -> Result<bool, String> {
+    reject_if_session_live(
+        provider_id,
+        session_id,
+        source_path,
+        &LiveProcessView,
+    )?;
     // SQLite sessions bypass the file-based deletion path
     if provider_id == "opencode" && source_path.starts_with("sqlite:") {
         return opencode::delete_session_sqlite(session_id, source_path);
