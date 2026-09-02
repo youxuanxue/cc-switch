@@ -538,6 +538,19 @@ pub fn resume_decision_for_session(
     decide_resume(find_live_writer(session_id, source_path, lock_config_dir, view).as_ref())
 }
 
+/// True when a session still has a live agent / lock holder and must not be deleted.
+pub fn is_session_live(
+    session_id: &str,
+    source_path: Option<&Path>,
+    lock_config_dir: Option<&Path>,
+    view: &dyn ProcessView,
+) -> bool {
+    !matches!(
+        resume_decision_for_session(session_id, source_path, lock_config_dir, view),
+        ResumeDecision::LaunchNew
+    )
+}
+
 pub fn appearance_from_decision(decision: &ResumeDecision) -> SessionResumeAppearance {
     match decision {
         ResumeDecision::LaunchNew => SessionResumeAppearance::Resume,
@@ -1137,6 +1150,49 @@ mod tests {
                 tty: Some("ttys002".to_string()),
             }
         );
+    }
+
+    #[test]
+    fn is_session_live_tracks_resume_decision() {
+        let view = MapView::new(HashMap::from([proc(
+            7,
+            1,
+            None,
+            "claude --resume ses_abc123",
+        )]));
+        assert!(is_session_live("ses_abc123", None, None, &view));
+        assert!(!is_session_live("other-session", None, None, &view));
+    }
+
+    #[test]
+    fn is_session_live_respects_store_db_holder() {
+        let session_id = "619f3d4a-0a40-47c9-aae6-253f7052d311";
+        let store = PathBuf::from(format!("/tmp/{session_id}/store.db"));
+        let view = MapView::new(HashMap::from([proc(
+            42,
+            1,
+            None,
+            "/Applications/iTerm.app/Contents/MacOS/iTerm2",
+        )]))
+        .with_holder(store.clone(), 42);
+        assert!(is_session_live(session_id, Some(&store), None, &view));
+    }
+
+    #[test]
+    fn reject_if_session_live_blocks_active_session() {
+        use crate::session_manager::reject_if_session_live;
+
+        let view = MapView::new(HashMap::from([proc(
+            7,
+            1,
+            None,
+            "claude --resume ses_abc123",
+        )]));
+        let error = reject_if_session_live("claude", "ses_abc123", "/tmp/session.jsonl", &view)
+            .expect_err("active session must be rejected");
+        assert!(error.contains("still active"));
+        reject_if_session_live("claude", "other-session", "/tmp/session.jsonl", &view)
+            .expect("idle session can be deleted");
     }
 
     #[test]

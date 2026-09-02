@@ -38,6 +38,18 @@ export interface WtsProjectContext {
   workspaces: WtsWorkspace[];
 }
 
+export interface SessionLiveState {
+  providerId: string;
+  sessionId: string;
+  isLive: boolean;
+}
+
+export interface SessionLiveProbe {
+  providerId: string;
+  sessionId: string;
+  sourcePath?: string | null;
+}
+
 export const sessionsApi = {
   async list(): Promise<SessionMeta[]> {
     return await invoke("list_sessions");
@@ -64,6 +76,12 @@ export const sessionsApi = {
       sessionId,
       sourcePath,
     });
+  },
+
+  async classifyLiveStates(
+    items: SessionLiveProbe[],
+  ): Promise<SessionLiveState[]> {
+    return await invoke("classify_session_live_states", { items });
   },
 
   async delete(options: DeleteSessionOptions): Promise<boolean> {

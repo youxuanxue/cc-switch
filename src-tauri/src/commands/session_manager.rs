@@ -192,6 +192,20 @@ pub async fn session_pty_kill(ptyId: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub async fn classify_session_live_states(
+    items: Vec<session_manager::SessionLiveProbe>,
+) -> Result<Vec<session_manager::SessionLiveState>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        Ok(session_manager::classify_session_live_states(
+            &items,
+            &LiveProcessView,
+        ))
+    })
+    .await
+    .map_err(|e| format!("Failed to classify session live states: {e}"))?
+}
+
+#[tauri::command]
 pub async fn get_session_resume_state(
     providerId: String,
     sessionId: String,

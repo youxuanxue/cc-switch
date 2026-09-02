@@ -235,6 +235,23 @@ export const handlers = [
     success({ appearance: "resume" }),
   ),
 
+  http.post(`${TAURI_ENDPOINT}/classify_session_live_states`, async ({ request }) => {
+    const { items = [] } = await withJson<{
+      items?: {
+        providerId: string;
+        sessionId: string;
+        sourcePath?: string | null;
+      }[];
+    }>(request);
+    return success(
+      items.map((item) => ({
+        providerId: item.providerId,
+        sessionId: item.sessionId,
+        isLive: false,
+      })),
+    );
+  }),
+
   http.post(`${TAURI_ENDPOINT}/get_session_messages`, async ({ request }) => {
     const { providerId, sourcePath } = await withJson<{
       providerId: string;

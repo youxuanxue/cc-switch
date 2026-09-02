@@ -1241,7 +1241,7 @@ export function SessionManagerPage({ appId }: { appId: string }) {
                                 aria-label={t(
                                   "sessionManager.staleCleanupTooltip",
                                   {
-                                    defaultValue: "清理闲置会话",
+                                    defaultValue: "清理会话",
                                   },
                                 )}
                                 onClick={() => setStaleCleanupOpen(true)}
@@ -1251,7 +1251,7 @@ export function SessionManagerPage({ appId }: { appId: string }) {
                             </TooltipTrigger>
                             <TooltipContent>
                               {t("sessionManager.staleCleanupTooltip", {
-                                defaultValue: "清理闲置会话",
+                                defaultValue: "清理会话",
                               })}
                             </TooltipContent>
                           </Tooltip>
@@ -2346,8 +2346,10 @@ export function SessionManagerPage({ appId }: { appId: string }) {
         onOpenChange={setStaleCleanupOpen}
         sessions={filteredSessions}
         initialDays={staleCleanupDays}
-        onConfirm={(targets, days) => {
-          setStaleCleanupDays(days);
+        onConfirm={(targets, mode, days) => {
+          if (mode === "stale") {
+            setStaleCleanupDays(days);
+          }
           setStaleCleanupOpen(false);
           setDeleteTargets(targets);
         }}
