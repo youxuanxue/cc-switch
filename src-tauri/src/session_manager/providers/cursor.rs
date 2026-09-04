@@ -440,44 +440,7 @@ fn cleanup_bucket_after_chat_removal(
         }
     }
 
-    remove_empty_bucket_if_needed(root, bucket)?;
     Ok(())
-}
-
-fn remove_empty_bucket_if_needed(root: &Path, bucket: &Path) -> Result<bool, String> {
-    if bucket == root || bucket.parent() != Some(root) {
-        return Ok(false);
-    }
-
-    let mut entries = match fs::read_dir(bucket) {
-        Ok(entries) => entries,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
-        Err(error) => {
-            return Err(format!(
-                "Failed to inspect Cursor Agent CLI project bucket {}: {error}",
-                bucket.display()
-            ));
-        }
-    };
-    if entries.next().is_some() {
-        return Ok(false);
-    }
-
-    match fs::remove_dir(bucket) {
-        Ok(()) => Ok(true),
-        Err(error)
-            if matches!(
-                error.kind(),
-                std::io::ErrorKind::NotFound | std::io::ErrorKind::DirectoryNotEmpty
-            ) =>
-        {
-            Ok(false)
-        }
-        Err(error) => Err(format!(
-            "Failed to remove empty Cursor Agent CLI project bucket {}: {error}",
-            bucket.display()
-        )),
-    }
 }
 
 pub fn delete_session(root: &Path, path: &Path, session_id: &str) -> Result<bool, String> {
@@ -524,7 +487,7 @@ pub fn delete_session(root: &Path, path: &Path, session_id: &str) -> Result<bool
     Ok(true)
 }
 
-/// Remove stale Agent CLI chat dirs and empty project buckets under `~/.cursor/chats`.
+/// Remove stale Agent CLI chat dirs while retaining project buckets.
 pub fn prune_empty_agent_cli_buckets() -> Result<CursorPruneResult, String> {
     prune_empty_agent_cli_buckets_in(&cursor_chats_root())
 }
@@ -587,11 +550,7 @@ fn prune_empty_agent_cli_buckets_in_with_view(
             }
         }
 
-        if remove_empty_bucket_if_needed(root, &bucket_path)? {
-            result.buckets_removed += 1;
-        } else {
-            result.buckets_retained += 1;
-        }
+        result.buckets_retained += 1;
     }
 
     Ok(result)
@@ -1129,7 +1088,7 @@ mod tests {
     }
 
     #[test]
-    fn removes_empty_project_bucket_after_last_chat_is_deleted() {
+    fn retains_project_bucket_after_last_chat_is_deleted() {
         let root = tempdir().unwrap();
         let meta = write_meta(
             root.path(),
@@ -1147,12 +1106,12 @@ mod tests {
 
         assert!(deleted);
         assert!(!chat_dir.exists());
-        assert!(!bucket.exists());
+        assert!(bucket.is_dir());
         assert!(root.path().is_dir());
     }
 
     #[test]
-    fn removes_project_bucket_when_only_orphan_chat_dirs_remain() {
+    fn retains_project_bucket_after_orphan_chat_dirs_are_removed() {
         let root = tempdir().unwrap();
         let meta = write_meta(
             root.path(),
@@ -1172,7 +1131,7 @@ mod tests {
         assert!(deleted);
         assert!(!chat_dir.exists());
         assert!(!orphan.exists());
-        assert!(!bucket.exists());
+        assert!(bucket.is_dir());
     }
 
     #[test]
@@ -1194,7 +1153,7 @@ mod tests {
 
         assert!(deleted);
         assert!(!chat_dir.exists());
-        assert!(!bucket.exists());
+        assert!(bucket.is_dir());
         assert!(root.path().is_dir());
     }
 
@@ -1234,7 +1193,7 @@ mod tests {
     }
 
     #[test]
-    fn prune_never_recursively_removes_bucket_with_unknown_content() {
+    fn prune_never_removes_project_bucket_with_unknown_content() {
         let root = tempdir().unwrap();
         let bucket = root.path().join("workspace-a");
         let unknown = bucket.join("future-layout").join("data.bin");
@@ -1251,7 +1210,7 @@ mod tests {
     }
 
     #[test]
-    fn prune_empty_agent_cli_buckets_removes_stale_chats_and_empty_buckets() {
+    fn prune_empty_agent_cli_buckets_removes_stale_chats_and_retains_project_buckets() {
         let root = tempdir().unwrap();
         write_meta(
             root.path(),
@@ -1282,17 +1241,17 @@ mod tests {
         assert_eq!(
             removed,
             CursorPruneResult {
-                buckets_removed: 3,
+                buckets_removed: 0,
                 stale_chats_removed: 1,
                 orphan_dirs_removed: 1,
-                buckets_retained: 1,
+                buckets_retained: 4,
                 scannable_chats_retained: 1,
             }
         );
         assert!(root.path().join("still-active").join(CHAT_ID).is_dir());
-        assert!(!root.path().join("dead-only").exists());
-        assert!(!root.path().join("already-empty").exists());
-        assert!(!root.path().join("orphan-chat-dirs").exists());
+        assert!(root.path().join("dead-only").is_dir());
+        assert!(root.path().join("already-empty").is_dir());
+        assert!(root.path().join("orphan-chat-dirs").is_dir());
     }
 
     #[test]

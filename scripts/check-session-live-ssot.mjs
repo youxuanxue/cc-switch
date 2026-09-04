@@ -197,17 +197,9 @@ if (!cursorProvider.missing) {
     FINDING_CODES.pruneSafety,
     "Cursor cleanup must probe store.db even when meta.json is missing",
   );
-  requireContains(
-    findings,
-    cursorProvider.relativePath,
-    cursorProvider.source,
-    /fn remove_empty_bucket_if_needed\s*\([\s\S]*?fs::remove_dir\(\s*bucket\s*\)/,
-    FINDING_CODES.pruneSafety,
-    "Cursor cleanup must remove project buckets only through non-recursive remove_dir",
-  );
   for (const forbidden of [
     /remove_dir_if_present\(\s*&?\s*bucket\b/,
-    /remove_dir_all\(\s*&?\s*bucket\b/,
+    /(?:fs|std::fs)::remove_dir(?:_all)?\(\s*&?\s*bucket\b/,
   ]) {
     const match = cursorProvider.source.match(forbidden);
     if (match) {
@@ -215,14 +207,15 @@ if (!cursorProvider.missing) {
         findings,
         FINDING_CODES.pruneSafety,
         cursorProvider.relativePath,
-        "Cursor cleanup must never recursively remove a project bucket",
+        "Cursor cleanup must never remove a project bucket",
         lineNumber(cursorProvider.source, match.index ?? -1),
       );
     }
   }
   for (const testName of [
     "prune_retains_active_chat_with_store_db_but_no_metadata",
-    "prune_never_recursively_removes_bucket_with_unknown_content",
+    "retains_project_bucket_after_last_chat_is_deleted",
+    "prune_never_removes_project_bucket_with_unknown_content",
   ]) {
     requireContains(
       findings,

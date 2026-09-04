@@ -60,13 +60,11 @@ fn launch_resume_with() {
 fn chat_live_probe_source_path(chat_dir: &Path) {
   let store_path = chat_dir.join("store.db");
 }
-fn remove_empty_bucket_if_needed(bucket: &Path) {
-  fs::remove_dir(bucket);
-}
 #[cfg(test)]
 mod tests {
   fn prune_retains_active_chat_with_store_db_but_no_metadata() {}
-  fn prune_never_recursively_removes_bucket_with_unknown_content() {}
+  fn retains_project_bucket_after_last_chat_is_deleted() {}
+  fn prune_never_removes_project_bucket_with_unknown_content() {}
 }
 `,
     "src/components/sessions/LiveTerminalPane.tsx": `
@@ -206,13 +204,11 @@ export function LiveTerminalPane({ onBlocked }) {
 fn chat_live_probe_source_path(chat_dir: &Path) {
   let meta_path = chat_dir.join("meta.json");
 }
-fn remove_empty_bucket_if_needed(bucket: &Path) {
-  fs::remove_dir(bucket);
-}
 #[cfg(test)]
 mod tests {
   fn prune_retains_active_chat_with_store_db_but_no_metadata() {}
-  fn prune_never_recursively_removes_bucket_with_unknown_content() {}
+  fn retains_project_bucket_after_last_chat_is_deleted() {}
+  fn prune_never_removes_project_bucket_with_unknown_content() {}
 }
 `,
       }),
@@ -222,6 +218,30 @@ mod tests {
     expect(result.stderr).toContain("must probe store.db");
   });
 
+  it("rejects non-recursive Cursor project-bucket deletion", () => {
+    const result = runChecker(
+      createFixture({
+        "src-tauri/src/session_manager/providers/cursor.rs": `
+fn chat_live_probe_source_path(chat_dir: &Path) {
+  let store_path = chat_dir.join("store.db");
+}
+fn cleanup_bucket(bucket: &Path) {
+  fs::remove_dir(bucket);
+}
+#[cfg(test)]
+mod tests {
+  fn prune_retains_active_chat_with_store_db_but_no_metadata() {}
+  fn retains_project_bucket_after_last_chat_is_deleted() {}
+  fn prune_never_removes_project_bucket_with_unknown_content() {}
+}
+`,
+      }),
+    );
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("SESSION_LIVE_PRUNE_SAFETY");
+    expect(result.stderr).toContain("never remove a project bucket");
+  });
+
   it("rejects recursive Cursor project-bucket deletion", () => {
     const result = runChecker(
       createFixture({
@@ -229,20 +249,20 @@ mod tests {
 fn chat_live_probe_source_path(chat_dir: &Path) {
   let store_path = chat_dir.join("store.db");
 }
-fn remove_empty_bucket_if_needed(bucket: &Path) {
+fn cleanup_bucket(bucket: &Path) {
   remove_dir_if_present(&bucket, "Cursor Agent CLI project bucket");
 }
 #[cfg(test)]
 mod tests {
   fn prune_retains_active_chat_with_store_db_but_no_metadata() {}
-  fn prune_never_recursively_removes_bucket_with_unknown_content() {}
+  fn retains_project_bucket_after_last_chat_is_deleted() {}
+  fn prune_never_removes_project_bucket_with_unknown_content() {}
 }
 `,
       }),
     );
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain("SESSION_LIVE_PRUNE_SAFETY");
-    expect(result.stderr).toContain("non-recursive remove_dir");
-    expect(result.stderr).toContain("never recursively remove");
+    expect(result.stderr).toContain("never remove a project bucket");
   });
 });
