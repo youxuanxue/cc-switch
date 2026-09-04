@@ -56,6 +56,19 @@ fn launch_resume_with() {
     if let Some(result) = reuse_live_session(session_id, Some(&live_source)) {}
 }
 `,
+    "src-tauri/src/session_manager/providers/cursor.rs": `
+fn chat_live_probe_source_path(chat_dir: &Path) {
+  let store_path = chat_dir.join("store.db");
+}
+fn remove_empty_bucket_if_needed(bucket: &Path) {
+  fs::remove_dir(bucket);
+}
+#[cfg(test)]
+mod tests {
+  fn prune_retains_active_chat_with_store_db_but_no_metadata() {}
+  fn prune_never_recursively_removes_bucket_with_unknown_content() {}
+}
+`,
     "src/components/sessions/LiveTerminalPane.tsx": `
 export function LiveTerminalPane({ onBlocked }) {
   if (result.kind === "focused") {
@@ -184,5 +197,52 @@ export function LiveTerminalPane({ onBlocked }) {
     );
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain("SESSION_LIVE_TERMINAL_BLOCK");
+  });
+
+  it("rejects Cursor cleanup that skips store.db without metadata", () => {
+    const result = runChecker(
+      createFixture({
+        "src-tauri/src/session_manager/providers/cursor.rs": `
+fn chat_live_probe_source_path(chat_dir: &Path) {
+  let meta_path = chat_dir.join("meta.json");
+}
+fn remove_empty_bucket_if_needed(bucket: &Path) {
+  fs::remove_dir(bucket);
+}
+#[cfg(test)]
+mod tests {
+  fn prune_retains_active_chat_with_store_db_but_no_metadata() {}
+  fn prune_never_recursively_removes_bucket_with_unknown_content() {}
+}
+`,
+      }),
+    );
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("SESSION_LIVE_PRUNE_SAFETY");
+    expect(result.stderr).toContain("must probe store.db");
+  });
+
+  it("rejects recursive Cursor project-bucket deletion", () => {
+    const result = runChecker(
+      createFixture({
+        "src-tauri/src/session_manager/providers/cursor.rs": `
+fn chat_live_probe_source_path(chat_dir: &Path) {
+  let store_path = chat_dir.join("store.db");
+}
+fn remove_empty_bucket_if_needed(bucket: &Path) {
+  remove_dir_if_present(&bucket, "Cursor Agent CLI project bucket");
+}
+#[cfg(test)]
+mod tests {
+  fn prune_retains_active_chat_with_store_db_but_no_metadata() {}
+  fn prune_never_recursively_removes_bucket_with_unknown_content() {}
+}
+`,
+      }),
+    );
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("SESSION_LIVE_PRUNE_SAFETY");
+    expect(result.stderr).toContain("non-recursive remove_dir");
+    expect(result.stderr).toContain("never recursively remove");
   });
 });

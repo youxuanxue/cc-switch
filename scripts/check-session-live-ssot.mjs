@@ -7,7 +7,8 @@
  * Soft rule (Jobs): 少入口、单一真身、共享大脑.
  * This script fails closed when launch paths fork a second live-session brain,
  * when inspector-noise again matches workspace paths containing "cc-switch",
- * or when the in-app terminal no longer blocks / focuses on live sessions.
+ * when the in-app terminal no longer blocks / focuses on live sessions, or
+ * when Cursor cleanup can remove an active chat or a non-empty project bucket.
  */
 
 import { existsSync, readFileSync } from "node:fs";
@@ -18,6 +19,7 @@ const FINDING_CODES = {
   decisionOwner: "SESSION_LIVE_DECISION_OWNER",
   launchConsumer: "SESSION_LIVE_LAUNCH_CONSUMER",
   noiseAntipattern: "SESSION_LIVE_NOISE_ANTIPATTERN",
+  pruneSafety: "SESSION_LIVE_PRUNE_SAFETY",
   terminalBlock: "SESSION_LIVE_TERMINAL_BLOCK",
 };
 
@@ -71,10 +73,7 @@ function requireContains(findings, file, source, pattern, code, message) {
 const root = parseRoot(process.argv.slice(2));
 const findings = [];
 
-const resumeRs = readRequired(
-  root,
-  "src-tauri/src/session_manager/resume.rs",
-);
+const resumeRs = readRequired(root, "src-tauri/src/session_manager/resume.rs");
 const sessionCommands = readRequired(
   root,
   "src-tauri/src/commands/session_manager.rs",
@@ -82,6 +81,10 @@ const sessionCommands = readRequired(
 const cursorOfficial = readRequired(
   root,
   "src-tauri/src/services/cursor_official.rs",
+);
+const cursorProvider = readRequired(
+  root,
+  "src-tauri/src/session_manager/providers/cursor.rs",
 );
 const liveTerminalPane = readRequired(
   root,
@@ -96,6 +99,7 @@ for (const file of [
   resumeRs,
   sessionCommands,
   cursorOfficial,
+  cursorProvider,
   liveTerminalPane,
   liveTerminalSpawn,
 ]) {
@@ -140,39 +144,39 @@ if (!resumeRs.missing) {
   const noiseFn = resumeRs.source.match(
     /pub fn is_inspector_noise\([\s\S]*?\n\}/,
   );
-    if (!noiseFn) {
+  if (!noiseFn) {
+    addFinding(
+      findings,
+      FINDING_CODES.noiseAntipattern,
+      resumeRs.relativePath,
+      "is_inspector_noise must exist in the shared resume owner",
+    );
+  } else {
+    if (/\.contains\(\s*["']cc-switch["']\s*\)/.test(noiseFn[0])) {
       addFinding(
         findings,
         FINDING_CODES.noiseAntipattern,
         resumeRs.relativePath,
-        "is_inspector_noise must exist in the shared resume owner",
+        'is_inspector_noise must not match contains("cc-switch"); only the cc-switch binary basename is noise',
+        lineNumber(resumeRs.source, noiseFn.index ?? -1),
       );
-    } else {
-      if (/\.contains\(\s*["']cc-switch["']\s*\)/.test(noiseFn[0])) {
-        addFinding(
-          findings,
-          FINDING_CODES.noiseAntipattern,
-          resumeRs.relativePath,
-          'is_inspector_noise must not match contains("cc-switch"); only the cc-switch binary basename is noise',
-          lineNumber(resumeRs.source, noiseFn.index ?? -1),
-        );
-      }
-      if (
-        !/command_basename\([\s\S]*?\)\s*==\s*["']cc-switch["']/.test(
-          noiseFn[0],
-        ) &&
-        !/==\s*["']cc-switch["']/.test(noiseFn[0]) &&
-        !/fn is_cc_switch_binary_command/.test(resumeRs.source)
-      ) {
-        addFinding(
-          findings,
-          FINDING_CODES.noiseAntipattern,
-          resumeRs.relativePath,
-          'is_inspector_noise must identify the cc-switch binary (basename or MacOS app path), not a path substring',
-          lineNumber(resumeRs.source, noiseFn.index ?? -1),
-        );
-      }
     }
+    if (
+      !/command_basename\([\s\S]*?\)\s*==\s*["']cc-switch["']/.test(
+        noiseFn[0],
+      ) &&
+      !/==\s*["']cc-switch["']/.test(noiseFn[0]) &&
+      !/fn is_cc_switch_binary_command/.test(resumeRs.source)
+    ) {
+      addFinding(
+        findings,
+        FINDING_CODES.noiseAntipattern,
+        resumeRs.relativePath,
+        "is_inspector_noise must identify the cc-switch binary (basename or MacOS app path), not a path substring",
+        lineNumber(resumeRs.source, noiseFn.index ?? -1),
+      );
+    }
+  }
 
   requireContains(
     findings,
@@ -184,13 +188,62 @@ if (!resumeRs.missing) {
   );
 }
 
+if (!cursorProvider.missing) {
+  requireContains(
+    findings,
+    cursorProvider.relativePath,
+    cursorProvider.source,
+    /fn chat_live_probe_source_path\s*\([\s\S]*?chat_dir\.join\(\s*["']store\.db["']\s*\)/,
+    FINDING_CODES.pruneSafety,
+    "Cursor cleanup must probe store.db even when meta.json is missing",
+  );
+  requireContains(
+    findings,
+    cursorProvider.relativePath,
+    cursorProvider.source,
+    /fn remove_empty_bucket_if_needed\s*\([\s\S]*?fs::remove_dir\(\s*bucket\s*\)/,
+    FINDING_CODES.pruneSafety,
+    "Cursor cleanup must remove project buckets only through non-recursive remove_dir",
+  );
+  for (const forbidden of [
+    /remove_dir_if_present\(\s*&?\s*bucket\b/,
+    /remove_dir_all\(\s*&?\s*bucket\b/,
+  ]) {
+    const match = cursorProvider.source.match(forbidden);
+    if (match) {
+      addFinding(
+        findings,
+        FINDING_CODES.pruneSafety,
+        cursorProvider.relativePath,
+        "Cursor cleanup must never recursively remove a project bucket",
+        lineNumber(cursorProvider.source, match.index ?? -1),
+      );
+    }
+  }
+  for (const testName of [
+    "prune_retains_active_chat_with_store_db_but_no_metadata",
+    "prune_never_recursively_removes_bucket_with_unknown_content",
+  ]) {
+    requireContains(
+      findings,
+      cursorProvider.relativePath,
+      cursorProvider.source,
+      new RegExp(`fn ${testName}\\s*\\(`),
+      FINDING_CODES.pruneSafety,
+      `missing Cursor cleanup regression test ${testName}`,
+    );
+  }
+}
+
 if (!sessionCommands.missing) {
   const source = sessionCommands.source;
   for (const [fnName, label] of [
     ["launch_session_terminal", "external terminal launch"],
     ["spawn_session_pty", "in-app PTY spawn"],
   ]) {
-    const start = source.search(new RegExp(`(?:pub\\s+)?async\\s+fn\\s+${fnName}\\b`));
+    const start = source.search(
+      new RegExp(`(?:pub\\s+)?async\\s+fn\\s+${fnName}\\b`),
+    );
     if (start < 0) {
       addFinding(
         findings,
@@ -201,9 +254,13 @@ if (!sessionCommands.missing) {
       continue;
     }
     const rest = source.slice(start + 1);
-    const nextRel = rest.search(/\n(?:#\[tauri::command\]|(?:pub\s+)?async\s+fn\s+)/);
+    const nextRel = rest.search(
+      /\n(?:#\[tauri::command\]|(?:pub\s+)?async\s+fn\s+)/,
+    );
     const body =
-      nextRel >= 0 ? source.slice(start, start + 1 + nextRel) : source.slice(start);
+      nextRel >= 0
+        ? source.slice(start, start + 1 + nextRel)
+        : source.slice(start);
     if (!body.includes("resume_decision_for_session")) {
       addFinding(
         findings,
