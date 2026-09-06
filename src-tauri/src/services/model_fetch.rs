@@ -22,7 +22,7 @@ pub struct FetchedModel {
 #[derive(Debug, Deserialize)]
 struct ModelsResponse {
     data: Option<Vec<ModelEntry>>,
-    models: Option<Vec<GeminiModelEntry>>,
+    models: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -87,11 +87,7 @@ pub async fn fetch_models(
     for (index, url) in candidates.iter().enumerate() {
         // Gemini Native 使用 x-goog-api-key；若原生端点不存在，OpenAI 兼容
         // 兜底仍沿用此前的 Bearer 认证行为。
-        let candidate_api_format = if api_format == Some("google-generative-ai") && index > 0 {
-            None
-        } else {
-            api_format
-        };
+        let candidate_api_format = model_fetch_api_format_for_candidate(api_format, index);
         let headers = build_model_fetch_headers(
             api_key,
             candidate_api_format,
@@ -146,6 +142,10 @@ pub async fn fetch_models(
 }
 
 fn normalize_models_response(response: ModelsResponse) -> Vec<FetchedModel> {
+    let gemini_models = match response.models {
+        Some(serde_json::Value::Array(entries)) => entries,
+        _ => Vec::new(),
+    };
     let mut models: Vec<FetchedModel> = response
         .data
         .unwrap_or_default()
@@ -155,10 +155,9 @@ fn normalize_models_response(response: ModelsResponse) -> Vec<FetchedModel> {
             owned_by: model.owned_by,
         })
         .chain(
-            response
-                .models
-                .unwrap_or_default()
+            gemini_models
                 .into_iter()
+                .filter_map(|entry| serde_json::from_value::<GeminiModelEntry>(entry).ok())
                 .map(|model| FetchedModel {
                     id: model
                         .name
@@ -174,6 +173,17 @@ fn normalize_models_response(response: ModelsResponse) -> Vec<FetchedModel> {
     models.sort_by(|a, b| a.id.cmp(&b.id));
     models.dedup_by(|a, b| a.id == b.id);
     models
+}
+
+fn model_fetch_api_format_for_candidate(
+    api_format: Option<&str>,
+    candidate_index: usize,
+) -> Option<&str> {
+    if api_format == Some("google-generative-ai") && candidate_index > 0 {
+        None
+    } else {
+        api_format
+    }
 }
 
 fn redact_model_fetch_error_body(body: String, known_secrets: &[String]) -> String {
@@ -429,6 +439,21 @@ mod tests {
         let openai =
             build_model_fetch_headers("openai-key", Some("openai-responses"), None, None).unwrap();
         assert_eq!(openai[AUTHORIZATION], "Bearer openai-key");
+    }
+
+    #[test]
+    fn gemini_candidate_auth_uses_google_header_then_bearer_fallback() {
+        let native_format = model_fetch_api_format_for_candidate(Some("google-generative-ai"), 0);
+        let native_headers =
+            build_model_fetch_headers("google-key", native_format, None, None).unwrap();
+        assert_eq!(native_headers["x-goog-api-key"], "google-key");
+        assert!(!native_headers.contains_key(AUTHORIZATION));
+
+        let fallback_format = model_fetch_api_format_for_candidate(Some("google-generative-ai"), 1);
+        let fallback_headers =
+            build_model_fetch_headers("google-key", fallback_format, None, None).unwrap();
+        assert_eq!(fallback_headers[AUTHORIZATION], "Bearer google-key");
+        assert!(!fallback_headers.contains_key("x-goog-api-key"));
     }
 
     #[test]
@@ -743,6 +768,17 @@ mod tests {
         assert_eq!(
             models.into_iter().map(|model| model.id).collect::<Vec<_>>(),
             vec!["gemini-2.5-flash", "gemini-2.5-pro"]
+        );
+    }
+
+    #[test]
+    fn test_non_array_models_does_not_reject_openai_data() {
+        let json = r#"{"data":[{"id":"gpt-compatible"}],"models":{"unexpected":true}}"#;
+        let response: ModelsResponse = serde_json::from_str(json).unwrap();
+        let models = normalize_models_response(response);
+        assert_eq!(
+            models.into_iter().map(|model| model.id).collect::<Vec<_>>(),
+            vec!["gpt-compatible"]
         );
     }
 
