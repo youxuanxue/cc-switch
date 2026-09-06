@@ -15,8 +15,8 @@ export interface ModelFetchOptions {
 /**
  * 从供应商获取可用模型列表
  *
- * 使用 OpenAI 兼容的 GET /v1/models 端点。优先用 `modelsUrl` 精确覆写；
- * 否则后端会对 baseURL 生成候选列表并按序尝试（含"剥离 /anthropic 等兼容子路径"兜底）。
+ * 根据 `apiFormat` 使用对应协议的模型端点，默认走 OpenAI 兼容的 GET /v1/models。
+ * 优先用 `modelsUrl` 精确覆写；否则后端会对 baseURL 生成候选列表并按序尝试。
  */
 export async function fetchModelsForConfig(
   baseUrl: string,

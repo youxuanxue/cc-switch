@@ -85,7 +85,9 @@ export function GeminiFormFields({
       return;
     }
     setIsFetchingModels(true);
-    fetchModelsForConfig(baseUrl, apiKey)
+    fetchModelsForConfig(baseUrl, apiKey, false, undefined, undefined, {
+      apiFormat: "google-generative-ai",
+    })
       .then((models) => {
         setFetchedModels(models);
         if (models.length === 0) {
