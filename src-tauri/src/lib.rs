@@ -1480,7 +1480,7 @@ pub fn run() {
             commands::delete_profile,
             commands::clear_current_profile,
             commands::apply_profile,
-            // model list fetch (OpenAI-compatible /v1/models)
+            // protocol-aware model list fetch
             commands::fetch_models_for_config,
             commands::get_opencode_models,
             // ours: endpoint speed test + custom endpoint management

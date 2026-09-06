@@ -1,8 +1,8 @@
 //! 模型列表获取服务
 //!
-//! 通过 OpenAI 兼容的 GET /v1/models 端点获取供应商可用模型列表。
-//! 主要面向第三方聚合站（硅基流动、OpenRouter 等），以及把 Anthropic
-//! 协议挂在兼容子路径上的官方供应商（DeepSeek、Kimi、智谱 GLM 等）。
+//! 通过供应商协议对应的模型端点获取可用模型列表。默认使用 OpenAI 兼容的
+//! GET /v1/models；Gemini Native 使用 GET /v1beta/models，并保留 OpenAI
+//! 兼容端点作为第三方聚合站的兜底。
 
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue, AUTHORIZATION, USER_AGENT};
 use reqwest::StatusCode;
@@ -22,12 +22,19 @@ pub struct FetchedModel {
 #[derive(Debug, Deserialize)]
 struct ModelsResponse {
     data: Option<Vec<ModelEntry>>,
+    models: Option<Vec<GeminiModelEntry>>,
 }
 
 #[derive(Debug, Deserialize)]
 struct ModelEntry {
     id: String,
     owned_by: Option<String>,
+}
+
+/// Gemini Native 的 models.list 响应条目。
+#[derive(Debug, Deserialize)]
+struct GeminiModelEntry {
+    name: String,
 }
 
 const FETCH_TIMEOUT_SECS: u64 = 15;
@@ -54,7 +61,7 @@ const KNOWN_COMPAT_SUFFIXES: &[&str] = &[
 
 /// 获取供应商的可用模型列表
 ///
-/// 使用 OpenAI 兼容的 GET /v1/models 端点，按候选列表顺序尝试。
+/// 按 API 协议生成候选端点并顺序尝试。
 pub async fn fetch_models(
     base_url: &str,
     api_key: &str,
@@ -64,9 +71,12 @@ pub async fn fetch_models(
     api_format: Option<&str>,
     request_headers: Option<&BTreeMap<String, String>>,
 ) -> Result<Vec<FetchedModel>, String> {
-    let candidates = build_models_url_candidates(base_url, is_full_url, models_url_override)?;
-    let headers =
-        build_model_fetch_headers(api_key, api_format, user_agent.as_ref(), request_headers)?;
+    let candidates = build_models_url_candidates_for_format(
+        base_url,
+        is_full_url,
+        models_url_override,
+        api_format,
+    )?;
     let client = crate::proxy::http_client::get();
     let mut last_err: Option<String> = None;
     let mut known_secrets = vec![api_key.to_string()];
@@ -74,7 +84,20 @@ pub async fn fetch_models(
         known_secrets.extend(request_headers.values().cloned());
     }
 
-    for url in &candidates {
+    for (index, url) in candidates.iter().enumerate() {
+        // Gemini Native 使用 x-goog-api-key；若原生端点不存在，OpenAI 兼容
+        // 兜底仍沿用此前的 Bearer 认证行为。
+        let candidate_api_format = if api_format == Some("google-generative-ai") && index > 0 {
+            None
+        } else {
+            api_format
+        };
+        let headers = build_model_fetch_headers(
+            api_key,
+            candidate_api_format,
+            user_agent.as_ref(),
+            request_headers,
+        )?;
         log::debug!(
             "[ModelFetch] Trying endpoint: {}",
             crate::url_for_log_with_secrets(url, &known_secrets)
@@ -97,19 +120,7 @@ pub async fn fetch_models(
                 .json()
                 .await
                 .map_err(|e| format!("Failed to parse response: {e}"))?;
-
-            let mut models: Vec<FetchedModel> = resp
-                .data
-                .unwrap_or_default()
-                .into_iter()
-                .map(|m| FetchedModel {
-                    id: m.id,
-                    owned_by: m.owned_by,
-                })
-                .collect();
-
-            models.sort_by(|a, b| a.id.cmp(&b.id));
-            return Ok(models);
+            return Ok(normalize_models_response(resp));
         }
 
         if status == StatusCode::NOT_FOUND || status == StatusCode::METHOD_NOT_ALLOWED {
@@ -132,6 +143,37 @@ pub async fn fetch_models(
         "All candidates failed: {}",
         last_err.unwrap_or_else(|| "no candidates".to_string())
     ))
+}
+
+fn normalize_models_response(response: ModelsResponse) -> Vec<FetchedModel> {
+    let mut models: Vec<FetchedModel> = response
+        .data
+        .unwrap_or_default()
+        .into_iter()
+        .map(|model| FetchedModel {
+            id: model.id,
+            owned_by: model.owned_by,
+        })
+        .chain(
+            response
+                .models
+                .unwrap_or_default()
+                .into_iter()
+                .map(|model| FetchedModel {
+                    id: model
+                        .name
+                        .strip_prefix("models/")
+                        .unwrap_or(&model.name)
+                        .to_string(),
+                    owned_by: None,
+                }),
+        )
+        .filter(|model| !model.id.is_empty())
+        .collect();
+
+    models.sort_by(|a, b| a.id.cmp(&b.id));
+    models.dedup_by(|a, b| a.id == b.id);
+    models
 }
 
 fn redact_model_fetch_error_body(body: String, known_secrets: &[String]) -> String {
@@ -265,15 +307,72 @@ pub fn build_models_url_candidates(
         }
     }
 
-    // 候选最多 3 条，线性去重即可，不值得上 HashSet。
-    let mut unique: Vec<String> = Vec::with_capacity(candidates.len());
+    Ok(deduplicate_urls(candidates))
+}
+
+/// Gemini Native 优先使用 `/v1beta/models`（或已带版本段时的 `/models`），
+/// 再追加 OpenAI 兼容候选，兼容同时服务多种协议的第三方聚合商。
+fn build_models_url_candidates_for_format(
+    base_url: &str,
+    is_full_url: bool,
+    models_url_override: Option<&str>,
+    api_format: Option<&str>,
+) -> Result<Vec<String>, String> {
+    if api_format != Some("google-generative-ai")
+        || models_url_override.is_some_and(|url| !url.trim().is_empty())
+    {
+        return build_models_url_candidates(base_url, is_full_url, models_url_override);
+    }
+
+    let trimmed = base_url.trim().trim_end_matches('/');
+    if trimmed.is_empty() {
+        return Err("Base URL is empty".to_string());
+    }
+
+    let native_endpoint = if is_full_url {
+        if let Some(index) = trimmed.find("/v1beta/") {
+            format!("{}/v1beta/models", &trimmed[..index])
+        } else if let Some(index) = trimmed.find("/v1/") {
+            format!("{}/v1beta/models", &trimmed[..index])
+        } else if let Some(index) = trimmed.rfind('/') {
+            let root = &trimmed[..index];
+            if root.contains("://") && root.len() > root.find("://").unwrap() + 3 {
+                format!("{root}/v1beta/models")
+            } else {
+                return Err("Cannot derive models endpoint from full URL".to_string());
+            }
+        } else {
+            return Err("Cannot derive models endpoint from full URL".to_string());
+        }
+    } else if trimmed.ends_with("/v1beta") || trimmed.ends_with("/v1") {
+        format!("{trimmed}/models")
+    } else {
+        format!("{trimmed}/v1beta/models")
+    };
+
+    let mut candidates = vec![native_endpoint];
+    let openai_base_url = if !is_full_url {
+        trimmed.strip_suffix("/v1beta").unwrap_or(base_url)
+    } else {
+        base_url
+    };
+    candidates.extend(build_models_url_candidates(
+        openai_base_url,
+        is_full_url,
+        None,
+    )?);
+    Ok(deduplicate_urls(candidates))
+}
+
+fn deduplicate_urls(candidates: Vec<String>) -> Vec<String> {
+    // 候选列表很短，线性去重比引入额外集合更直接。
+    let mut unique = Vec::with_capacity(candidates.len());
     for url in candidates {
-        if !unique.iter().any(|u| u == &url) {
+        if !unique.iter().any(|candidate| candidate == &url) {
             unique.push(url);
         }
     }
-
-    Ok(unique)
+    unique
 }
 
 /// 截断响应体到 [`ERROR_BODY_MAX_CHARS`] 字符，避免 HTML 404 页占用错误串。
@@ -379,6 +478,42 @@ mod tests {
     fn test_candidates_plain_root() {
         let c = build_models_url_candidates("https://api.siliconflow.cn", false, None).unwrap();
         assert_eq!(c, vec!["https://api.siliconflow.cn/v1/models"]);
+    }
+
+    #[test]
+    fn gemini_candidates_prefer_native_endpoint_then_openai_fallback() {
+        let candidates = build_models_url_candidates_for_format(
+            "https://api.tokenkey.dev",
+            false,
+            None,
+            Some("google-generative-ai"),
+        )
+        .unwrap();
+        assert_eq!(
+            candidates,
+            vec![
+                "https://api.tokenkey.dev/v1beta/models",
+                "https://api.tokenkey.dev/v1/models",
+            ]
+        );
+    }
+
+    #[test]
+    fn gemini_candidates_do_not_duplicate_existing_version_segment() {
+        let candidates = build_models_url_candidates_for_format(
+            "https://relay.example.com/v1beta",
+            false,
+            None,
+            Some("google-generative-ai"),
+        )
+        .unwrap();
+        assert_eq!(
+            candidates,
+            vec![
+                "https://relay.example.com/v1beta/models",
+                "https://relay.example.com/v1/models",
+            ]
+        );
     }
 
     #[test]
@@ -597,6 +732,18 @@ mod tests {
         assert_eq!(data[0].id, "gpt-4");
         assert_eq!(data[0].owned_by.as_deref(), Some("openai"));
         assert_eq!(data[1].id, "claude-3-sonnet");
+    }
+
+    #[test]
+    fn test_parse_gemini_native_response() {
+        let json =
+            r#"{"models":[{"name":"models/gemini-2.5-pro"},{"name":"models/gemini-2.5-flash"}]}"#;
+        let response: ModelsResponse = serde_json::from_str(json).unwrap();
+        let models = normalize_models_response(response);
+        assert_eq!(
+            models.into_iter().map(|model| model.id).collect::<Vec<_>>(),
+            vec!["gemini-2.5-flash", "gemini-2.5-pro"]
+        );
     }
 
     #[test]
