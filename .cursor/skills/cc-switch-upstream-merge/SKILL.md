@@ -8,6 +8,8 @@ description: >-
 
 # CC Switch upstream merge
 
+基于 `agent-skills` 的 [upstream-merge SOP](https://github.com/youxuanxue/agent-skills/blob/main/upstream-merge/SKILL.md)，本 skill 仅承载 CC Switch 专属的不变量与验证门禁。
+
 在 `merge/upstream-*` 分支合入上游。用非快进 merge 保留 fork 历史；不 rebase
 已发布历史、不强推。合并 PR 与发布仍遵循用户授权。
 
