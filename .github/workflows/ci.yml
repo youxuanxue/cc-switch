@@ -47,12 +47,14 @@ jobs:
               - "scripts/check-cursor-session-ssot.mjs"
               - "scripts/check-session-chrome-ssot.mjs"
               - "scripts/check-session-live-ssot.mjs"
+              - "scripts/preflight.sh"
               - ".preflight/local-lint.conf"
               - "tailwind.config.cjs"
               - "postcss.config.cjs"
               - "components.json"
               - ".github/workflows/**"
             backend:
+              - "scripts/preflight.sh"
               - "src-tauri/**"
               - "rust-toolchain.toml"
               - ".github/workflows/**"
@@ -95,29 +97,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: TypeScript type check
-        run: pnpm typecheck
-
-      - name: Check formatting
-        run: pnpm format:check
-
-      - name: Unit tests
-        run: pnpm test:unit
-
-      - name: Cursor session SSOT contract
-        run: node scripts/check-cursor-session-ssot.mjs
-
-      - name: Session chrome SSOT contract
-        run: node scripts/check-session-chrome-ssot.mjs
-
-      - name: Session live-body SSOT contract
-        run: node scripts/check-session-live-ssot.mjs
-
       - name: Install Playwright Chromium
         run: pnpm exec playwright install --with-deps chromium
 
-      - name: Browser acceptance tests
-        run: pnpm test:e2e
+      - name: Frontend preflight
+        run: bash scripts/preflight.sh frontend
 
   # PR/main backend gate is Linux-only. This fork develops and smoke-tests the
   # desktop app on a local Mac; the old multi-OS cargo matrix plus the per-PR
@@ -161,11 +145,5 @@ jobs:
       - name: Create frontend dist placeholder
         run: mkdir -p dist
 
-      - name: Check Rust formatting
-        run: cargo fmt --check --manifest-path src-tauri/Cargo.toml
-
-      - name: Clippy
-        run: cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
-
-      - name: Run tests
-        run: cargo test --manifest-path src-tauri/Cargo.toml
+      - name: Backend preflight
+        run: bash scripts/preflight.sh backend

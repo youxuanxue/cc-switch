@@ -384,7 +384,13 @@ describe("US-004 Cursor session SSOT checker", () => {
       '- "scripts/check-cursor-session-ssot.mjs"',
     );
     expect(frontendFilter).toContain('- ".preflight/local-lint.conf"');
-    expect(workflow).toContain("node scripts/check-cursor-session-ssot.mjs");
+    expect(frontendFilter).toContain('- "scripts/preflight.sh"');
+    expect(workflow).toContain("bash scripts/preflight.sh frontend");
+    const preflight = readFileSync(
+      resolve(process.cwd(), "scripts/preflight.sh"),
+      "utf8",
+    );
+    expect(preflight).toContain("node scripts/check-cursor-session-ssot.mjs");
   });
 
   it("rejects direct sourcePath-based Cursor deletion eligibility", () => {
