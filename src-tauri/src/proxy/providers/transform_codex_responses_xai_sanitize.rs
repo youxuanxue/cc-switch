@@ -526,7 +526,7 @@ fn rewrite_function_tool_parameters(tool: &mut Value, params: Option<&Value>) ->
     }
 
     if let Some(obj) = tool.as_object_mut() {
-        if obj.contains_key("parameters") || params.is_some() {
+        if obj.contains_key("parameters") || obj.get("function").is_none() {
             obj.insert("parameters".to_string(), simplified);
             return true;
         }
@@ -594,28 +594,13 @@ fn normalize_xai_function_tool_parameters(tool: &mut Value) -> bool {
         })
         .cloned();
 
-    let changed = match params.as_ref() {
+    match params.as_ref() {
         Some(params) if xai_function_parameters_need_simplification(params) => {
             rewrite_function_tool_parameters(tool, Some(params))
         }
         None => rewrite_function_tool_parameters(tool, None),
         _ => false,
-    };
-
-    if changed && is_automation_update_tool(function_tool_name(tool)) {
-        if let Some(obj) = tool.as_object_mut() {
-            if obj.get("strict") == Some(&json!(true)) {
-                obj.insert("strict".to_string(), json!(false));
-            }
-            if let Some(function) = obj.get_mut("function").and_then(Value::as_object_mut) {
-                if function.get("strict") == Some(&json!(true)) {
-                    function.insert("strict".to_string(), json!(false));
-                }
-            }
-        }
     }
-
-    changed
 }
 
 fn normalize_xai_function_tool_parameter_schemas(body: &mut Value) -> bool {
@@ -1079,6 +1064,31 @@ mod tests {
     use std::collections::HashSet;
 
     #[test]
+    fn repairs_function_parameters_in_the_original_tool_shape() {
+        for nested in [false, true] {
+            for params in [None, Some(Value::Null), Some(json!({}))] {
+                let mut function = json!({"name": "read_file"});
+                if let Some(params) = params {
+                    function["parameters"] = params;
+                }
+                let mut tool = if nested {
+                    json!({"type": "function", "function": function})
+                } else {
+                    function["type"] = json!("function");
+                    function
+                };
+                assert!(normalize_xai_function_tool_parameters(&mut tool));
+                let function = if nested { &tool["function"] } else { &tool };
+                assert_eq!(function["parameters"], xai_safe_empty_object_schema());
+                if nested {
+                    assert!(tool.get("parameters").is_none());
+                }
+                assert!(!normalize_xai_function_tool_parameters(&mut tool));
+            }
+        }
+    }
+
+    #[test]
     fn strips_external_web_access_recursively() {
         let mut body = json!({
             "model": "grok-4.5",
@@ -1222,7 +1232,7 @@ mod tests {
     fn keeps_valid_function_tool_choice() {
         let mut body = json!({
             "model": "grok-4.5",
-            "tools": [{"type": "function", "name": "run"}],
+            "tools": [{"type": "function", "name": "run", "parameters": {"type": "object", "properties": {}}}],
             "tool_choice": {"type": "function", "name": "run"}
         });
         assert!(!sanitize_xai_responses_request(&mut body));
@@ -1236,7 +1246,7 @@ mod tests {
     fn keeps_string_tool_choice() {
         let mut body = json!({
             "model": "grok-4.5",
-            "tools": [{"type": "function", "name": "run"}],
+            "tools": [{"type": "function", "name": "run", "parameters": {"type": "object", "properties": {}}}],
             "tool_choice": "auto"
         });
         assert!(!sanitize_xai_responses_request(&mut body));
@@ -1248,9 +1258,11 @@ mod tests {
         let mut body = json!({
             "model": "grok-4.5",
             "input": [{"type": "message", "role": "user", "content": "hi"}],
-            "tools": [{"type": "function", "name": "f"}]
+            "tools": [{"type": "function", "name": "f", "parameters": {"type": "object", "properties": {}}}]
         });
+        let original = body.clone();
         assert!(!sanitize_xai_responses_request(&mut body));
+        assert_eq!(body, original);
     }
 
     #[test]

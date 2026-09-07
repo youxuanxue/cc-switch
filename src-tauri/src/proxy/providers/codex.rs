@@ -239,8 +239,8 @@ fn provider_is_xai_native_responses(provider: &Provider) -> bool {
     }
 
     extract_codex_base_url_from_toml(config_text)
-        .map(|url| url.to_ascii_lowercase())
-        .is_some_and(|url| url.contains("api.x.ai"))
+        .and_then(|base_url| url::Url::parse(base_url.trim()).ok())
+        .is_some_and(|url| url.host_str() == Some("api.x.ai"))
 }
 
 fn has_explicit_codex_third_party_upstream(provider: &Provider) -> bool {
@@ -2258,6 +2258,31 @@ wire_api = "responses"
             resolve_codex_catalog_tool_profile(&provider),
             crate::codex_config::CodexCatalogToolProfile::NativeResponses
         ));
+    }
+
+    #[test]
+    fn namespace_flatten_gate_matches_only_the_xai_host() {
+        for (base_url, expected) in [
+            ("https://api.x.ai/v1", true),
+            ("https://API.X.AI:443/v1", true),
+            ("https://api.x.ai.evil.example/v1", false),
+            ("https://notapi.x.ai/v1", false),
+            ("https://relay.example/api.x.ai/v1", false),
+            ("https://relay.example/v1?upstream=api.x.ai", false),
+            ("https://api.x.ai@relay.example/v1", false),
+            ("api.x.ai/v1", false),
+        ] {
+            let provider = create_provider(json!({
+                "config": format!(
+                    "model_provider = \"custom\"\n[model_providers.custom]\nbase_url = \"{base_url}\"\nwire_api = \"responses\"\n"
+                )
+            }));
+            assert_eq!(
+                provider_needs_responses_namespace_flatten(&provider),
+                expected,
+                "{base_url}"
+            );
+        }
     }
 
     #[test]

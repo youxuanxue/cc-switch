@@ -1236,7 +1236,9 @@ mod tests {
         )
         .unwrap();
 
-        let removed = super::prune_empty_agent_cli_buckets_in(root.path()).expect("prune buckets");
+        let removed =
+            prune_empty_agent_cli_buckets_in_with_view(root.path(), &TestProcessView::default())
+                .expect("prune buckets");
 
         assert_eq!(
             removed,
