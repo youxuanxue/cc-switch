@@ -861,3 +861,181 @@ fn open_claude_keeps_foreign_sibling() {
     assert_per_skill_link(&claude_root.join("keep"), &lib);
     assert!(claude_root.join("foreign").join("SKILL.md").is_file());
 }
+
+struct GitFixture {
+    root: PathBuf,
+    previous_config: Option<std::ffi::OsString>,
+}
+
+impl GitFixture {
+    fn new(home: &Path) -> Self {
+        let root = home.join(format!("git-source-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(&root).unwrap();
+        let config = home.join("git-fixture.config");
+        fs::write(
+            &config,
+            format!(
+                "[url \"file://{}\"]\n    insteadOf = https://github.com/test/skills.git\n",
+                root.display()
+            ),
+        )
+        .unwrap();
+        let previous_config = std::env::var_os("GIT_CONFIG_GLOBAL");
+        std::env::set_var("GIT_CONFIG_GLOBAL", config);
+        let fixture = Self {
+            root,
+            previous_config,
+        };
+        fixture.git(&["init", "--quiet"]);
+        fixture
+    }
+
+    fn git(&self, args: &[&str]) -> String {
+        let out = std::process::Command::new("git")
+            .current_dir(&self.root)
+            .args([
+                "-c",
+                "user.name=Skills Test",
+                "-c",
+                "user.email=skills@example.test",
+                "-c",
+                "commit.gpgsign=false",
+            ])
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8(out.stdout).unwrap().trim().to_string()
+    }
+
+    fn commit(&self, body: &str) -> String {
+        write_skill(&self.root.join("host-clean"), "host-clean", body);
+        self.git(&["add", "."]);
+        self.git(&["commit", "--quiet", "-m", body]);
+        self.git(&["rev-parse", "HEAD"])
+    }
+}
+
+impl Drop for GitFixture {
+    fn drop(&mut self) {
+        match &self.previous_config {
+            Some(value) => std::env::set_var("GIT_CONFIG_GLOBAL", value),
+            None => std::env::remove_var("GIT_CONFIG_GLOBAL"),
+        }
+    }
+}
+
+fn git_catalog(home: &Path, revision: &str, path: &str) {
+    let file = home.join("git-catalog.yaml");
+    fs::write(&file, format!("schema: 1\nrevision: catalog-version\nskills:\n  - name: host-clean\n    recommended: false\n    source:\n      kind: git\n      repo: https://github.com/test/skills.git\n      revision: {revision}\n      path: {path}\n")).unwrap();
+    std::env::set_var("CC_SWITCH_CATALOG", file);
+}
+
+#[test]
+fn git_catalog_pins_commit_promotes_matching_draft_and_follows_new_revision() {
+    let (_guard, home, state) = setup();
+    let fixture = GitFixture::new(&home);
+    let first = fixture.commit("version-one");
+    let second = fixture.commit("version-two");
+    git_catalog(&home, &first, "host-clean");
+    skills_core::open(&state.db, &["codex".into()], &[]).unwrap();
+    skills_core::sync(&state.db, true).unwrap();
+    assert!(
+        !home.join(".cc-switch/catalog-sources").exists(),
+        "read-only checks must not fetch"
+    );
+
+    let draft = home.join("host-clean");
+    write_skill(&draft, "host-clean", "version-one");
+    skills_core::import_paths(&state.db, &[draft]).unwrap();
+    let installed = library_dir().join("host-clean");
+    fs::create_dir(installed.join("__pycache__")).unwrap();
+    fs::write(
+        installed.join("__pycache__/generated.pyc"),
+        "runtime artifact",
+    )
+    .unwrap();
+    skills_core::install(&state.db, &["host-clean".into()]).unwrap();
+    let report = skills_core::doctor(&state.db).unwrap();
+    assert_eq!(report.library[0].provenance, "catalog-managed");
+    assert!(fs::read_to_string(installed.join("SKILL.md"))
+        .unwrap()
+        .contains("version-one"));
+
+    git_catalog(&home, &second, "host-clean");
+    assert!(skills_core::doctor(&state.db).unwrap().library[0].behind_catalog);
+    skills_core::follow_catalog(&state.db, false).unwrap();
+    skills_core::sync(&state.db, false).unwrap();
+    assert!(fs::read_to_string(installed.join("SKILL.md"))
+        .unwrap()
+        .contains("version-one"));
+    skills_core::follow_catalog(&state.db, true).unwrap();
+    skills_core::sync(&state.db, false).unwrap();
+    assert!(fs::read_to_string(installed.join("SKILL.md"))
+        .unwrap()
+        .contains("version-two"));
+    assert!(!skills_core::doctor(&state.db).unwrap().library[0].behind_catalog);
+}
+
+#[test]
+fn git_catalog_rejects_floating_revision_escape_missing_and_mismatched_skills() {
+    let (_guard, home, state) = setup();
+    let fixture = GitFixture::new(&home);
+    let revision = fixture.commit("version-one");
+    skills_core::open(&state.db, &["codex".into()], &[]).unwrap();
+    for (rev, path) in [
+        ("main", "host-clean"),
+        (&revision, "../outside"),
+        (&revision, "missing"),
+    ] {
+        git_catalog(&home, rev, path);
+        assert!(skills_core::install(&state.db, &["host-clean".into()]).is_err());
+        assert!(skills_core::doctor(&state.db).unwrap().library.is_empty());
+    }
+    write_skill(&fixture.root.join("wrong"), "different-name", "wrong");
+    fixture.git(&["add", "."]);
+    fixture.git(&["commit", "--quiet", "-m", "wrong-name"]);
+    git_catalog(&home, &fixture.git(&["rev-parse", "HEAD"]), "wrong");
+    assert!(skills_core::install(&state.db, &["host-clean".into()]).is_err());
+    assert!(skills_core::doctor(&state.db).unwrap().library.is_empty());
+}
+
+#[test]
+fn git_catalog_rejects_ignored_files_in_cached_package() {
+    let (_guard, home, state) = setup();
+    let fixture = GitFixture::new(&home);
+    fs::write(fixture.root.join(".gitignore"), "ignored.py\n").unwrap();
+    let revision = fixture.commit("version-one");
+    git_catalog(&home, &revision, "host-clean");
+    skills_core::open(&state.db, &["codex".into()], &[]).unwrap();
+    skills_core::install(&state.db, &["host-clean".into()]).unwrap();
+    let cache = fs::read_dir(home.join(".cc-switch/catalog-sources"))
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path()
+        .join(&revision);
+    fs::write(cache.join("host-clean/ignored.py"), "unexpected payload").unwrap();
+    assert!(skills_core::install(&state.db, &["host-clean".into()]).is_err());
+    assert!(!library_dir().join("host-clean/ignored.py").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn git_catalog_rejects_symlink_payload_before_installation() {
+    let (_guard, home, state) = setup();
+    let fixture = GitFixture::new(&home);
+    fixture.commit("version-one");
+    std::os::unix::fs::symlink("/etc/passwd", fixture.root.join("host-clean/secret")).unwrap();
+    fixture.git(&["add", "."]);
+    fixture.git(&["commit", "--quiet", "-m", "symlink"]);
+    git_catalog(&home, &fixture.git(&["rev-parse", "HEAD"]), "host-clean");
+    skills_core::open(&state.db, &["codex".into()], &[]).unwrap();
+    assert!(skills_core::install(&state.db, &["host-clean".into()]).is_err());
+    assert!(skills_core::doctor(&state.db).unwrap().library.is_empty());
+}

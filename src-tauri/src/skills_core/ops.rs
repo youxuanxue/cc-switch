@@ -124,7 +124,7 @@ pub fn install(db: &Database, names: &[String]) -> Result<(), AppError> {
             let skill = catalog
                 .get(&name)
                 .ok_or_else(|| AppError::InvalidInput(format!("货架没有技能 {name}")))?;
-            let src = catalog.source_dir(skill)?;
+            let src = catalog.materialize_source(skill)?;
             reject_local_draft_overwrite(&state, &name, &src)?;
             ingest_skill(&src, &name)?;
             let hash = content_hash(&library_skill_dir(&name)?)?;
@@ -536,7 +536,7 @@ fn resolve_open_source(
         let skill = catalog
             .get(&cand.name)
             .ok_or_else(|| AppError::InvalidInput(format!("货架没有 {}", cand.name)))?;
-        return catalog.source_dir(skill);
+        return catalog.materialize_source(skill);
     }
     field
         .get(&cand.name)
@@ -670,7 +670,7 @@ fn apply_catalog_updates(
         let skill = catalog
             .get(name)
             .ok_or_else(|| AppError::InvalidInput(format!("货架没有 {name}")))?;
-        let src = catalog.source_dir(skill)?;
+        let src = catalog.materialize_source(skill)?;
         ingest_skill(&src, name)?;
         let hash = content_hash(&library_skill_dir(name)?)?;
         if let Some(slot) = state.library.iter_mut().find(|s| s.name == *name) {
@@ -861,6 +861,9 @@ fn collect_files(root: &Path, current: &Path, out: &mut Vec<PathBuf>) -> Result<
     }
     for entry in fs::read_dir(current).map_err(|e| AppError::io(current, e))? {
         let entry = entry.map_err(|e| AppError::io(current, e))?;
+        if entry.file_name() == "__pycache__" || entry.file_name() == ".git" {
+            continue;
+        }
         let path = entry.path();
         reject_dir_symlink(&path)?;
         if path.is_dir() {
@@ -890,6 +893,9 @@ fn copy_dir(src: &Path, dest: &Path) -> Result<(), AppError> {
     fs::create_dir_all(dest).map_err(|e| AppError::io(dest, e))?;
     for entry in fs::read_dir(src).map_err(|e| AppError::io(src, e))? {
         let entry = entry.map_err(|e| AppError::io(src, e))?;
+        if entry.file_name() == "__pycache__" || entry.file_name() == ".git" {
+            continue;
+        }
         let from = entry.path();
         let to = dest.join(entry.file_name());
         reject_dir_symlink(&from)?;
