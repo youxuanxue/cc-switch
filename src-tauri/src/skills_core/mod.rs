@@ -5,6 +5,7 @@
 mod agent;
 mod catalog;
 mod cli;
+mod git_source;
 mod ops;
 mod state;
 

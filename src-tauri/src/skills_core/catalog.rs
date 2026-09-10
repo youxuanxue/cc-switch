@@ -30,6 +30,10 @@ pub struct CatalogSkill {
 pub struct CatalogSource {
     pub kind: String,
     #[serde(default)]
+    pub repo: Option<String>,
+    #[serde(default)]
+    pub revision: Option<String>,
+    #[serde(default)]
     pub path: Option<String>,
 }
 
@@ -60,9 +64,12 @@ impl LoadedCatalog {
     }
 
     pub fn source_dir(&self, skill: &CatalogSkill) -> Result<PathBuf, AppError> {
+        if skill.source.kind == "git" {
+            return super::git_source::resolve(&skill.source, &skill.name, false);
+        }
         if skill.source.kind != "self" {
             return Err(AppError::InvalidInput(format!(
-                "v1 只支持 source.kind=self，收到 {}",
+                "支持 source.kind=self 或 git，收到 {}",
                 skill.source.kind
             )));
         }
@@ -81,6 +88,14 @@ impl LoadedCatalog {
         }
         Ok(path)
     }
+
+    pub fn materialize_source(&self, skill: &CatalogSkill) -> Result<PathBuf, AppError> {
+        if skill.source.kind == "git" {
+            super::git_source::resolve(&skill.source, &skill.name, true)
+        } else {
+            self.source_dir(skill)
+        }
+    }
 }
 
 pub fn load_catalog() -> Result<LoadedCatalog, AppError> {
@@ -91,6 +106,7 @@ pub fn load_catalog() -> Result<LoadedCatalog, AppError> {
     if !path.is_file() {
         return Ok(LoadedCatalog::empty());
     }
+    let path = fs::canonicalize(&path).map_err(|e| AppError::io(&path, e))?;
     let raw = fs::read_to_string(&path).map_err(|e| AppError::io(&path, e))?;
     let parsed: CatalogFile = serde_yaml::from_str(&raw)
         .map_err(|e| AppError::Config(format!("catalog YAML 无效: {e}")))?;
@@ -98,7 +114,12 @@ pub fn load_catalog() -> Result<LoadedCatalog, AppError> {
         repo: parsed
             .repo
             .unwrap_or_else(|| DEFAULT_CATALOG_REPO.to_string()),
-        revision: parsed.revision.unwrap_or_default(),
+        revision: parsed.revision.unwrap_or_else(|| {
+            super::git_source::git_output(path.parent().unwrap(), &["rev-parse", "HEAD"])
+                .unwrap_or_default()
+                .trim()
+                .to_string()
+        }),
         skills: parsed.skills,
         root: path.parent().unwrap_or(Path::new(".")).to_path_buf(),
     })
