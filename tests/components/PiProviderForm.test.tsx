@@ -775,6 +775,35 @@ describe("PiProviderForm", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("saves the Volcengine Agent Plan preset with its own subscription endpoint", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    render(
+      <PiProviderForm
+        appId="pi"
+        submitLabel="Save Agent Plan"
+        onSubmit={onSubmit}
+        onCancel={() => {}}
+      />,
+    );
+
+    fireEvent.click(screen.getByText("火山Agentplan", { selector: "span" }));
+    fireEvent.change(screen.getByLabelText("pi.form.credential"), {
+      target: { value: "literal-key" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save Agent Plan" }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    const submitted = onSubmit.mock.calls[0][0];
+    expect(submitted.providerKey).toBe("cc-switch-agentplan");
+    expect(new URL(submitted.websiteUrl).pathname).toBe("/activity/agentplan");
+    expect(JSON.parse(submitted.settingsConfig)).toMatchObject({
+      api: "openai-completions",
+      baseUrl: "https://ark.cn-beijing.volces.com/api/plan/v3",
+      apiKey: "literal-key",
+      models: [expect.objectContaining({ id: "ark-code-latest" })],
+    });
+  });
+
   it("keeps preset model order without exposing a default-model field", async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     render(
