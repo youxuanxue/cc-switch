@@ -216,7 +216,7 @@ export function AddProviderDialog({
         await universalProvidersApi.sync(provider.id);
         toast.success(
           t("universalProvider.addedAndSynced", {
-            defaultValue: "统一供应商已添加并同步",
+            defaultValue: "统一供应商已添加、同步并设为当前",
           }),
         );
       } catch (error) {

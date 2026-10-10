@@ -13,6 +13,7 @@ import {
   Globe,
   History,
   Info,
+  Combine,
   KeyRound,
   Layers,
   LayoutGrid,
@@ -224,6 +225,11 @@ function MainDirectory({
     trailing?: string;
     alert?: string;
   }[] = [
+    {
+      page: "universal",
+      label: t("nav.universal"),
+      icon: Combine,
+    },
     { page: "mcp", label: "MCP", icon: Server },
     { page: "skills", label: "Skills", icon: SkillsIcon },
     { page: "prompts", label: t("nav.prompts"), icon: BookOpen },

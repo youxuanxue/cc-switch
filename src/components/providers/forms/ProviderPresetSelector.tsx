@@ -535,7 +535,10 @@ function PresetPicker({
 }: PresetPickerProps) {
   const { t } = useTranslation();
   const [query, setQuery] = useState("");
-  const [category, setCategory] = useState<PickerCategory>("all");
+  // 支持统一供应商时默认落在「统一」分类，对应「一处配置、处处生效」主路径。
+  const [category, setCategory] = useState<PickerCategory>(() =>
+    onUniversalPresetSelect ? "universal" : "all",
+  );
   const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
