@@ -18,7 +18,10 @@ pub struct FetchedModel {
     pub owned_by: Option<String>,
 }
 
-/// OpenAI 兼容的 /v1/models 响应格式
+/// 模型列表响应的兼容格式。
+///
+/// OpenAI/Anthropic 用 `data`；Gemini Native 用 `models[].name`；
+/// 智谱等目录用 `models[].slug`（#7593，`models` 保持 Value 以免拖垮 data）。
 #[derive(Debug, Deserialize)]
 struct ModelsResponse {
     data: Option<Vec<ModelEntry>>,
@@ -31,10 +34,27 @@ struct ModelEntry {
     owned_by: Option<String>,
 }
 
-/// Gemini Native 的 models.list 响应条目。
-#[derive(Debug, Deserialize)]
-struct GeminiModelEntry {
-    name: String,
+/// `models[]` 条目 id：`name`（去 models/ 前缀）→ `slug` → `id`；无法识别则跳过。
+fn catalog_and_gemini_model_ids(models: Option<serde_json::Value>) -> Vec<String> {
+    let Some(serde_json::Value::Array(entries)) = models else {
+        return Vec::new();
+    };
+    entries
+        .iter()
+        .filter_map(|m| {
+            if let Some(name) = m
+                .get("name")
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty())
+            {
+                return Some(name.strip_prefix("models/").unwrap_or(name).to_string());
+            }
+            ["slug", "id"]
+                .iter()
+                .find_map(|k| m.get(*k)?.as_str().filter(|s| !s.is_empty()))
+                .map(str::to_string)
+        })
+        .collect()
 }
 
 const FETCH_TIMEOUT_SECS: u64 = 15;
@@ -142,10 +162,6 @@ pub async fn fetch_models(
 }
 
 fn normalize_models_response(response: ModelsResponse) -> Vec<FetchedModel> {
-    let gemini_models = match response.models {
-        Some(serde_json::Value::Array(entries)) => entries,
-        _ => Vec::new(),
-    };
     let mut models: Vec<FetchedModel> = response
         .data
         .unwrap_or_default()
@@ -155,17 +171,9 @@ fn normalize_models_response(response: ModelsResponse) -> Vec<FetchedModel> {
             owned_by: model.owned_by,
         })
         .chain(
-            gemini_models
+            catalog_and_gemini_model_ids(response.models)
                 .into_iter()
-                .filter_map(|entry| serde_json::from_value::<GeminiModelEntry>(entry).ok())
-                .map(|model| FetchedModel {
-                    id: model
-                        .name
-                        .strip_prefix("models/")
-                        .unwrap_or(&model.name)
-                        .to_string(),
-                    owned_by: None,
-                }),
+                .map(|id| FetchedModel { id, owned_by: None }),
         )
         .filter(|model| !model.id.is_empty())
         .collect();

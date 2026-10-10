@@ -289,6 +289,12 @@ dev-rules **保留**项目 `.cursor/skills` 编辑入口；**删除**的是 home
 - 在用 token 上 legacy writer 可被 doctor 证明已停写。
 - UI 与 CLI 同一 core、同一 `doctor --json` 字段。
 
+## 上游合并说明（legacy UnifiedSkillsPanel）
+
+上游曾有的 **「检查更新 → 全部更新」** 批量升级 UI（`UnifiedSkillsPanel` 路径）在本 fork 的 upstream 合并中**刻意不移植**。Skills Core 是 SSOT：货架对齐走 `follow_catalog` / `sync` / `upgrade`（及 doctor 的 behind 信号），Discover 仍用于从 catalog 安装；库列表对 `behind_catalog` 提供单条/全部 `upgrade`。不得复活第二套 writer 或矩阵开关。
+
+v7 设置壳不得再次吞掉 fork 的 **Skill 存储位置 / 同步方式**（`SkillStorageLocationSettings` / `SkillSyncMethodSettings`，挂在设置 → 通用）；`check-skills-core-ssot` 机械守卫该接线。
+
 ## 验证（Core 实现 PR 承担）
 
 - **单元**：catalog 解析、库成员、在用名单、`claude`/`cursor` 各自逐条投影且 Claude 根不是整目录 symlink、只开一侧不写另一侧、历史 Claude→Cursor 整目录 symlink 在开 Claude 时被拆掉、旧 token `claude-cursor` 拒绝、Pi 在用后跟库、整笔失败、foreign、先勾 Agent 再出候选、默认不预勾、零勾选不算开张、只有 `open` 能开张、`open` 成功即写 marker、未开张时 install/import/sync/upgrade/follow-catalog/agents add 拒绝、已开张再 `open` 拒绝、去掉最后一个为关张且清空 marker、关张不拆链接、关张后旧库目录不当候选且不挡住 `recommended`、空目录才用 `recommended`、catalog 新增不进库、follow_catalog 默认开、关掉则 sync 不换版、自动跟上失败整笔回滚、`local-draft` 进库即投影且不跟总闸、导入失败整批不动、改 `local-draft` 失败则库内回滚、第一次现场标 `local-draft` 且不对 hash 提升、空机器 `recommended` 标 `catalog-managed`、无 `bundled`、第一次同名 hash 不同则确认失败且库不动、`doctor --json` 含 `open`/`library`/`legacy_writers_stopped`。

@@ -2,12 +2,13 @@ import { expect, test } from "@playwright/test";
 import { installTauriIpcHarness } from "./tauriIpcHarness";
 
 const CURSOR_SESSION_ID = "11111111-1111-4111-8111-111111111111";
-
 test("aggregates Cursor and Codex sessions under the same project", async ({
   page,
 }) => {
   await installTauriIpcHarness(page, {
     view: "sessions",
+    lastApp: "claude",
+    groupMode: "project",
     sessions: [
       {
         providerId: "cursor",
@@ -44,27 +45,38 @@ test("aggregates Cursor and Codex sessions under the same project", async ({
 
   await page.goto("/");
 
-  await expect(
-    page.getByRole("button", { name: "展开或折叠 app 项目分组" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "展开或折叠 docs 项目分组" }),
-  ).toBeVisible();
-  await expect(page.getByRole("button", { name: /Cursor Shared/ })).toHaveCount(
-    0,
-  );
+  await page.getByRole("button", { name: /^应用：/ }).click();
+  const allAppsItem = page.getByRole("menuitemradio", { name: /^全部应用/ });
+  await expect(allAppsItem).toBeVisible();
+  await allAppsItem.click();
 
-  await page.getByRole("button", { name: "展开或折叠 app 项目分组" }).click();
-  await expect(page.getByRole("button", { name: /Cursor Shared/ })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Codex Shared/ })).toBeVisible();
+  const list = page.getByRole("region", { name: "会话列表" });
   await expect(
-    page.getByRole("button", { name: /Claude Other/ }),
+    list.getByRole("button").filter({ hasText: "app" }),
+  ).toBeVisible();
+  await expect(
+    list.getByRole("button").filter({ hasText: "docs" }),
+  ).toBeVisible();
+  await expect(
+    list.getByRole("button", { name: "Cursor Shared", exact: true }),
   ).toHaveCount(0);
 
-  await page.getByRole("button", { name: /Cursor Shared/ }).click();
+  const appGroup = list
+    .getByRole("button", { name: /^app\b/ })
+    .first();
+  await appGroup.click();
   await expect(
-    page.getByText(
-      `agent --workspace /work/acme/app --resume ${CURSOR_SESSION_ID}`,
-    ),
+    list.getByRole("button", { name: "Cursor Shared", exact: true }),
+  ).toBeVisible();
+  await expect(
+    list.getByRole("button", { name: "Codex Shared", exact: true }),
+  ).toBeVisible();
+  await expect(
+    list.getByRole("button", { name: "Claude Other", exact: true }),
+  ).toHaveCount(0);
+
+  await list.getByRole("button", { name: "Cursor Shared", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "恢复会话", exact: true }),
   ).toBeVisible();
 });

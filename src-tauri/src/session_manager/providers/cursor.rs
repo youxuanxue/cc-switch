@@ -619,6 +619,7 @@ fn message_from_blob(data: &[u8]) -> Option<SessionMessage> {
         role: role.to_string(),
         content,
         ts: None,
+        ..SessionMessage::default()
     })
 }
 

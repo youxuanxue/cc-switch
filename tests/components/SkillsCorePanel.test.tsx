@@ -41,6 +41,34 @@ vi.mock("@/lib/api/skillsCore", async (importOriginal) => {
         ],
         conflicts: [],
       }),
+      upgrade: vi.fn().mockResolvedValue({
+        schema: 1,
+        open: false,
+        follow_catalog: true,
+        catalog_ref: { repo: "", revision: "" },
+        in_use_agents: [],
+        library: [],
+        projections: [],
+        foreign: [],
+        broken: [],
+        duplicate: [],
+        legacy_writers_stopped: [],
+        reload: [],
+      }),
+      uninstall: vi.fn().mockResolvedValue({
+        schema: 1,
+        open: false,
+        follow_catalog: true,
+        catalog_ref: { repo: "", revision: "" },
+        in_use_agents: [],
+        library: [],
+        projections: [],
+        foreign: [],
+        broken: [],
+        duplicate: [],
+        legacy_writers_stopped: [],
+        reload: [],
+      }),
     },
   };
 });
@@ -80,5 +108,48 @@ describe("SkillsCorePanel first open labels", () => {
     expect(screen.queryByText("进台后果")).not.toBeInTheDocument();
     expect(screen.queryByText("local-draft")).not.toBeInTheDocument();
     expect(screen.queryByText("ignored when curated")).not.toBeInTheDocument();
+  });
+
+  it("upgrades skills that are behind the catalog", async () => {
+    i18n.addResourceBundle("zh", "translation", zh, true, true);
+    const behindDoctor = {
+      schema: 1,
+      open: true,
+      follow_catalog: false,
+      catalog_ref: { repo: "agent-skills", revision: "abc" },
+      in_use_agents: ["pi"],
+      library: [
+        {
+          name: "host-clean",
+          provenance: "catalog-managed",
+          behind_catalog: true,
+        },
+      ],
+      projections: [],
+      foreign: [],
+      broken: [],
+      duplicate: [],
+      legacy_writers_stopped: [],
+      reload: [],
+    } as never;
+    vi.mocked(skillsCoreApi.doctor).mockResolvedValueOnce(behindDoctor);
+    vi.mocked(skillsCoreApi.upgrade).mockResolvedValueOnce(behindDoctor);
+
+    render(<SkillsCorePanel onOpenDiscovery={() => undefined} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("host-clean")).toBeInTheDocument();
+    });
+    expect(
+      screen.getByRole("button", { name: "全部升级" }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "升级" }));
+    await waitFor(() => {
+      expect(skillsCoreApi.upgrade).toHaveBeenCalledWith("host-clean");
+    });
+    fireEvent.click(screen.getByRole("button", { name: "全部升级" }));
+    await waitFor(() => {
+      expect(skillsCoreApi.upgrade).toHaveBeenCalledWith();
+    });
   });
 });

@@ -44,6 +44,8 @@ type CursorIndexStatus =
   | { state: "indexReady" }
   | { state: "indexUnavailable"; reason: string };
 
+type GroupMode = "time" | "project";
+
 export interface RecordedInvoke {
   command: string;
   payloadKeys: string[];
@@ -51,8 +53,15 @@ export interface RecordedInvoke {
 }
 
 export interface TauriIpcHarnessOptions {
-  view?: "sessions" | "settings";
+  view?: "sessions" | "settings" | "auth";
+  /** Preferred: persisted as `cc-switch.sessionManager.groupMode`. */
+  groupMode?: GroupMode;
+  /** @deprecated Use `groupMode`. Mapped: byProject/grouped → project, flat → time. */
   listViewMode?: "flat" | "grouped" | "byProject";
+  /** Sidebar app (`cc-switch-last-app`). Use `cursor` for Cursor-only session filter. */
+  lastApp?: string;
+  /** Project group keys pre-expanded in `cc-switch.sessionManager.expandedProjects`. */
+  expandedProjects?: string[];
   sessions?: SessionFixture[];
   cursorStatus?: CursorOfficialStatus;
   cursorIndexStatus?: CursorIndexStatus;
@@ -71,13 +80,32 @@ const defaultCursorStatus: CursorOfficialStatus = {
   state: "ready",
 };
 
+function resolveGroupMode(options: TauriIpcHarnessOptions): GroupMode {
+  if (options.groupMode) {
+    return options.groupMode;
+  }
+  if (options.listViewMode === "flat") {
+    return "time";
+  }
+  if (
+    options.listViewMode === "grouped" ||
+    options.listViewMode === "byProject"
+  ) {
+    return "project";
+  }
+  return "project";
+}
+
 export async function installTauriIpcHarness(
   page: Page,
   options: TauriIpcHarnessOptions = {},
 ): Promise<void> {
+  const groupMode = resolveGroupMode(options);
   const initialState = {
     view: options.view ?? "sessions",
-    listViewMode: options.listViewMode ?? "byProject",
+    groupMode,
+    lastApp: options.lastApp ?? "claude",
+    expandedProjects: options.expandedProjects ?? [],
     sessions: options.sessions ?? [],
     cursorStatus: options.cursorStatus ?? defaultCursorStatus,
     cursorIndexStatus: options.cursorIndexStatus ?? {
@@ -115,11 +143,12 @@ export async function installTauriIpcHarness(
     });
 
     localStorage.setItem("cc-switch-last-view", fixture.view);
-    localStorage.setItem("cc-switch-last-app", "claude");
+    localStorage.setItem("cc-switch-last-app", fixture.lastApp);
     localStorage.setItem("language", "zh");
+    localStorage.setItem("cc-switch.sessionManager.groupMode", fixture.groupMode);
     localStorage.setItem(
-      "cc-switch.sessionManager.listViewMode",
-      fixture.listViewMode,
+      "cc-switch.sessionManager.expandedProjects",
+      JSON.stringify(fixture.expandedProjects),
     );
 
     const state = {
@@ -272,6 +301,9 @@ export async function installTauriIpcHarness(
           const sourcePath = rawPayload.sourcePath as string;
           return state.sessionMessages[`${providerId}:${sourcePath}`] ?? [];
         }
+        case "stream_session_messages":
+          // Force transcript loader to fall back to get_session_messages in e2e.
+          throw new Error("stream_session_messages unavailable in e2e harness");
         case "get_cursor_official_status":
           return { ...state.cursorStatus };
         case "update_cursor_official_auth": {
@@ -305,10 +337,51 @@ export async function installTauriIpcHarness(
           }
           return { ...state.resumeContext };
         }
+        case "get_session_resume_state":
+          return { appearance: "resume" };
         case "launch_cursor_session":
         case "launch_cursor_login":
         case "launch_cursor_login_and_session":
           return { state: "launched" };
+        case "delete_session": {
+          const providerId = rawPayload.providerId as string;
+          const sessionId = rawPayload.sessionId as string;
+          const sourcePath = rawPayload.sourcePath as string | undefined;
+          state.sessions = state.sessions.filter(
+            (session) =>
+              !(
+                session.providerId === providerId &&
+                session.sessionId === sessionId &&
+                (sourcePath === undefined ||
+                  session.sourcePath === sourcePath)
+              ),
+          );
+          return true;
+        }
+        case "delete_sessions": {
+          const items = (rawPayload.items ?? []) as Array<{
+            providerId: string;
+            sessionId: string;
+            sourcePath?: string;
+          }>;
+          for (const item of items) {
+            state.sessions = state.sessions.filter(
+              (session) =>
+                !(
+                  session.providerId === item.providerId &&
+                  session.sessionId === item.sessionId &&
+                  (item.sourcePath === undefined ||
+                    session.sourcePath === item.sourcePath)
+                ),
+            );
+          }
+          return items.map((item) => ({
+            providerId: item.providerId,
+            sessionId: item.sessionId,
+            sourcePath: item.sourcePath ?? "",
+            success: true,
+          }));
+        }
         case "pick_directory":
           return state.pickedDirectories.shift() ?? null;
         case "plugin:window|is_maximized":

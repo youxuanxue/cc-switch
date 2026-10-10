@@ -32,16 +32,22 @@ function createConformingFixture() {
   );
   writeFixtureFile(
     root,
-    "src/components/sessions/SessionToc.tsx",
+    "src/components/sessions/reader/SessionOutline.tsx",
+    "export function SessionOutline() { return <nav />; }",
+  );
+  writeFixtureFile(
+    root,
+    "src/components/sessions/reader/SessionReader.tsx",
     [
-      'import { shouldRenderSessionTocDialog, shouldRenderSessionTocSidebar } from "./sessionChrome";',
-      "export function SessionTocSidebar({ items }: { items: unknown[] }) {",
-      "  if (!shouldRenderSessionTocSidebar(items)) return null;",
-      "  return <aside />;",
-      "}",
-      "export function SessionTocDialog({ items }: { items: unknown[] }) {",
-      "  if (!shouldRenderSessionTocDialog(items)) return null;",
-      "  return <dialog />;",
+      'import { toDisplayMessages } from "../sessionChrome";',
+      'import { SessionOutline } from "./SessionOutline";',
+      "export function SessionReader({ messages = [] }) {",
+      "  const displayMessages = toDisplayMessages(messages, 'cursor');",
+      "  return (",
+      "    <section data-count={displayMessages.length}>",
+      "      <SessionOutline />",
+      "    </section>",
+      "  );",
       "}",
     ].join("\n"),
   );
@@ -49,17 +55,9 @@ function createConformingFixture() {
     root,
     "src/components/sessions/SessionManagerPage.tsx",
     [
-      'import { SessionTocDialog, SessionTocSidebar } from "./SessionToc";',
-      'import { buildSessionTocItems, toDisplayMessages } from "./sessionChrome";',
-      "export function SessionManagerPage({ messages }: { messages: unknown[] }) {",
-      "  const displayMessages = toDisplayMessages(messages);",
-      "  const items = buildSessionTocItems(displayMessages);",
-      "  return (",
-      "    <>",
-      "      <SessionTocSidebar items={items} />",
-      "      <SessionTocDialog items={items} />",
-      "    </>",
-      "  );",
+      'import { SessionReader } from "./reader/SessionReader";',
+      "export function SessionManagerPage() {",
+      "  return <SessionReader />;",
       "}",
     ].join("\n"),
   );
@@ -85,7 +83,7 @@ afterEach(() => {
 });
 
 describe("session chrome SSOT checker", () => {
-  it("accepts a fixture that consumes the shared chrome owner", () => {
+  it("accepts a fixture that consumes SessionReader outline chrome", () => {
     const result = runChecker(createConformingFixture());
 
     expect(result.status).toBe(0);
@@ -99,44 +97,33 @@ describe("session chrome SSOT checker", () => {
     expect(result.output).toContain("session-chrome-ssot: PASS");
   });
 
-  it("rejects hiding the TOC behind an item-count threshold", () => {
+  it("rejects Session Manager that skips SessionReader", () => {
     const root = createConformingFixture();
     writeFixtureFile(
       root,
-      "src/components/sessions/SessionToc.tsx",
-      [
-        'import { shouldRenderSessionTocDialog, shouldRenderSessionTocSidebar } from "./sessionChrome";',
-        "export function SessionTocSidebar({ items }: { items: unknown[] }) {",
-        "  if (items.length <= 2) return null;",
-        "  if (!shouldRenderSessionTocSidebar(items)) return null;",
-        "  return <aside />;",
-        "}",
-        "export function SessionTocDialog({ items }: { items: unknown[] }) {",
-        "  if (!shouldRenderSessionTocDialog(items)) return null;",
-        "  return <dialog />;",
-        "}",
-      ].join("\n"),
+      "src/components/sessions/SessionManagerPage.tsx",
+      "export function SessionManagerPage() { return <div />; }",
     );
 
     const result = runChecker(root);
 
     expect(result.status).toBe(1);
-    expect(result.output).toContain("SESSION_TOC_VISIBILITY_BYPASS");
+    expect(result.output).toContain("SESSION_PAGE_CHROME_FORK");
   });
 
-  it("rejects rebuilding chrome from provider-specific helpers on the page", () => {
+  it("rejects resurrecting legacy SessionToc on the page", () => {
     const root = createConformingFixture();
     writeFixtureFile(
       root,
       "src/components/sessions/SessionManagerPage.tsx",
       [
-        'import { SessionTocDialog, SessionTocSidebar } from "./SessionToc";',
-        'import { extractCursorDisplayContent, shouldHideCodexMessageFromToc } from "./utils";',
+        'import { SessionTocSidebar } from "./SessionToc";',
+        'import { SessionReader } from "./reader/SessionReader";',
         "export function SessionManagerPage() {",
         "  return (",
         "    <>",
         "      <SessionTocSidebar items={[]} />",
-        "      <SessionTocDialog items={[]} />",
+        "      <SessionReader />",
         "    </>",
         "  );",
         "}",
@@ -149,23 +136,29 @@ describe("session chrome SSOT checker", () => {
     expect(result.output).toContain("SESSION_PAGE_CHROME_FORK");
   });
 
-  it("rejects gating the shared TOC by provider", () => {
+  it("rejects SessionReader without SessionOutline", () => {
     const root = createConformingFixture();
     writeFixtureFile(
       root,
-      "src/components/sessions/SessionManagerPage.tsx",
+      "src/components/sessions/reader/SessionReader.tsx",
+      "export function SessionReader() { return <section />; }",
+    );
+
+    const result = runChecker(root);
+
+    expect(result.status).toBe(1);
+    expect(result.output).toContain("SESSION_READER_CHROME_FORK");
+  });
+
+  it("rejects SessionReader that skips toDisplayMessages", () => {
+    const root = createConformingFixture();
+    writeFixtureFile(
+      root,
+      "src/components/sessions/reader/SessionReader.tsx",
       [
-        'import { SessionTocDialog, SessionTocSidebar } from "./SessionToc";',
-        'import { buildSessionTocItems, toDisplayMessages } from "./sessionChrome";',
-        "export function SessionManagerPage({ providerId }: { providerId: string }) {",
-        "  const displayMessages = toDisplayMessages([]);",
-        "  const items = buildSessionTocItems(displayMessages);",
-        "  return (",
-        "    <>",
-        "      {providerId === 'codex' && <SessionTocSidebar items={items} />}",
-        "      <SessionTocDialog items={items} />",
-        "    </>",
-        "  );",
+        'import { SessionOutline } from "./SessionOutline";',
+        "export function SessionReader() {",
+        "  return <SessionOutline />;",
         "}",
       ].join("\n"),
     );
@@ -173,6 +166,7 @@ describe("session chrome SSOT checker", () => {
     const result = runChecker(root);
 
     expect(result.status).toBe(1);
-    expect(result.output).toContain("SESSION_PAGE_CHROME_FORK");
+    expect(result.output).toContain("SESSION_READER_CHROME_FORK");
+    expect(result.output).toContain("toDisplayMessages");
   });
 });

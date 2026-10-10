@@ -50,7 +50,8 @@ export function toDisplayMessages(
   if (!presentation.displayContent) return messages;
 
   return messages.flatMap((message) => {
-    const content = presentation.displayContent?.(message.content) ?? "";
+    const raw = message.content ?? "";
+    const content = presentation.displayContent?.(raw) ?? raw;
     if (!content) return [];
     return [{ ...message, content }];
   });
@@ -66,12 +67,13 @@ export function buildSessionTocItems(
     .map((msg, index) => ({ msg, index }))
     .filter(({ msg }) => {
       if (msg.role.toLowerCase() !== "user") return false;
-      return !presentation.hideFromToc?.(msg.content);
+      const raw = msg.content ?? "";
+      return !presentation.hideFromToc?.(raw);
     })
     .map(({ msg, index }) => ({
       index,
       preview: formatSessionMessagePreview(
-        presentation.preview?.(msg.content) ?? msg.content,
+        presentation.preview?.(msg.content ?? "") ?? msg.content ?? "",
       ),
       ts: msg.ts,
     }));

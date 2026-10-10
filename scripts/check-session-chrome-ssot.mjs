@@ -1,5 +1,13 @@
 #!/usr/bin/env node
 
+/**
+ * Plan A chrome SSOT (post upstream sidebar + sessions reader):
+ * - SessionManagerPage must consume SessionReader (not resurrect SessionToc)
+ * - SessionReader must render SessionOutline for directory chrome
+ * - Provider message presentation helpers stay owned by sessionChrome.ts
+ *   (toDisplayMessages / buildSessionTocItems remain for non-reader callers)
+ */
+
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,7 +15,7 @@ import { fileURLToPath } from "node:url";
 const SOURCE_EXTENSIONS = new Set([".js", ".jsx", ".ts", ".tsx"]);
 const FINDING_CODES = {
   owner: "SESSION_CHROME_OWNER_BYPASS",
-  visibility: "SESSION_TOC_VISIBILITY_BYPASS",
+  reader: "SESSION_READER_CHROME_FORK",
   page: "SESSION_PAGE_CHROME_FORK",
 };
 
@@ -18,11 +26,6 @@ const OWNER_EXPORTS = [
   "shouldRenderSessionTocDialog",
 ];
 
-const PAGE_CHROME_IMPORTS = ["toDisplayMessages", "buildSessionTocItems"];
-const TOC_VISIBILITY_IMPORTS = [
-  "shouldRenderSessionTocSidebar",
-  "shouldRenderSessionTocDialog",
-];
 const PAGE_FORBIDDEN_CHROME_IMPORTS = [
   "shouldHideCodexMessageFromToc",
   "shouldHideCursorMessageFromToc",
@@ -30,6 +33,8 @@ const PAGE_FORBIDDEN_CHROME_IMPORTS = [
   "extractCursorPromptPreview",
   "extractCursorDisplayContent",
   "formatSessionMessagePreview",
+  "SessionTocSidebar",
+  "SessionTocDialog",
 ];
 
 function parseRoot(argv) {
@@ -151,7 +156,8 @@ function requireExports(file, symbols, code, message) {
 }
 
 const ownerPath = "src/components/sessions/sessionChrome.ts";
-const tocPath = "src/components/sessions/SessionToc.tsx";
+const readerPath = "src/components/sessions/reader/SessionReader.tsx";
+const outlinePath = "src/components/sessions/reader/SessionOutline.tsx";
 const pagePath = "src/components/sessions/SessionManagerPage.tsx";
 
 requireExports(
@@ -161,48 +167,41 @@ requireExports(
   "Session chrome owner must export the shared display/TOC APIs",
 );
 
+requireFile(
+  outlinePath,
+  FINDING_CODES.reader,
+  "Session reader outline chrome owner must exist",
+);
+
 requireImports(
-  tocPath,
-  TOC_VISIBILITY_IMPORTS,
-  FINDING_CODES.visibility,
-  "SessionToc must consume the shared TOC visibility owner",
+  readerPath,
+  ["SessionOutline", "toDisplayMessages"],
+  FINDING_CODES.reader,
+  "SessionReader must render the shared outline chrome",
 );
 
 requireImports(
   pagePath,
-  PAGE_CHROME_IMPORTS,
+  ["SessionReader"],
   FINDING_CODES.page,
-  "Session Manager must consume the shared session chrome owner",
+  "Session Manager must consume the shared SessionReader chrome",
 );
 
-requireImports(
-  pagePath,
-  ["SessionTocSidebar", "SessionTocDialog"],
-  FINDING_CODES.page,
-  "Session Manager must render the shared TOC chrome",
-);
-
-const tocSource = sources.get(tocPath);
-if (tocSource !== undefined) {
-  const threshold = tocSource.match(/items\.length\s*(?:<=|<)\s*[1-9]\d*/);
-  if (threshold) {
+const readerSource = sources.get(readerPath);
+if (readerSource !== undefined) {
+  if (!/<SessionOutline\b/.test(readerSource)) {
     addFinding(
-      FINDING_CODES.visibility,
-      tocPath,
-      "SessionToc must not hide the directory behind a provider-sensitive item-count threshold",
-      lineNumber(tocSource, threshold.index),
+      FINDING_CODES.reader,
+      readerPath,
+      "SessionReader must render <SessionOutline> for directory chrome",
     );
   }
-
-  for (const symbol of TOC_VISIBILITY_IMPORTS) {
-    const call = tocSource.match(new RegExp(`\\b${symbol}\\s*\\(\\s*items`));
-    if (!call) {
-      addFinding(
-        FINDING_CODES.visibility,
-        tocPath,
-        `SessionToc must call ${symbol}(items)`,
-      );
-    }
+  if (!/\btoDisplayMessages\s*\(/.test(readerSource)) {
+    addFinding(
+      FINDING_CODES.reader,
+      readerPath,
+      "SessionReader must call toDisplayMessages for provider presentation",
+    );
   }
 }
 
@@ -216,71 +215,23 @@ if (pageSource !== undefined) {
     addFinding(
       FINDING_CODES.page,
       pagePath,
-      `Session Manager must not rebuild chrome from provider helpers: ${forbidden.join(", ")}`,
+      `Session Manager must not rebuild or resurrect legacy TOC chrome: ${forbidden.join(", ")}`,
     );
   }
 
-  for (const component of ["SessionTocSidebar", "SessionTocDialog"]) {
-    const tag = pageSource.match(new RegExp(`<${component}\\b`));
-    if (!tag) {
-      addFinding(
-        FINDING_CODES.page,
-        pagePath,
-        `Session Manager must unconditionally render <${component}>`,
-      );
-      continue;
-    }
-
-    const prefix = pageSource.slice(Math.max(0, tag.index - 240), tag.index);
-    if (
-      /(?:providerId|isCodexSession|isCursorSession|isClaudeSession)\b/.test(
-        prefix,
-      )
-    ) {
-      addFinding(
-        FINDING_CODES.page,
-        pagePath,
-        `<${component}> must not be gated by provider-specific chrome`,
-        lineNumber(pageSource, tag.index),
-      );
-    }
-  }
-
-  if (!/\btoDisplayMessages\s*\(/.test(pageSource)) {
+  if (!/<SessionReader\b/.test(pageSource)) {
     addFinding(
       FINDING_CODES.page,
       pagePath,
-      "Session Manager must call toDisplayMessages",
-    );
-  }
-  if (!/\bbuildSessionTocItems\s*\(/.test(pageSource)) {
-    addFinding(
-      FINDING_CODES.page,
-      pagePath,
-      "Session Manager must call buildSessionTocItems",
+      "Session Manager must unconditionally render <SessionReader>",
     );
   }
 }
 
-const visibilityOwnerFiles = new Set([ownerPath, tocPath]);
 const presentationOwnerFiles = new Set([ownerPath]);
 
 for (const [file, source] of sources) {
   if (!file.startsWith("src/components/sessions/")) continue;
-
-  if (!visibilityOwnerFiles.has(file)) {
-    const match = source.match(
-      /\bshouldRenderSessionToc(?:Sidebar|Dialog)\s*=/,
-    );
-    if (match) {
-      addFinding(
-        FINDING_CODES.visibility,
-        file,
-        "TOC visibility must be owned by sessionChrome.ts",
-        lineNumber(source, match.index),
-      );
-    }
-  }
 
   if (!presentationOwnerFiles.has(file)) {
     const match = source.match(/\bSESSION_MESSAGE_PRESENTATION\b/);
