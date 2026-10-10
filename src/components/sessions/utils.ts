@@ -430,7 +430,10 @@ export const groupSessionsByProject = (
     }
 
     projectGroup.sessions.push(session);
-    projectGroup.latest = Math.max(projectGroup.latest, getSessionTime(session));
+    projectGroup.latest = Math.max(
+      projectGroup.latest,
+      getSessionTime(session),
+    );
     if (!projectGroup.providerIds.includes(session.providerId)) {
       projectGroup.providerIds.push(session.providerId);
     }

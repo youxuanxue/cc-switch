@@ -73,7 +73,7 @@ export function buildSessionTocItems(
     .map(({ msg, index }) => ({
       index,
       preview: formatSessionMessagePreview(
-        presentation.preview?.(msg.content ?? "") ?? (msg.content ?? ""),
+        presentation.preview?.(msg.content ?? "") ?? msg.content ?? "",
       ),
       ts: msg.ts,
     }));

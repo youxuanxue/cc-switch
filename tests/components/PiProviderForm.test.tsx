@@ -782,7 +782,15 @@ describe("PiProviderForm", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("火山Agentplan", { selector: "span" }));
+    fireEvent.change(
+      screen.getByLabelText("providerPreset.searchAriaLabel"),
+      { target: { value: "火山 Agent Plan" } },
+    );
+    fireEvent.click(
+      await screen.findByText(/Volcengine|providerPreset\.family\.volcengine/, {
+        selector: "span",
+      }),
+    );
     fireEvent.change(screen.getByLabelText("pi.form.credential"), {
       target: { value: "literal-key" },
     });

@@ -169,9 +169,14 @@ vi.mock("@/components/settings/SettingsPage", () => ({
   SettingsPage: () => <div data-testid="settings-page" />,
 }));
 
-vi.mock("@/components/skills/SkillsPage", () => ({
-  SkillsPage: () => <div data-testid="skills-discovery-page" />,
-}));
+vi.mock("@/components/skills/SkillsPage", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/components/skills/SkillsPage")>();
+  return {
+    ...actual,
+    SkillsPage: () => <div data-testid="skills-discovery-page" />,
+  };
+});
 
 vi.mock("@/components/mcp/McpPanel", () => ({
   default: ({ open, onOpenChange }: any) =>
@@ -848,8 +853,10 @@ describe("App integration with MSW", () => {
       }),
     );
 
-    expect(skillsPanelMocks.openDiscovery).toHaveBeenCalledTimes(1);
-    expect(screen.getByTestId("skills-core-panel")).toBeInTheDocument();
+    expect(
+      await screen.findByTestId("skills-discovery-page"),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId("skills-core-panel")).not.toBeInTheDocument();
   });
 
   it("navigates OpenClaw and Hermes pages with underline tabs", async () => {

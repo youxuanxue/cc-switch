@@ -297,9 +297,8 @@ function App() {
   useUsageCacheBridge();
 
   const skillsCorePanelRef = useRef<SkillsCorePanelHandle>(null);
-  const skillsPageRef = useRef<import("@/components/skills/SkillsPage").SkillsPageHandle>(
-    null,
-  );
+  const skillsPageRef =
+    useRef<import("@/components/skills/SkillsPage").SkillsPageHandle>(null);
 
   useLayoutEffect(() => {
     if (currentView !== "providers") return;

@@ -407,15 +407,16 @@ describe("SessionManagerPage", () => {
   it("launches the resume command in the preferred terminal on macOS", async () => {
     platform.mac = true;
     setSettings({ preferredTerminal: "iterm2" });
-    const launch = vi
-      .spyOn(sessionsApi, "launchTerminal")
-      .mockResolvedValue("launched" as never);
+    const launch = vi.spyOn(sessionsApi, "launchTerminal").mockResolvedValue({
+      action: "launched",
+    });
     renderPage("codex");
     await screen.findByText("Alpha Session");
     openRow("Alpha Session");
+    await screen.findByRole("heading", { level: 1, name: "Alpha Session" });
 
     const resume = await screen.findByRole("button", {
-      name: /中恢复$/,
+      name: /sessionManager\.resume$/i,
     });
     fireEvent.click(resume);
 

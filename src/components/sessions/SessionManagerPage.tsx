@@ -197,7 +197,8 @@ export function SessionManagerPage({
   const [whereOpen, setWhereOpen] = useState(false);
   const [staleCleanupOpen, setStaleCleanupOpen] = useState(false);
   const [wtsCleanupOpen, setWtsCleanupOpen] = useState(false);
-  const [staleCleanupDays, setStaleCleanupDays] = useState(readStaleCleanupDays);
+  const [staleCleanupDays, setStaleCleanupDays] =
+    useState(readStaleCleanupDays);
   const [readerPane, setReaderPane] = useState<ReaderPane>("transcript");
   const [terminalVisited, setTerminalVisited] = useState(false);
   const [cursorPrimaryAction, setCursorPrimaryAction] =
@@ -353,7 +354,7 @@ export function SessionManagerPage({
   const transcript = useSessionTranscript(
     readerSession?.providerId,
     readerSession
-      ? sessionMessageSourcePath(readerSession) ?? readerSession.sourcePath
+      ? (sessionMessageSourcePath(readerSession) ?? readerSession.sourcePath)
       : undefined,
   );
   const { data: resumeState } = useSessionResumeStateQuery(
@@ -513,7 +514,8 @@ export function SessionManagerPage({
     () =>
       sessions.filter(
         (session) =>
-          selectedKeys.has(getSessionKey(session)) && isSessionDeletable(session),
+          selectedKeys.has(getSessionKey(session)) &&
+          isSessionDeletable(session),
       ),
     [sessions, selectedKeys],
   );
