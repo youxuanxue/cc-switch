@@ -743,16 +743,24 @@ const piProviderPresetDefinitions: PiProviderPreset[] = [
       // Bearer `/models`; Universal sync falls back to the same id list.
       models: [
         piModel("volcengine/ark-code-latest", { id: "ark-code-latest" }),
-        piModel("volcengine/doubao-seed-2.1-pro", { id: "Doubao-Seed-2.1-pro" }),
-        piModel("volcengine/doubao-seed-2.0-mini", { id: "Doubao-Seed-2.0-mini" }),
+        piModel("volcengine/doubao-seed-2.1-pro", {
+          id: "Doubao-Seed-2.1-pro",
+        }),
+        piModel("volcengine/doubao-seed-2.0-mini", {
+          id: "Doubao-Seed-2.0-mini",
+        }),
         piModel("volcengine/doubao-seed-2.1-turbo", {
           id: "Doubao-Seed-2.1-turbo",
         }),
         piModel("volcengine/doubao-seed-evolving", {
           id: "Doubao-Seed-Evolving",
         }),
-        piModel("volcengine/doubao-seed-2.1-lite", { id: "Doubao-Seed-2.1-lite" }),
-        piModel("volcengine/doubao-seed-2.0-lite", { id: "Doubao-Seed-2.0-lite" }),
+        piModel("volcengine/doubao-seed-2.1-lite", {
+          id: "Doubao-Seed-2.1-lite",
+        }),
+        piModel("volcengine/doubao-seed-2.0-lite", {
+          id: "Doubao-Seed-2.0-lite",
+        }),
         piModel("deepseek/deepseek-v4-flash", { id: "DeepSeek-V4.1-Flash" }),
         piModel("deepseek/deepseek-v4-flash", { id: "DeepSeek-V4-Flash" }),
         piModel("deepseek/deepseek-v4-pro", { id: "DeepSeek-V4-Pro" }),
