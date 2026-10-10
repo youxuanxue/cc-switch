@@ -46,6 +46,8 @@ vi.mock("@/components/providers/forms/ProviderForm", () => ({
     onSubmitReadyChange,
     onManageAuthAccounts,
     onEditorBaseChange,
+    onUniversalPresetSelect,
+    onManageUniversalProviders,
   }: {
     onSubmit: (values: ProviderFormValues) => void;
     onSubmitReadyChange?: (isReady: boolean) => void;
@@ -54,6 +56,18 @@ vi.mock("@/components/providers/forms/ProviderForm", () => ({
       base: Record<string, unknown> | null,
       draft?: Record<string, unknown>,
     ) => void;
+    onUniversalPresetSelect?: (preset: {
+      name: string;
+      providerType: string;
+      defaultApps: {
+        claude: boolean;
+        codex: boolean;
+        gemini: boolean;
+      };
+      defaultModels: Record<string, unknown>;
+      isCustomTemplate?: boolean;
+    }) => void;
+    onManageUniversalProviders?: () => void;
   }) => {
     useEffect(() => {
       if (onSubmitReadyChange) {
@@ -78,6 +92,27 @@ vi.mock("@/components/providers/forms/ProviderForm", () => ({
         >
           manage-auth
         </button>
+        {onUniversalPresetSelect && (
+          <button
+            type="button"
+            onClick={() =>
+              onUniversalPresetSelect({
+                name: "Custom Universal",
+                providerType: "custom",
+                defaultApps: { claude: true, codex: true, gemini: true },
+                defaultModels: {},
+                isCustomTemplate: true,
+              })
+            }
+          >
+            pick-universal-preset
+          </button>
+        )}
+        {onManageUniversalProviders && (
+          <button type="button" onClick={() => onManageUniversalProviders()}>
+            manage-universal
+          </button>
+        )}
       </form>
     );
   },
@@ -86,6 +121,18 @@ vi.mock("@/components/providers/forms/ProviderForm", () => ({
 vi.mock("@/components/providers/AuthSettingsPanel", () => ({
   AuthSettingsPanel: ({ target }: { target: string | null }) =>
     target ? <div data-testid="auth-settings-panel">{target}</div> : null,
+}));
+
+vi.mock("@/components/universal", () => ({
+  UniversalProviderPanel: () => <div data-testid="universal-panel" />,
+}));
+
+vi.mock("@/components/universal/UniversalProviderFormModal", () => ({
+  UniversalProviderFormModal: ({
+    isOpen,
+  }: {
+    isOpen: boolean;
+  }) => (isOpen ? <div data-testid="universal-form-modal" /> : null),
 }));
 
 describe("AddProviderDialog", () => {
@@ -107,6 +154,43 @@ describe("AddProviderDialog", () => {
         },
       },
     };
+  });
+
+  it("Claude 添加路径可通过预设选择打开统一供应商表单与管理面板", async () => {
+    render(
+      <AddProviderDialog
+        open
+        onOpenChange={vi.fn()}
+        appId="claude"
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    await screen.findByRole("button", { name: "pick-universal-preset" });
+    fireEvent.click(screen.getByRole("button", { name: "pick-universal-preset" }));
+    expect(screen.getByTestId("universal-form-modal")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "manage-universal" }));
+    expect(screen.getByTestId("universal-panel")).toBeInTheDocument();
+  });
+
+  it("OpenCode 不暴露统一供应商入口", async () => {
+    render(
+      <AddProviderDialog
+        open
+        onOpenChange={vi.fn()}
+        appId="opencode"
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    await screen.findByRole("button", { name: "manage-auth" });
+    expect(
+      screen.queryByRole("button", { name: "pick-universal-preset" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "manage-universal" }),
+    ).not.toBeInTheDocument();
   });
 
   it("使用 ProviderForm 返回的自定义端点", async () => {

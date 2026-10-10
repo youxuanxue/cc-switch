@@ -355,9 +355,11 @@ describe("preset families", () => {
 function TwoSteps({
   onPresetChange,
   presetEntries = entries,
+  withUniversal = false,
 }: {
   onPresetChange: (id: string) => void;
   presetEntries?: PresetEntry[];
+  withUniversal?: boolean;
 }) {
   const [step, setStep] = useState<"pick" | "form">("pick");
   const [host, setHost] = useState<HTMLDivElement | null>(null);
@@ -383,6 +385,12 @@ function TwoSteps({
             setApiKey("");
             onPresetChange(id);
           }}
+          onUniversalPresetSelect={
+            withUniversal ? () => undefined : undefined
+          }
+          onManageUniversalProviders={
+            withUniversal ? () => undefined : undefined
+          }
         />
         {step === "form" && (
           <input
@@ -698,5 +706,17 @@ describe("ProviderPresetSelector", () => {
       within(host).getByRole("button", { name: "providerPreset.useCustom" }),
     );
     await waitFor(() => expect(onPresetChange).toHaveBeenCalledWith("custom"));
+  });
+
+  it("defaults to the universal category when cross-app presets are available", async () => {
+    render(<TwoSteps onPresetChange={vi.fn()} withUniversal />);
+    const host = await screen.findByTestId("host");
+    expect(
+      within(host).getByRole("button", {
+        name: /providerPreset.group.universal/,
+        pressed: true,
+      }),
+    ).toBeInTheDocument();
+    expect(within(host).queryByText("Gamma")).not.toBeInTheDocument();
   });
 });
