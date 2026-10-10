@@ -181,7 +181,7 @@ function App() {
   const [settingsSection, setSettingsSection] =
     useState<SettingsSection>("general");
   // 进设置前停留的页面：设置目录里的「← 返回」回到这里
-  const settingsReturnViewRef = useRef<View>("providers");
+  const settingsReturnViewRef = useRef<View>("universal");
   const [openclawConfigTab, setOpenclawConfigTab] =
     useState<OpenClawConfigTab>("env");
   const [promptsApp, setPromptsApp] = useState<AppId>(() =>
