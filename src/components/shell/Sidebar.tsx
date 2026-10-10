@@ -26,7 +26,7 @@ import type { AppId } from "@/lib/api";
 import type { VisibleApps } from "@/types";
 import { APP_IDS } from "@/config/appConfig";
 import type { GlobalPage, SettingsSection, View } from "@/lib/navigation";
-import { isAppPage } from "@/lib/navigation";
+import { DEFAULT_VIEW, isAppPage } from "@/lib/navigation";
 import { SkillsIcon } from "@/components/BrandIcons";
 import { useUpdate } from "@/contexts/UpdateContext";
 import { sidebarWidth, useSidebarCollapsed } from "@/hooks/useSidebarCollapsed";
@@ -218,6 +218,13 @@ function MainDirectory({
       ? t("nav.todayCost", { cost: fmtUsd(todayCost, 2) })
       : undefined;
 
+  // 统一供应商钉在 App 列表之上：默认工作台，不是埋在全局区里的又一项。
+  const workbench = {
+    page: DEFAULT_VIEW,
+    label: t("nav.universal"),
+    icon: Combine,
+  };
+
   const globals: {
     page: GlobalPage;
     label: string;
@@ -225,11 +232,6 @@ function MainDirectory({
     trailing?: string;
     alert?: string;
   }[] = [
-    {
-      page: "universal",
-      label: t("nav.universal"),
-      icon: Combine,
-    },
     { page: "mcp", label: "MCP", icon: Server },
     { page: "skills", label: "Skills", icon: SkillsIcon },
     { page: "prompts", label: t("nav.prompts"), icon: BookOpen },
@@ -253,6 +255,23 @@ function MainDirectory({
 
   return (
     <>
+      <div className="flex shrink-0 flex-col pb-0.5 pt-0.5">
+        <NavItem
+          collapsed={collapsed}
+          selected={isGlobalSelected(workbench.page)}
+          icon={workbench.icon}
+          label={workbench.label}
+          onClick={() => onSelectPage(workbench.page)}
+        />
+      </div>
+
+      <div
+        className={cn(
+          "h-px shrink-0 bg-border",
+          collapsed ? "mx-[18px] my-1.5" : "mx-4 mb-1.5 mt-0.5",
+        )}
+      />
+
       <div
         className={cn(
           "flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden pb-2 pt-0.5",

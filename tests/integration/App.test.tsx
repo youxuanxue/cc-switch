@@ -215,7 +215,8 @@ describe("App integration with MSW", () => {
     toastErrorMock.mockReset();
     skillsPanelMocks.syncNow.mockReset();
     skillsPanelMocks.openDiscovery.mockReset();
-    localStorage.removeItem("cc-switch-last-view");
+    // Provider-flow suites exercise App 仓；默认工作台已是 universal，这里显式回到供应商页。
+    localStorage.setItem("cc-switch-last-view", "providers");
     localStorage.removeItem("cc-switch-last-app");
   });
 
