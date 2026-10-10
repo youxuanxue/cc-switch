@@ -63,6 +63,7 @@ import { isLinux, isMac, isWindows } from "@/lib/platform";
 import {
   APP_STORAGE_KEY,
   appPageBelongsTo,
+  DEFAULT_VIEW,
   isAppPage,
   readStoredView,
   sharedFeatureAppOf,
@@ -181,7 +182,7 @@ function App() {
   const [settingsSection, setSettingsSection] =
     useState<SettingsSection>("general");
   // 进设置前停留的页面：设置目录里的「← 返回」回到这里
-  const settingsReturnViewRef = useRef<View>("universal");
+  const settingsReturnViewRef = useRef<View>(DEFAULT_VIEW);
   const [openclawConfigTab, setOpenclawConfigTab] =
     useState<OpenClawConfigTab>("env");
   const [promptsApp, setPromptsApp] = useState<AppId>(() =>
