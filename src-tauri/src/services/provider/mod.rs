@@ -4203,6 +4203,12 @@ wire_api = "responses"
                 .get_provider_by_id(child_id, "claude")
                 .expect("lookup")
                 .is_some());
+            let current_before = crate::settings::get_effective_current_provider(
+                state.db.as_ref(),
+                &AppType::Claude,
+            )
+            .expect("read current before disable");
+            assert_eq!(current_before.as_deref(), Some(child_id));
 
             universal.apps.claude = false;
             state
@@ -4216,6 +4222,12 @@ wire_api = "responses"
                 .get_provider_by_id(child_id, "claude")
                 .expect("lookup after delete")
                 .is_none());
+            let current_after = crate::settings::get_effective_current_provider(
+                state.db.as_ref(),
+                &AppType::Claude,
+            )
+            .expect("read current after disable");
+            assert_eq!(current_after, None);
         });
     }
 }
@@ -6935,15 +6947,15 @@ impl ProviderService {
         if let Some(p) = provider {
             if p.apps.claude {
                 let claude_id = format!("universal-claude-{id}");
-                let _ = state.db.delete_provider("claude", &claude_id);
+                Self::remove_disabled_universal_child(state, AppType::Claude, &claude_id);
             }
             if p.apps.codex {
                 let codex_id = format!("universal-codex-{id}");
-                let _ = state.db.delete_provider("codex", &codex_id);
+                Self::remove_disabled_universal_child(state, AppType::Codex, &codex_id);
             }
             if p.apps.gemini {
                 let gemini_id = format!("universal-gemini-{id}");
-                let _ = state.db.delete_provider("gemini", &gemini_id);
+                Self::remove_disabled_universal_child(state, AppType::Gemini, &gemini_id);
             }
         }
 
@@ -6980,7 +6992,7 @@ impl ProviderService {
         } else {
             // 如果禁用了 Claude，删除对应的子供应商
             let claude_id = format!("universal-claude-{id}");
-            let _ = state.db.delete_provider("claude", &claude_id);
+            Self::remove_disabled_universal_child(state, AppType::Claude, &claude_id);
         }
 
         // 同步到 Codex
@@ -7000,7 +7012,7 @@ impl ProviderService {
             );
         } else {
             let codex_id = format!("universal-codex-{id}");
-            let _ = state.db.delete_provider("codex", &codex_id);
+            Self::remove_disabled_universal_child(state, AppType::Codex, &codex_id);
         }
 
         // 同步到 Gemini
@@ -7020,7 +7032,7 @@ impl ProviderService {
             );
         } else {
             let gemini_id = format!("universal-gemini-{id}");
-            let _ = state.db.delete_provider("gemini", &gemini_id);
+            Self::remove_disabled_universal_child(state, AppType::Gemini, &gemini_id);
         }
 
         if live_failures.is_empty() {
@@ -7030,6 +7042,43 @@ impl ProviderService {
                 "统一供应商已保存到数据库，但以下应用未能设为当前或写入配置：{}。请重试同步，或手动启用该应用的供应商。",
                 live_failures.join("、")
             )))
+        }
+    }
+
+    /// Delete a disabled universal child. If it was the effective current
+    /// provider, clear the local current pointer so sync does not leave a
+    /// dangling selection after activation-on-sync made that child current.
+    fn remove_disabled_universal_child(state: &AppState, app_type: AppType, child_id: &str) {
+        let was_current =
+            match crate::settings::get_effective_current_provider(&state.db, &app_type) {
+                Ok(current) => current.as_deref() == Some(child_id),
+                Err(err) => {
+                    log::warn!(
+                        "读取 {} 当前供应商失败，仍尝试删除统一子供应商 {}: {err}",
+                        app_type.as_str(),
+                        child_id
+                    );
+                    false
+                }
+            };
+
+        if let Err(err) = state.db.delete_provider(app_type.as_str(), child_id) {
+            log::warn!(
+                "删除统一子供应商 {} ({}) 失败: {err}",
+                child_id,
+                app_type.as_str()
+            );
+            return;
+        }
+
+        if was_current {
+            if let Err(err) = crate::settings::set_current_provider(&app_type, None) {
+                log::warn!(
+                    "清除 {} 当前供应商指针失败（子供应商 {} 已删除）: {err}",
+                    app_type.as_str(),
+                    child_id
+                );
+            }
         }
     }
 

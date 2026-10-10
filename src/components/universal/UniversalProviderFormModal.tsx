@@ -707,7 +707,7 @@ requires_openai_auth = true`;
           defaultValue: "同步统一供应商",
         })}
         message={t("universalProvider.syncConfirmDescription", {
-          defaultValue: `同步 "${name}" 将会覆盖 Claude、Codex 和 Gemini 中关联的供应商配置。确定要继续吗？`,
+          defaultValue: `同步 "${name}" 会更新勾选应用中的关联供应商，并设为各应用的当前供应商。确定要继续吗？`,
           name: name,
         })}
         confirmText={t("universalProvider.saveAndSync", {
