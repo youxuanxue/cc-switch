@@ -29,7 +29,7 @@ export type GlobalPage =
 export type View = AppPage | GlobalPage | "settings";
 
 /** 无 localStorage 记忆时的落地页——统一供应商是配置主路径。 */
-export const DEFAULT_VIEW: View = "universal";
+export const DEFAULT_VIEW = "universal" as const satisfies GlobalPage;
 
 export type SettingsSection =
   | "general"

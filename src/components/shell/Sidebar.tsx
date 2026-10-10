@@ -26,7 +26,7 @@ import type { AppId } from "@/lib/api";
 import type { VisibleApps } from "@/types";
 import { APP_IDS } from "@/config/appConfig";
 import type { GlobalPage, SettingsSection, View } from "@/lib/navigation";
-import { isAppPage } from "@/lib/navigation";
+import { DEFAULT_VIEW, isAppPage } from "@/lib/navigation";
 import { SkillsIcon } from "@/components/BrandIcons";
 import { useUpdate } from "@/contexts/UpdateContext";
 import { sidebarWidth, useSidebarCollapsed } from "@/hooks/useSidebarCollapsed";
@@ -220,7 +220,7 @@ function MainDirectory({
 
   // 统一供应商钉在 App 列表之上：默认工作台，不是埋在全局区里的又一项。
   const workbench = {
-    page: "universal" as const,
+    page: DEFAULT_VIEW,
     label: t("nav.universal"),
     icon: Combine,
   };
