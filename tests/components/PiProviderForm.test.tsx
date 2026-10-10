@@ -61,9 +61,7 @@ describe("PiProviderForm", () => {
     );
 
     // 表单直接铺在添加页里，不再套一层卡片
-    expect(container.querySelector("#provider-form")).not.toHaveClass(
-      "glass",
-    );
+    expect(container.querySelector("#provider-form")).not.toHaveClass("glass");
     expect(screen.getByLabelText("provider.name")).toBeInTheDocument();
     expect(screen.getByLabelText("provider.notes")).toBeInTheDocument();
     expect(screen.getByLabelText("provider.websiteUrl")).toBeInTheDocument();
@@ -782,10 +780,9 @@ describe("PiProviderForm", () => {
       />,
     );
 
-    fireEvent.change(
-      screen.getByLabelText("providerPreset.searchAriaLabel"),
-      { target: { value: "火山 Agent Plan" } },
-    );
+    fireEvent.change(screen.getByLabelText("providerPreset.searchAriaLabel"), {
+      target: { value: "火山 Agent Plan" },
+    });
     fireEvent.click(
       await screen.findByText(/Volcengine|providerPreset\.family\.volcengine/, {
         selector: "span",
@@ -800,12 +797,31 @@ describe("PiProviderForm", () => {
     const submitted = onSubmit.mock.calls[0][0];
     expect(submitted.providerKey).toBe("cc-switch-agentplan");
     expect(new URL(submitted.websiteUrl).pathname).toBe("/activity/agentplan");
-    expect(JSON.parse(submitted.settingsConfig)).toMatchObject({
+    const settings = JSON.parse(submitted.settingsConfig);
+    expect(settings).toMatchObject({
       api: "openai-completions",
       baseUrl: "https://ark.cn-beijing.volces.com/api/plan/v3",
       apiKey: "literal-key",
-      models: [expect.objectContaining({ id: "ark-code-latest" })],
     });
+    // Console language catalog (same ids as Universal sync fallback).
+    expect(settings.models.map((model: { id: string }) => model.id)).toEqual([
+      "ark-code-latest",
+      "Doubao-Seed-2.1-pro",
+      "Doubao-Seed-2.0-mini",
+      "Doubao-Seed-2.1-turbo",
+      "Doubao-Seed-Evolving",
+      "Doubao-Seed-2.1-lite",
+      "Doubao-Seed-2.0-lite",
+      "DeepSeek-V4.1-Flash",
+      "DeepSeek-V4-Flash",
+      "DeepSeek-V4-Pro",
+      "Kimi-K2.7-Code",
+      "Kimi-K2.8-Preview",
+      "Kimi-K3",
+      "GLM-5.3",
+      "GLM-5.3-Flash",
+      "MiniMax-M3",
+    ]);
   });
 
   it("keeps preset model order without exposing a default-model field", async () => {

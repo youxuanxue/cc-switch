@@ -350,6 +350,61 @@ async fn update_tray_menu(
     }
 }
 
+/// CLI: `cc-switch universal sync [id…]` — sync universal providers to apps.
+pub fn run_universal_cli(args: &[String]) -> i32 {
+    use std::sync::Arc;
+
+    let Some(sub) = args.get(1).map(String::as_str) else {
+        eprintln!("usage: cc-switch universal sync [id…]");
+        return 2;
+    };
+    if sub != "sync" {
+        eprintln!("usage: cc-switch universal sync [id…]");
+        return 2;
+    }
+
+    let db = match database::Database::init() {
+        Ok(db) => Arc::new(db),
+        Err(err) => {
+            eprintln!("open database failed: {err}");
+            return 1;
+        }
+    };
+    let state = store::AppState::new(db);
+    let ids: Vec<String> = if args.len() > 2 {
+        args[2..].to_vec()
+    } else {
+        match services::ProviderService::list_universal(&state) {
+            Ok(map) => map.keys().cloned().collect(),
+            Err(err) => {
+                eprintln!("list universal providers failed: {err}");
+                return 1;
+            }
+        }
+    };
+
+    if ids.is_empty() {
+        eprintln!("no universal providers to sync");
+        return 0;
+    }
+
+    let mut failed = 0;
+    for id in ids {
+        match services::ProviderService::sync_universal_to_apps(&state, &id) {
+            Ok(_) => println!("synced {id}"),
+            Err(err) => {
+                eprintln!("sync {id} failed: {err}");
+                failed += 1;
+            }
+        }
+    }
+    if failed > 0 {
+        1
+    } else {
+        0
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // 设置 panic hook，在应用崩溃时记录日志到 <app_config_dir>/crash.log（默认 ~/.cc-switch/crash.log）

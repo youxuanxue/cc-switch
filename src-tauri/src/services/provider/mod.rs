@@ -4970,6 +4970,199 @@ wire_api = "responses"
     }
 
     #[test]
+    fn merge_pi_model_catalog_keeps_metadata_and_drops_stale_ids() {
+        use crate::services::model_fetch::FetchedModel;
+
+        let existing = json!([
+            { "id": "keep-me", "name": "Keep", "compat": { "supportsStore": false } },
+            { "id": "stale", "name": "Gone" }
+        ]);
+        let fetched = vec![
+            FetchedModel {
+                id: "keep-me".into(),
+                owned_by: None,
+            },
+            FetchedModel {
+                id: "brand-new".into(),
+                owned_by: Some("org".into()),
+            },
+        ];
+        let merged = ProviderService::merge_pi_model_catalog(&existing, &fetched);
+        let arr = merged.as_array().expect("array");
+        assert_eq!(arr.len(), 2);
+        assert_eq!(arr[0]["id"], "keep-me");
+        assert_eq!(arr[0]["name"], "Keep");
+        assert_eq!(arr[0]["compat"]["supportsStore"], false);
+        assert_eq!(arr[1]["id"], "brand-new");
+        assert_eq!(arr[1]["name"], "brand-new");
+        assert!(arr.iter().all(|m| m["id"] != "stale"));
+    }
+
+    #[test]
+    fn merge_pi_model_catalog_rejects_empty_ids() {
+        use crate::services::model_fetch::FetchedModel;
+
+        let fetched = vec![
+            FetchedModel {
+                id: "  ".into(),
+                owned_by: None,
+            },
+            FetchedModel {
+                id: "ok".into(),
+                owned_by: None,
+            },
+        ];
+        let merged = ProviderService::merge_pi_model_catalog(&json!([]), &fetched);
+        assert_eq!(merged.as_array().map(|a| a.len()), Some(1));
+        assert_eq!(merged[0]["id"], "ok");
+    }
+
+    #[test]
+    fn volc_agent_plan_base_url_matches_plan_not_coding_or_payg() {
+        assert!(ProviderService::is_volc_agent_plan_base_url(
+            "https://ark.cn-beijing.volces.com/api/plan/v3"
+        ));
+        assert!(ProviderService::is_volc_agent_plan_base_url(
+            "https://ARK.CN-BEIJING.VOLCES.COM/api/plan"
+        ));
+        assert!(!ProviderService::is_volc_agent_plan_base_url(
+            "https://ark.cn-beijing.volces.com/api/coding/v3"
+        ));
+        assert!(!ProviderService::is_volc_agent_plan_base_url(
+            "https://ark.cn-beijing.volces.com/api/v3"
+        ));
+        assert!(!ProviderService::is_volc_agent_plan_base_url(
+            "https://api.example.com/api/plan/v3"
+        ));
+    }
+
+    #[test]
+    fn volc_agent_plan_console_catalog_expands_stub_while_keeping_metadata() {
+        let catalog = ProviderService::volc_agent_plan_console_catalog();
+        let ids: Vec<&str> = catalog.iter().map(|m| m.id.as_str()).collect();
+        assert!(ids.contains(&"ark-code-latest"));
+        assert!(ids.contains(&"Doubao-Seed-2.1-pro"));
+        assert!(ids.contains(&"DeepSeek-V4-Flash"));
+        assert!(ids.contains(&"Kimi-K2.7-Code"));
+        assert!(ids.contains(&"GLM-5.3"));
+        assert!(ids.contains(&"MiniMax-M3"));
+        assert_eq!(ids.len(), 16);
+
+        let existing = json!([{
+            "id": "ark-code-latest",
+            "name": "Ark Code Latest",
+            "compat": { "supportsStore": false }
+        }]);
+        let merged = ProviderService::merge_pi_model_catalog(&existing, &catalog);
+        let arr = merged.as_array().expect("array");
+        assert_eq!(arr.len(), 16);
+        assert_eq!(arr[0]["id"], "ark-code-latest");
+        assert_eq!(arr[0]["name"], "Ark Code Latest");
+        assert_eq!(arr[0]["compat"]["supportsStore"], false);
+        assert!(arr.iter().any(|m| m["id"] == "Doubao-Seed-2.1-pro"));
+    }
+
+    #[test]
+    #[serial]
+    fn sync_universal_to_apps_projects_pi_into_models_json() {
+        let _agent = crate::pi_config::test_support::TestAgentDir::new();
+        with_test_home(|state, _home| {
+            let mut universal = UniversalProvider::new(
+                "shared-pi".into(),
+                "Shared Pi".into(),
+                "custom".into(),
+                "https://api.example.com".into(),
+                "pi-key".into(),
+            );
+            universal.apps.pi = true;
+            universal.models.pi = Some(crate::provider::PiModelConfig {
+                model: Some("claude-sonnet-5".into()),
+                api: Some("anthropic-messages".into()),
+            });
+            state
+                .db
+                .save_universal_provider(&universal)
+                .expect("save universal");
+
+            ProviderService::sync_universal_to_apps(state, "shared-pi").expect("sync");
+
+            let child_id = "universal-pi-shared-pi";
+            let child = state
+                .db
+                .get_provider_by_id(child_id, "pi")
+                .expect("lookup")
+                .expect("pi child");
+            assert_eq!(
+                child.settings_config["baseUrl"].as_str(),
+                Some("https://api.example.com")
+            );
+            assert_eq!(child.settings_config["apiKey"].as_str(), Some("pi-key"));
+            assert_eq!(
+                child.settings_config["api"].as_str(),
+                Some("anthropic-messages")
+            );
+
+            let native = crate::pi_config::read_pi_native_provider(child_id)
+                .expect("read native")
+                .expect("native present");
+            assert_eq!(native["apiKey"].as_str(), Some("pi-key"));
+            assert_eq!(native["models"][0]["id"].as_str(), Some("claude-sonnet-5"));
+
+            // Re-sync updates credentials. Upstream fetch against example.com
+            // fails in tests → existing catalog must be kept (not wiped by stub).
+            let mut richer = child.clone();
+            richer.settings_config["models"] = json!([
+                { "id": "claude-sonnet-5", "name": "Sonnet" },
+                { "id": "claude-opus-5", "name": "Opus" }
+            ]);
+            state.db.save_provider("pi", &richer).expect("seed richer");
+            crate::pi_config::replace_pi_provider_if_present(child_id, &richer.settings_config)
+                .expect("seed native richer");
+
+            universal.api_key = "pi-key-2".into();
+            state
+                .db
+                .save_universal_provider(&universal)
+                .expect("save updated");
+            ProviderService::sync_universal_to_apps(state, "shared-pi").expect("re-sync");
+
+            let after = state
+                .db
+                .get_provider_by_id(child_id, "pi")
+                .expect("lookup after")
+                .expect("still there");
+            assert_eq!(after.settings_config["apiKey"].as_str(), Some("pi-key-2"));
+            assert_eq!(
+                after.settings_config["models"].as_array().map(|a| a.len()),
+                Some(2),
+                "failed upstream refresh must keep the existing catalog"
+            );
+            assert_eq!(
+                after.settings_config["models"][0]["name"].as_str(),
+                Some("Sonnet"),
+                "existing model metadata must survive a failed refresh"
+            );
+
+            // Disable Pi → scrub DB + models.json
+            universal.apps.pi = false;
+            state
+                .db
+                .save_universal_provider(&universal)
+                .expect("disable");
+            ProviderService::sync_universal_to_apps(state, "shared-pi").expect("sync disable");
+            assert!(state
+                .db
+                .get_provider_by_id(child_id, "pi")
+                .expect("lookup disabled")
+                .is_none());
+            assert!(
+                !crate::pi_config::pi_provider_exists(child_id).expect("exists check"),
+                "native models.json entry must be removed"
+            );
+        });
+    }
+
+    #[test]
     #[serial]
     fn add_first_managed_codex_with_missing_account_leaves_no_provider_or_live_state() {
         with_test_home(|state, _| {
@@ -8221,8 +8414,9 @@ impl ProviderService {
         // 删除统一供应商
         state.db.delete_universal_provider(id)?;
 
-        // Always scrub child rows for all three apps. apps.* may be stale relative
-        // to leftover children if the user disabled an app without syncing first.
+        // Always scrub child rows for all projected apps. apps.* may be stale
+        // relative to leftover children if the user disabled an app without
+        // syncing first.
         if provider.is_some() {
             Self::remove_disabled_universal_child(
                 state,
@@ -8238,6 +8432,11 @@ impl ProviderService {
                 state,
                 AppType::Gemini,
                 &format!("universal-gemini-{id}"),
+            );
+            Self::remove_disabled_universal_child(
+                state,
+                AppType::Pi,
+                &format!("universal-pi-{id}"),
             );
         }
 
@@ -8329,6 +8528,53 @@ impl ProviderService {
             Self::remove_disabled_universal_child(state, AppType::Gemini, &gemini_id);
         }
 
+        // 同步到 Pi（写入 models.json；凭据合并后尽量从上游 /models 刷新目录）
+        if let Some(mut pi_provider) = provider.to_pi_provider() {
+            if let Some(existing) = state.db.get_provider_by_id(&pi_provider.id, "pi")? {
+                let mut merged = existing.settings_config.clone();
+                let mut patch = pi_provider.settings_config.clone();
+                // Models come from upstream refresh (or the existing catalog on
+                // fetch failure) — never let the stub overwrite a real list.
+                if let Some(obj) = patch.as_object_mut() {
+                    obj.remove("models");
+                }
+                Self::merge_json(&mut merged, &patch);
+                pi_provider.settings_config = merged;
+                pi_provider.meta = existing.meta;
+                pi_provider.created_at = existing.created_at;
+                pi_provider.sort_index = existing.sort_index;
+            }
+            match Self::refresh_universal_pi_models_from_upstream(&mut pi_provider.settings_config)
+            {
+                Ok(count) => {
+                    log::info!("统一供应商 {} 已从上游刷新 Pi 模型目录（{} 个）", id, count);
+                }
+                Err(err) => {
+                    log::warn!(
+                        "统一供应商 {} 刷新 Pi 模型目录失败，保留已有/占位目录: {err}",
+                        id
+                    );
+                    let empty = pi_provider
+                        .settings_config
+                        .get("models")
+                        .and_then(Value::as_array)
+                        .map(|models| models.is_empty())
+                        .unwrap_or(true);
+                    if empty {
+                        if let Some(stub) = provider.to_pi_provider() {
+                            pi_provider.settings_config["models"] =
+                                stub.settings_config["models"].clone();
+                        }
+                    }
+                }
+            }
+            state.db.save_provider("pi", &pi_provider)?;
+            Self::upsert_universal_pi_live(&pi_provider, &mut live_failures);
+        } else {
+            let pi_id = format!("universal-pi-{id}");
+            Self::remove_disabled_universal_child(state, AppType::Pi, &pi_id);
+        }
+
         if live_failures.is_empty() {
             Ok(true)
         } else {
@@ -8339,10 +8585,169 @@ impl ProviderService {
         }
     }
 
+    /// Upsert the universal Pi child into `models.json`.
+    ///
+    /// Pi's normal `enable` path syncs native → DB when the key already exists,
+    /// which would clobber the just-written universal credentials — so sync
+    /// pushes DB → native explicitly.
+    fn upsert_universal_pi_live(provider: &Provider, failures: &mut Vec<String>) {
+        let id = provider.id.as_str();
+        let result = (|| -> Result<(), AppError> {
+            if crate::pi_config::pi_provider_exists(id)? {
+                crate::pi_config::replace_pi_provider_if_present(id, &provider.settings_config)?;
+            } else {
+                crate::pi_config::insert_pi_provider(id, &provider.settings_config)?;
+            }
+            Ok(())
+        })();
+        if let Err(err) = result {
+            log::warn!("统一供应商同步后写入 Pi models.json ({id}) 失败: {err}");
+            failures.push("pi".to_string());
+        }
+    }
+
+    /// Fetch upstream model ids via `model_fetch` and rewrite `settings.models`.
+    ///
+    /// Existing per-model metadata (name/compat/…) is preserved for matching
+    /// ids; new ids get a minimal `{id, name}` entry. Empty upstream lists are
+    /// treated as failure so a flaky gateway cannot wipe a working catalog.
+    ///
+    /// Volcengine Agent Plan (`…/api/plan/…`) does not expose OpenAI-compatible
+    /// `/models` with the plan Bearer key (404). When live fetch fails, fall
+    /// back to the console Agent Plan language catalog
+    /// (`console.volcengine.com/.../subscription/agent-plan`); those display
+    /// names are accepted as `model` ids on `/api/plan/v3`.
+    fn refresh_universal_pi_models_from_upstream(settings: &mut Value) -> Result<usize, String> {
+        let base_url = settings
+            .get("baseUrl")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|url| !url.is_empty())
+            .ok_or_else(|| "Pi provider missing baseUrl".to_string())?;
+        let api_key = settings
+            .get("apiKey")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
+        if api_key.is_empty() {
+            return Err("Pi provider missing apiKey".to_string());
+        }
+        let api_format = settings
+            .get("api")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|api| !api.is_empty());
+
+        let fetched =
+            match tauri::async_runtime::block_on(crate::services::model_fetch::fetch_models(
+                base_url, &api_key, false, None, None, api_format, None,
+            )) {
+                Ok(models) if !models.is_empty() => models,
+                Ok(_) | Err(_) if Self::is_volc_agent_plan_base_url(base_url) => {
+                    log::info!(
+                    "Pi model_fetch unavailable for Volc Agent Plan; using console catalog fallback"
+                );
+                    Self::volc_agent_plan_console_catalog()
+                }
+                Ok(_) => {
+                    return Err("upstream returned an empty model list".to_string());
+                }
+                Err(err) => return Err(err),
+            };
+
+        let existing = settings
+            .get("models")
+            .cloned()
+            .unwrap_or_else(|| Value::Array(vec![]));
+        let merged = Self::merge_pi_model_catalog(&existing, &fetched);
+        let count = merged.as_array().map(|models| models.len()).unwrap_or(0);
+        settings["models"] = merged;
+        Ok(count)
+    }
+
+    fn is_volc_agent_plan_base_url(base_url: &str) -> bool {
+        let lower = base_url.to_ascii_lowercase();
+        lower.contains("ark.cn-beijing.volces.com") && lower.contains("/api/plan")
+    }
+
+    /// Language models shown on the Volc Agent Plan console (plus the
+    /// `ark-code-latest` router). Vision / speech / embedding entries are
+    /// omitted — Pi's coding path only needs chat models.
+    fn volc_agent_plan_console_catalog() -> Vec<crate::services::model_fetch::FetchedModel> {
+        const IDS: &[&str] = &[
+            "ark-code-latest",
+            "Doubao-Seed-2.1-pro",
+            "Doubao-Seed-2.0-mini",
+            "Doubao-Seed-2.1-turbo",
+            "Doubao-Seed-Evolving",
+            "Doubao-Seed-2.1-lite",
+            "Doubao-Seed-2.0-lite",
+            "DeepSeek-V4.1-Flash",
+            "DeepSeek-V4-Flash",
+            "DeepSeek-V4-Pro",
+            "Kimi-K2.7-Code",
+            "Kimi-K2.8-Preview",
+            "Kimi-K3",
+            "GLM-5.3",
+            "GLM-5.3-Flash",
+            "MiniMax-M3",
+        ];
+        IDS.iter()
+            .map(|id| crate::services::model_fetch::FetchedModel {
+                id: (*id).to_string(),
+                owned_by: Some("volcengine".to_string()),
+            })
+            .collect()
+    }
+
+    /// Merge a fetched OpenAI/Anthropic model list into Pi's `models` array.
+    ///
+    /// Positive: keep richer existing entries when the id still exists upstream.
+    /// Negative: drop ids that disappeared from upstream (catalog follows the
+    /// gateway); brand-new ids get a minimal stub.
+    fn merge_pi_model_catalog(
+        existing: &Value,
+        fetched: &[crate::services::model_fetch::FetchedModel],
+    ) -> Value {
+        let mut by_id = std::collections::HashMap::new();
+        if let Some(entries) = existing.as_array() {
+            for entry in entries {
+                if let Some(id) = entry.get("id").and_then(Value::as_str) {
+                    if !id.is_empty() {
+                        by_id.insert(id.to_string(), entry.clone());
+                    }
+                }
+            }
+        }
+
+        let models: Vec<Value> = fetched
+            .iter()
+            .filter(|model| !model.id.trim().is_empty())
+            .map(|model| {
+                by_id.remove(&model.id).unwrap_or_else(|| {
+                    serde_json::json!({
+                        "id": model.id,
+                        "name": model.id,
+                    })
+                })
+            })
+            .collect();
+        Value::Array(models)
+    }
+
     /// Delete a disabled universal child. If it was the effective current
     /// provider, clear the local current pointer so sync does not leave a
     /// dangling selection after activation-on-sync made that child current.
     fn remove_disabled_universal_child(state: &AppState, app_type: AppType, child_id: &str) {
+        // Pi manages live presence in models.json; use the Pi delete path so
+        // native and DB stay aligned.
+        if app_type == AppType::Pi {
+            if let Err(err) = Self::delete(state, AppType::Pi, child_id) {
+                log::warn!("删除统一 Pi 子供应商 {child_id} 失败: {err}");
+            }
+            return;
+        }
+
         let was_current = match crate::mode::current::provider_for(
             &state.db,
             &app_type,

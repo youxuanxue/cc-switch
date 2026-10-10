@@ -738,10 +738,38 @@ const piProviderPresetDefinitions: PiProviderPreset[] = [
       baseUrl: "https://ark.cn-beijing.volces.com/api/plan/v3",
       api: "openai-completions",
       apiKey: "",
+      // Console language catalog
+      // (console.volcengine.com/.../subscription/agent-plan). Agent Plan has no
+      // Bearer `/models`; Universal sync falls back to the same id list.
       models: [
-        piModel("volcengine/ark-code-latest", {
-          id: "ark-code-latest",
+        piModel("volcengine/ark-code-latest", { id: "ark-code-latest" }),
+        piModel("volcengine/doubao-seed-2.1-pro", {
+          id: "Doubao-Seed-2.1-pro",
         }),
+        piModel("volcengine/doubao-seed-2.0-mini", {
+          id: "Doubao-Seed-2.0-mini",
+        }),
+        piModel("volcengine/doubao-seed-2.1-turbo", {
+          id: "Doubao-Seed-2.1-turbo",
+        }),
+        piModel("volcengine/doubao-seed-evolving", {
+          id: "Doubao-Seed-Evolving",
+        }),
+        piModel("volcengine/doubao-seed-2.1-lite", {
+          id: "Doubao-Seed-2.1-lite",
+        }),
+        piModel("volcengine/doubao-seed-2.0-lite", {
+          id: "Doubao-Seed-2.0-lite",
+        }),
+        piModel("deepseek/deepseek-v4-flash", { id: "DeepSeek-V4.1-Flash" }),
+        piModel("deepseek/deepseek-v4-flash", { id: "DeepSeek-V4-Flash" }),
+        piModel("deepseek/deepseek-v4-pro", { id: "DeepSeek-V4-Pro" }),
+        piModel("moonshotai/kimi-k2.7-code", { id: "Kimi-K2.7-Code" }),
+        piModel("moonshotai/kimi-k2.8-preview", { id: "Kimi-K2.8-Preview" }),
+        piModel("moonshotai/kimi-k3", { id: "Kimi-K3" }),
+        piModel("zai/glm-5.3", { id: "GLM-5.3" }),
+        piModel("zai/glm-5.3-flash", { id: "GLM-5.3-Flash" }),
+        piModel("minimax/minimax-m3", { id: "MiniMax-M3" }),
       ],
     },
     category: "cn_official",

@@ -63,6 +63,7 @@ vi.mock("@/components/providers/forms/ProviderForm", () => ({
         claude: boolean;
         codex: boolean;
         gemini: boolean;
+        pi: boolean;
       };
       defaultModels: Record<string, unknown>;
       isCustomTemplate?: boolean;
@@ -99,7 +100,12 @@ vi.mock("@/components/providers/forms/ProviderForm", () => ({
               onUniversalPresetSelect({
                 name: "Custom Universal",
                 providerType: "custom",
-                defaultApps: { claude: true, codex: true, gemini: true },
+                defaultApps: {
+                  claude: true,
+                  codex: true,
+                  gemini: true,
+                  pi: true,
+                },
                 defaultModels: {},
                 isCustomTemplate: true,
               })
