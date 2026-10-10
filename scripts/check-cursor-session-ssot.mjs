@@ -147,10 +147,16 @@ requireImports(
   "Session Manager must delegate Cursor resume to CursorResumeGate and the shared resume-state owner",
 );
 requireImports(
-  "src/components/sessions/SessionManagerPage.tsx",
+  "src/components/sessions/useSessionCursor.ts",
   ["useCursorSessionIndex"],
   FINDING_CODES.index,
-  "Session Manager must own Cursor index diagnostics through the shared hook",
+  "Session Cursor hook must own Cursor index diagnostics through the shared hook",
+);
+requireImports(
+  "src/components/sessions/SessionManagerPage.tsx",
+  ["useSessionCursor"],
+  FINDING_CODES.index,
+  "Session Manager must compose Cursor index/resume state through useSessionCursor",
 );
 requireImports(
   "src/components/sessions/SessionManagerPage.tsx",
@@ -159,34 +165,38 @@ requireImports(
   "Session Manager delete decisions must use isSessionDeletable",
 );
 
-const sessionManagerPath = "src/components/sessions/SessionManagerPage.tsx";
-const sessionManagerSource = sources.get(sessionManagerPath);
-if (sessionManagerSource !== undefined) {
+const sessionCursorHookPath = "src/components/sessions/useSessionCursor.ts";
+const sessionCursorHookSource = sources.get(sessionCursorHookPath);
+if (sessionCursorHookSource !== undefined) {
   const cursorIndexCalls = [
-    ...sessionManagerSource.matchAll(/\buseCursorSessionIndex\s*\(/g),
+    ...sessionCursorHookSource.matchAll(/\buseCursorSessionIndex\s*\(/g),
   ];
   if (cursorIndexCalls.length === 0) {
     addFinding(
       FINDING_CODES.index,
-      sessionManagerPath,
-      "Session Manager must consume useCursorSessionIndex",
+      sessionCursorHookPath,
+      "useSessionCursor must consume useCursorSessionIndex",
     );
   }
   const cursorFilteredIndexQuery =
     /^useCursorSessionIndex\s*\(\s*providerFilter\s*===\s*["']cursor["']\s*\)/;
   for (const call of cursorIndexCalls) {
     if (
-      !cursorFilteredIndexQuery.test(sessionManagerSource.slice(call.index))
+      !cursorFilteredIndexQuery.test(sessionCursorHookSource.slice(call.index))
     ) {
       addFinding(
         FINDING_CODES.index,
-        sessionManagerPath,
-        "Session Manager Cursor index query must be enabled only by the Cursor filter",
-        lineNumber(sessionManagerSource, call.index),
+        sessionCursorHookPath,
+        "useSessionCursor Cursor index query must be enabled only by the Cursor filter",
+        lineNumber(sessionCursorHookSource, call.index),
       );
     }
   }
+}
 
+const sessionManagerPath = "src/components/sessions/SessionManagerPage.tsx";
+const sessionManagerSource = sources.get(sessionManagerPath);
+if (sessionManagerSource !== undefined) {
   const genericResumeCalls = [
     ...sessionManagerSource.matchAll(/\buseSessionResumeStateQuery\s*\(/g),
   ];
@@ -224,10 +234,12 @@ const resumeOwnerFiles = new Set([
   "src/components/sessions/cursorResumeState.ts",
   "src/components/sessions/liveTerminalSpawn.ts",
   "src/components/sessions/SessionManagerPage.tsx",
+  "src/components/sessions/useSessionCursor.ts",
+  "src/components/sessions/useSessionLiveTerminal.ts",
   "src/lib/api/cursor.ts",
 ]);
 const indexHookConsumerFiles = new Set([
-  "src/components/sessions/SessionManagerPage.tsx",
+  "src/components/sessions/useSessionCursor.ts",
   "src/hooks/useCursorSessionIndex.ts",
 ]);
 const indexApiOwnerFiles = new Set([
@@ -258,7 +270,7 @@ for (const [file, source] of sources) {
       addFinding(
         FINDING_CODES.index,
         file,
-        "Cursor index diagnostics must be consumed only by SessionManagerPage",
+        "Cursor index diagnostics must be consumed only by useSessionCursor",
         lineNumber(source, match.index),
       );
     }
