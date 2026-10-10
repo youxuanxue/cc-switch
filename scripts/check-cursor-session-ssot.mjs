@@ -289,6 +289,14 @@ const indexApiOwnerFiles = new Set([
   "src/hooks/useCursorSessionIndex.ts",
   "src/lib/api/cursor.ts",
 ]);
+const pruneCallOwnerFiles = new Set([
+  "src/components/sessions/useSessionPrune.ts",
+  "src/lib/api/sessions.ts",
+]);
+const liveSpawnImportOwnerFiles = new Set([
+  "src/components/sessions/useSessionLiveTerminal.ts",
+  "src/components/sessions/liveTerminalSpawn.ts",
+]);
 const deleteOwnerFile = "src/components/sessions/sessionCapabilities.ts";
 const authApiPattern =
   /cursorApi\.(?:getOfficialStatus|updateOfficialAuth|clearUserApiKey|launchLogin)\s*\(/g;
@@ -304,6 +312,9 @@ const indexInvokePattern =
   /invoke\s*\(\s*["']get_cursor_session_index_status["']/g;
 const genericTerminalPattern =
   /sessionsApi\.(?:launchTerminal|spawnPty)\s*\(|invoke\s*\(\s*["'](?:launch_session_terminal|spawn_session_pty)["']/g;
+const pruneApiPattern = /sessionsApi\.pruneSessionStorage\s*\(/g;
+const liveSpawnImportPattern =
+  /from\s+["'][^"']*liveTerminalSpawn["']/g;
 
 for (const [file, source] of sources) {
   if (!indexHookConsumerFiles.has(file)) {
@@ -418,6 +429,30 @@ for (const [file, source] of sources) {
         file,
         "Cursor code must use dedicated Cursor launch IPC, never launch_session_terminal",
         lineNumber(source, terminalMatch.index),
+      );
+    }
+  }
+
+  if (!pruneCallOwnerFiles.has(file)) {
+    const pruneMatch = /sessionsApi\.pruneSessionStorage\s*\(/.exec(source);
+    if (pruneMatch) {
+      addFinding(
+        FINDING_CODES.prune,
+        file,
+        "sessionsApi.pruneSessionStorage must stay inside useSessionPrune",
+        lineNumber(source, pruneMatch.index),
+      );
+    }
+  }
+
+  if (!liveSpawnImportOwnerFiles.has(file)) {
+    const spawnImport = /from\s+["'][^"']*liveTerminalSpawn["']/.exec(source);
+    if (spawnImport) {
+      addFinding(
+        FINDING_CODES.live,
+        file,
+        "liveTerminalSpawn must be imported only by useSessionLiveTerminal",
+        lineNumber(source, spawnImport.index),
       );
     }
   }

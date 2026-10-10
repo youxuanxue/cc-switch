@@ -495,4 +495,94 @@ describe("US-004 Cursor session SSOT checker", () => {
     expect(result.output).toContain("CURSOR_GENERIC_TERMINAL_BYPASS");
     expect(result.output).toContain("CursorTerminalPanel.tsx");
   });
+
+  it("rejects SessionManagerPage importing liveTerminalSpawn", () => {
+    const root = createConformingFixture();
+    writeFixtureFile(
+      root,
+      "src/components/sessions/SessionManagerPage.tsx",
+      conformingPageSource([
+        'import { spawnCursorLiveTerminal } from "./liveTerminalSpawn";',
+        "export function SessionManagerPage({ session, providerFilter }: { session: any; providerFilter: string }) {",
+        "  useSessionCursor({ providerFilter });",
+        "  useSessionLiveTerminal();",
+        "  useSessionPrune();",
+        "  useSessionResumeStateQuery(",
+        "    session?.providerId,",
+        "    session?.sessionId,",
+        "    session?.sourcePath,",
+        "  );",
+        "  getSessionResumeI18nKeys(undefined);",
+        "  void spawnCursorLiveTerminal;",
+        "  return (",
+        "    <>",
+        "      <SessionManagerPruneDialogs />",
+        "      {SessionReaderForkChrome().afterHeader}",
+        "    </>",
+        "  );",
+        "}",
+      ]),
+    );
+
+    const result = runChecker(root);
+
+    expect(result.status).toBe(1);
+    expect(result.output).toContain("SESSION_LIVE_HOOK_BYPASS");
+    expect(result.output).toContain("liveTerminalSpawn");
+  });
+
+  it("rejects pruneSessionStorage calls outside useSessionPrune", () => {
+    const root = createConformingFixture();
+    writeFixtureFile(
+      root,
+      "src/components/sessions/StaleSessionCleanupDialog.tsx",
+      [
+        'import { sessionsApi } from "../../lib/api/sessions";',
+        "export async function pruneFromDialog() {",
+        "  await sessionsApi.pruneSessionStorage();",
+        "}",
+      ].join("\n"),
+    );
+
+    const result = runChecker(root);
+
+    expect(result.status).toBe(1);
+    expect(result.output).toContain("SESSION_PRUNE_OWNER_BYPASS");
+    expect(result.output).toContain("StaleSessionCleanupDialog.tsx");
+  });
+
+  it("rejects SessionManagerPage importing CursorResumeGate directly", () => {
+    const root = createConformingFixture();
+    writeFixtureFile(
+      root,
+      "src/components/sessions/SessionManagerPage.tsx",
+      conformingPageSource([
+        'import { CursorResumeGate } from "./CursorResumeGate";',
+        "export function SessionManagerPage({ session, providerFilter }: { session: any; providerFilter: string }) {",
+        "  useSessionCursor({ providerFilter });",
+        "  useSessionLiveTerminal();",
+        "  useSessionPrune();",
+        "  useSessionResumeStateQuery(",
+        "    session?.providerId,",
+        "    session?.sessionId,",
+        "    session?.sourcePath,",
+        "  );",
+        "  getSessionResumeI18nKeys(undefined);",
+        "  return (",
+        "    <>",
+        "      <SessionManagerPruneDialogs />",
+        "      <CursorResumeGate />",
+        "      {SessionReaderForkChrome().afterHeader}",
+        "    </>",
+        "  );",
+        "}",
+      ]),
+    );
+
+    const result = runChecker(root);
+
+    expect(result.status).toBe(1);
+    expect(result.output).toContain("CURSOR_RESUME_OWNER_BYPASS");
+    expect(result.output).toContain("SessionReaderForkChrome");
+  });
 });

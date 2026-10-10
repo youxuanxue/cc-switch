@@ -2900,6 +2900,7 @@
     "liveTerminalLaunched": "站内终端已启动",
     "liveTerminalMacOnly": "站内终端目前仅支持 macOS",
     "liveTerminalNoSession": "请先选择一个会话",
+    "liveTerminalCursorNotReady": "Cursor 会话尚未就绪，无法打开站内终端",
     "liveTerminalRunning": "运行中",
     "liveTerminalSpawnFailed": "站内终端启动失败",
     "liveTerminalSpawning": "启动中…",
