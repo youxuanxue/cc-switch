@@ -59,6 +59,14 @@ export function useSessionLiveTerminal({
         };
       }
       if (readerSession.providerId === "cursor") {
+        if (!cursorPrimaryAction || cursorPrimaryAction.disabled) {
+          return {
+            kind: "unavailable" as const,
+            reason: t("sessionManager.liveTerminalCursorNotReady", {
+              defaultValue: "Cursor 会话尚未就绪，无法打开站内终端",
+            }),
+          };
+        }
         return spawnCursorLiveTerminal({
           sessionId: readerSession.sessionId,
           cols,
@@ -88,7 +96,7 @@ export function useSessionLiveTerminal({
       }
       return result;
     },
-    [readerSession, t],
+    [cursorPrimaryAction, readerSession, t],
   );
 
   const liveTerminalEnabled = Boolean(

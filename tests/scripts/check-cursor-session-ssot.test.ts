@@ -103,27 +103,80 @@ function createConformingFixture() {
   );
   writeFixtureFile(
     root,
-    "src/components/sessions/SessionManagerPage.tsx",
+    "src/components/sessions/useSessionLiveTerminal.ts",
+    [
+      "export function useSessionLiveTerminal() {",
+      '  return { readerPane: "transcript", liveTerminalEnabled: false };',
+      "}",
+    ].join("\n"),
+  );
+  writeFixtureFile(
+    root,
+    "src/components/sessions/useSessionPrune.ts",
+    "export function useSessionPrune() { return { openStaleCleanup: () => undefined }; }",
+  );
+  writeFixtureFile(
+    root,
+    "src/components/sessions/SessionManagerPruneDialogs.tsx",
+    "export function SessionManagerPruneDialogs() { return null; }",
+  );
+  writeFixtureFile(
+    root,
+    "src/components/sessions/SessionReaderForkChrome.tsx",
     [
       'import { CursorResumeGate } from "./CursorResumeGate";',
+      "export function SessionReaderForkChrome() {",
+      "  return { afterHeader: <CursorResumeGate /> };",
+      "}",
+    ].join("\n"),
+  );
+  writeFixtureFile(
+    root,
+    "src/components/sessions/SessionManagerPage.tsx",
+    [
+      'import { SessionReaderForkChrome } from "./SessionReaderForkChrome";',
       'import { isSessionDeletable } from "./sessionCapabilities";',
       'import { useSessionCursor } from "./useSessionCursor";',
+      'import { useSessionLiveTerminal } from "./useSessionLiveTerminal";',
+      'import { useSessionPrune } from "./useSessionPrune";',
+      'import { SessionManagerPruneDialogs } from "./SessionManagerPruneDialogs";',
       'import { useSessionResumeStateQuery } from "../../lib/query";',
       'import { getSessionResumeI18nKeys } from "./utils";',
       "export function SessionManagerPage({ session, providerFilter }: { session: any; providerFilter: string }) {",
       "  useSessionCursor({ providerFilter });",
+      "  useSessionLiveTerminal();",
+      "  useSessionPrune();",
       "  useSessionResumeStateQuery(",
       "    session?.providerId,",
       "    session?.sessionId,",
       "    session?.sourcePath,",
       "  );",
       "  getSessionResumeI18nKeys(undefined);",
-      "  return isSessionDeletable(session) ? <CursorResumeGate /> : null;",
+      "  return isSessionDeletable(session) ? (",
+      "    <>",
+      "      <SessionManagerPruneDialogs />",
+      "      {SessionReaderForkChrome().afterHeader}",
+      "    </>",
+      "  ) : null;",
       "}",
     ].join("\n"),
   );
 
   return root;
+}
+
+function conformingPageSource(body: string[]) {
+  return [
+    'import { SessionReaderForkChrome } from "./SessionReaderForkChrome";',
+    'import { isSessionDeletable } from "./sessionCapabilities";',
+    'import { useSessionCursor } from "./useSessionCursor";',
+    'import { useSessionLiveTerminal } from "./useSessionLiveTerminal";',
+    'import { useSessionPrune } from "./useSessionPrune";',
+    'import { SessionManagerPruneDialogs } from "./SessionManagerPruneDialogs";',
+    'import { useSessionResumeStateQuery } from "../../lib/query";',
+    'import { getSessionResumeI18nKeys } from "./utils";',
+    ...body,
+  ].join("\n");
 }
 
 function runChecker(root: string) {
@@ -185,15 +238,12 @@ describe("US-004 Cursor session SSOT checker", () => {
     writeFixtureFile(
       root,
       "src/components/sessions/SessionManagerPage.tsx",
-      [
-        'import { CursorResumeGate } from "./CursorResumeGate";',
-        'import { isSessionDeletable } from "./sessionCapabilities";',
-        'import { useSessionCursor } from "./useSessionCursor";',
-        'import { useSessionResumeStateQuery } from "../../lib/query";',
-        'import { getSessionResumeI18nKeys } from "./utils";',
+      conformingPageSource([
         "export function SessionManagerPage({ session, providerFilter }: { session: any; providerFilter: string }) {",
         '  const isCursorSession = session?.providerId === "cursor";',
         "  useSessionCursor({ providerFilter });",
+        "  useSessionLiveTerminal();",
+        "  useSessionPrune();",
         "  useSessionResumeStateQuery(",
         "    isCursorSession ? undefined : session?.providerId,",
         "    isCursorSession ? undefined : session?.sessionId,",
@@ -205,9 +255,14 @@ describe("US-004 Cursor session SSOT checker", () => {
         "    session?.sourcePath,",
         "  );",
         "  getSessionResumeI18nKeys(undefined);",
-        "  return isSessionDeletable(session) ? <CursorResumeGate /> : null;",
+        "  return isSessionDeletable(session) ? (",
+        "    <>",
+        "      <SessionManagerPruneDialogs />",
+        "      {SessionReaderForkChrome().afterHeader}",
+        "    </>",
+        "  ) : null;",
         "}",
-      ].join("\n"),
+      ]),
     );
 
     const result = runChecker(root);
@@ -222,15 +277,12 @@ describe("US-004 Cursor session SSOT checker", () => {
     writeFixtureFile(
       root,
       "src/components/sessions/SessionManagerPage.tsx",
-      [
-        'import { CursorResumeGate } from "./CursorResumeGate";',
-        'import { isSessionDeletable } from "./sessionCapabilities";',
-        'import { useSessionCursor } from "./useSessionCursor";',
-        'import { useSessionResumeStateQuery } from "../../lib/query";',
-        'import { getSessionResumeI18nKeys } from "./utils";',
+      conformingPageSource([
         "export function SessionManagerPage({ session, providerFilter }: { session: any; providerFilter: string }) {",
         '  const isCursorSession = session?.providerId === "cursor";',
         "  useSessionCursor({ providerFilter });",
+        "  useSessionLiveTerminal();",
+        "  useSessionPrune();",
         "  useSessionResumeStateQuery(",
         "    session?.providerId,",
         "    session?.sessionId,",
@@ -242,9 +294,14 @@ describe("US-004 Cursor session SSOT checker", () => {
         "    isCursorSession ? undefined : session?.sourcePath,",
         "  );",
         "  getSessionResumeI18nKeys(undefined);",
-        "  return isSessionDeletable(session) ? <CursorResumeGate /> : null;",
+        "  return isSessionDeletable(session) ? (",
+        "    <>",
+        "      <SessionManagerPruneDialogs />",
+        "      {SessionReaderForkChrome().afterHeader}",
+        "    </>",
+        "  ) : null;",
         "}",
-      ].join("\n"),
+      ]),
     );
 
     const result = runChecker(root);
@@ -305,21 +362,27 @@ describe("US-004 Cursor session SSOT checker", () => {
     writeFixtureFile(
       root,
       "src/components/sessions/SessionManagerPage.tsx",
-      [
-        'import { CursorResumeGate } from "./CursorResumeGate";',
-        'import { isSessionDeletable } from "./sessionCapabilities";',
-        'import { useSessionResumeStateQuery } from "../../lib/query";',
-        'import { getSessionResumeI18nKeys } from "./utils";',
+      conformingPageSource([
         "export function SessionManagerPage({ session }: { session: any }) {",
+        "  useSessionLiveTerminal();",
+        "  useSessionPrune();",
         "  useSessionResumeStateQuery(",
         "    session?.providerId,",
         "    session?.sessionId,",
         "    session?.sourcePath,",
         "  );",
         "  getSessionResumeI18nKeys(undefined);",
-        "  return isSessionDeletable(session) ? <CursorResumeGate /> : null;",
+        "  return isSessionDeletable(session) ? (",
+        "    <>",
+        "      <SessionManagerPruneDialogs />",
+        "      {SessionReaderForkChrome().afterHeader}",
+        "    </>",
+        "  ) : null;",
         "}",
-      ].join("\n"),
+      ]).replace(
+        'import { useSessionCursor } from "./useSessionCursor";\n',
+        "",
+      ),
     );
 
     const result = runChecker(root);

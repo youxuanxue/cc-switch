@@ -53,11 +53,33 @@ function createConformingFixture() {
   );
   writeFixtureFile(
     root,
+    "src/components/sessions/SessionReaderForkChrome.tsx",
+    [
+      'import { CursorResumeGate } from "./CursorResumeGate";',
+      'import { LiveTerminalPane } from "./LiveTerminalPane";',
+      "export function SessionReaderForkChrome() {",
+      "  return { afterHeader: <CursorResumeGate />, alternateBody: <LiveTerminalPane /> };",
+      "}",
+    ].join("\n"),
+  );
+  writeFixtureFile(
+    root,
+    "src/components/sessions/CursorResumeGate.tsx",
+    "export function CursorResumeGate() { return null; }",
+  );
+  writeFixtureFile(
+    root,
+    "src/components/sessions/LiveTerminalPane.tsx",
+    "export function LiveTerminalPane() { return null; }",
+  );
+  writeFixtureFile(
+    root,
     "src/components/sessions/SessionManagerPage.tsx",
     [
       'import { SessionReader } from "./reader/SessionReader";',
+      'import { SessionReaderForkChrome } from "./SessionReaderForkChrome";',
       "export function SessionManagerPage() {",
-      "  return <SessionReader />;",
+      "  return <SessionReader {...SessionReaderForkChrome()} />;",
       "}",
     ].join("\n"),
   );

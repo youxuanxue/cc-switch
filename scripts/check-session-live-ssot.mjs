@@ -94,6 +94,14 @@ const liveTerminalSpawn = readRequired(
   root,
   "src/components/sessions/liveTerminalSpawn.ts",
 );
+const liveTerminalHook = readRequired(
+  root,
+  "src/components/sessions/useSessionLiveTerminal.ts",
+);
+const sessionManagerPage = readRequired(
+  root,
+  "src/components/sessions/SessionManagerPage.tsx",
+);
 
 for (const file of [
   resumeRs,
@@ -102,6 +110,7 @@ for (const file of [
   cursorProvider,
   liveTerminalPane,
   liveTerminalSpawn,
+  liveTerminalHook,
 ]) {
   if (file.missing) {
     addFinding(
@@ -341,6 +350,52 @@ if (!liveTerminalSpawn.missing) {
     /sessionsApi\.spawnPty\s*\(/,
     FINDING_CODES.launchConsumer,
     "non-Cursor in-app spawn must use sessionsApi.spawnPty",
+  );
+}
+
+if (!liveTerminalHook.missing) {
+  requireContains(
+    findings,
+    liveTerminalHook.relativePath,
+    liveTerminalHook.source,
+    /spawnCursorLiveTerminal\s*\(/,
+    FINDING_CODES.launchConsumer,
+    "useSessionLiveTerminal must route Cursor through spawnCursorLiveTerminal",
+  );
+  requireContains(
+    findings,
+    liveTerminalHook.relativePath,
+    liveTerminalHook.source,
+    /spawnProviderLiveTerminal\s*\(/,
+    FINDING_CODES.launchConsumer,
+    "useSessionLiveTerminal must route non-Cursor through spawnProviderLiveTerminal",
+  );
+  requireContains(
+    findings,
+    liveTerminalHook.relativePath,
+    liveTerminalHook.source,
+    /cursorPrimaryAction/,
+    FINDING_CODES.launchConsumer,
+    "useSessionLiveTerminal must gate Cursor spawn on cursorPrimaryAction readiness",
+  );
+}
+
+if (!sessionManagerPage.missing) {
+  if (/from\s+["']\.\/liveTerminalSpawn["']/.test(sessionManagerPage.source)) {
+    addFinding(
+      findings,
+      FINDING_CODES.launchConsumer,
+      sessionManagerPage.relativePath,
+      "SessionManagerPage must not import liveTerminalSpawn; use useSessionLiveTerminal",
+    );
+  }
+  requireContains(
+    findings,
+    sessionManagerPage.relativePath,
+    sessionManagerPage.source,
+    /useSessionLiveTerminal/,
+    FINDING_CODES.launchConsumer,
+    "SessionManagerPage must compose live terminal through useSessionLiveTerminal",
   );
 }
 

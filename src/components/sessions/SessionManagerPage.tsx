@@ -49,18 +49,14 @@ import { SessionItem, sessionMenuItemClass } from "./SessionItem";
 import { SessionReader } from "./reader/SessionReader";
 import { sessionKeys, useSessionTranscript } from "@/lib/query/sessions";
 import { SessionDeleteDialog, SessionSourcesDialog } from "./SessionDialogs";
-import { CursorResumeGate } from "./CursorResumeGate";
-import { LiveTerminalPane } from "./LiveTerminalPane";
 import {
   isSessionDeletable,
   sessionMessageSourcePath,
 } from "./sessionCapabilities";
 import { SessionManagerPruneDialogs } from "./SessionManagerPruneDialogs";
+import { SessionReaderForkChrome } from "./SessionReaderForkChrome";
 import { useSessionCursor } from "./useSessionCursor";
-import {
-  useSessionLiveTerminal,
-  type ReaderPane,
-} from "./useSessionLiveTerminal";
+import { useSessionLiveTerminal } from "./useSessionLiveTerminal";
 import { useSessionPrune } from "./useSessionPrune";
 import {
   formatRelativeTime,
@@ -1164,63 +1160,20 @@ export function SessionManagerPage({
             resumePrimary={readerResumePrimary}
             resumeCommandOverride={cursorResumeCommand}
             allowDelete={isSessionDeletable(readerSession)}
-            afterHeader={
-              isCursorReaderSession ? (
-                <div className="shrink-0 border-b border-border px-6 pb-3">
-                  <CursorResumeGate
-                    session={readerSession}
-                    appearance={resumeState?.appearance}
-                    onPrimaryActionChange={setCursorPrimaryAction}
-                    onResumeCommandChange={setCursorResumeCommand}
-                  />
-                </div>
-              ) : undefined
-            }
-            toolbarAddon={
-              isMac() ? (
-                <div className="flex shrink-0 items-center gap-2 border-b border-border px-6 py-2">
-                  <SegmentedControl<ReaderPane>
-                    aria-label={t("sessionManager.readerPane", {
-                      defaultValue: "阅读视图",
-                    })}
-                    value={readerPane}
-                    onValueChange={(value) => {
-                      if (value === "terminal") {
-                        openLiveTerminalPane();
-                        return;
-                      }
-                      setReaderPane("transcript");
-                    }}
-                    className="h-8 shrink-0 rounded-[8px] [&>button]:rounded-[5px] [&>button]:px-3"
-                    items={[
-                      {
-                        value: "transcript",
-                        label: t("sessionManager.conversationHistory", {
-                          defaultValue: "对话记录",
-                        }),
-                      },
-                      {
-                        value: "terminal",
-                        label: t("sessionManager.liveTerminal", {
-                          defaultValue: "站内终端",
-                        }),
-                        disabled: !liveTerminalEnabled,
-                      },
-                    ]}
-                  />
-                </div>
-              ) : undefined
-            }
-            alternateBody={
-              readerPane === "terminal" && terminalVisited ? (
-                <LiveTerminalPane
-                  active={readerPane === "terminal"}
-                  onSpawn={handleLiveTerminalSpawn}
-                  onBlocked={() => setReaderPane("transcript")}
-                  sessionKey={getSessionKey(readerSession)}
-                />
-              ) : undefined
-            }
+            {...SessionReaderForkChrome({
+              t,
+              session: readerSession,
+              isCursorSession: isCursorReaderSession,
+              resumeAppearance: resumeState?.appearance,
+              onPrimaryActionChange: setCursorPrimaryAction,
+              onResumeCommandChange: setCursorResumeCommand,
+              readerPane,
+              setReaderPane,
+              terminalVisited,
+              liveTerminalEnabled,
+              openLiveTerminalPane,
+              onLiveTerminalSpawn: handleLiveTerminalSpawn,
+            })}
           />
         )}
 

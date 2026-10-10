@@ -11,6 +11,8 @@ const FINDING_CODES = {
   resume: "CURSOR_RESUME_OWNER_BYPASS",
   deletion: "CURSOR_DELETE_OWNER_BYPASS",
   terminal: "CURSOR_GENERIC_TERMINAL_BYPASS",
+  prune: "SESSION_PRUNE_OWNER_BYPASS",
+  live: "SESSION_LIVE_HOOK_BYPASS",
 };
 const RESUME_STATE_LITERALS = [
   "platformUnavailable",
@@ -137,14 +139,20 @@ requireImports(
   "Cursor resume composition must use the shared state derivation",
 );
 requireImports(
+  "src/components/sessions/SessionReaderForkChrome.tsx",
+  ["CursorResumeGate"],
+  FINDING_CODES.resume,
+  "Fork reader chrome must host CursorResumeGate",
+);
+requireImports(
   "src/components/sessions/SessionManagerPage.tsx",
   [
-    "CursorResumeGate",
+    "SessionReaderForkChrome",
     "useSessionResumeStateQuery",
     "getSessionResumeI18nKeys",
   ],
   FINDING_CODES.resume,
-  "Session Manager must delegate Cursor resume to CursorResumeGate and the shared resume-state owner",
+  "Session Manager must compose Cursor resume through SessionReaderForkChrome and the shared resume-state owner",
 );
 requireImports(
   "src/components/sessions/useSessionCursor.ts",
@@ -157,6 +165,18 @@ requireImports(
   ["useSessionCursor"],
   FINDING_CODES.index,
   "Session Manager must compose Cursor index/resume state through useSessionCursor",
+);
+requireImports(
+  "src/components/sessions/SessionManagerPage.tsx",
+  ["useSessionLiveTerminal"],
+  FINDING_CODES.live,
+  "Session Manager must compose in-app live terminal through useSessionLiveTerminal",
+);
+requireImports(
+  "src/components/sessions/SessionManagerPage.tsx",
+  ["useSessionPrune", "SessionManagerPruneDialogs"],
+  FINDING_CODES.prune,
+  "Session Manager must compose prune dialogs through useSessionPrune",
 );
 requireImports(
   "src/components/sessions/SessionManagerPage.tsx",
@@ -223,6 +243,31 @@ if (sessionManagerSource !== undefined) {
       );
     }
   }
+
+  if (/from\s+["']\.\/liveTerminalSpawn["']/.test(sessionManagerSource)) {
+    addFinding(
+      FINDING_CODES.live,
+      sessionManagerPath,
+      "Session Manager must not import liveTerminalSpawn; use useSessionLiveTerminal",
+    );
+  }
+  if (/sessionsApi\.pruneSessionStorage\s*\(/.test(sessionManagerSource)) {
+    addFinding(
+      FINDING_CODES.prune,
+      sessionManagerPath,
+      "Session Manager must not call sessionsApi.pruneSessionStorage; use useSessionPrune",
+    );
+  }
+  if (
+    /from\s+["']\.\/CursorResumeGate["']/.test(sessionManagerSource) ||
+    /from\s+["']\.\/LiveTerminalPane["']/.test(sessionManagerSource)
+  ) {
+    addFinding(
+      FINDING_CODES.resume,
+      sessionManagerPath,
+      "Session Manager must host CursorResumeGate/LiveTerminalPane via SessionReaderForkChrome",
+    );
+  }
 }
 
 const authOwnerFiles = new Set([
@@ -234,8 +279,6 @@ const resumeOwnerFiles = new Set([
   "src/components/sessions/cursorResumeState.ts",
   "src/components/sessions/liveTerminalSpawn.ts",
   "src/components/sessions/SessionManagerPage.tsx",
-  "src/components/sessions/useSessionCursor.ts",
-  "src/components/sessions/useSessionLiveTerminal.ts",
   "src/lib/api/cursor.ts",
 ]);
 const indexHookConsumerFiles = new Set([
