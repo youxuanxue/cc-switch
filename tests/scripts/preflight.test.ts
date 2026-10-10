@@ -15,16 +15,21 @@ const roots: string[] = [];
 function runPreflight(area?: string, failCommand?: string) {
   const root = mkdtempSync(resolve(tmpdir(), "cc-switch-preflight-"));
   roots.push(root);
-  mkdirSync(resolve(root, "scripts"));
+  mkdirSync(resolve(root, "scripts/upstream"), { recursive: true });
   mkdirSync(resolve(root, "bin"));
   const script = resolve(root, "scripts/preflight.sh");
   writeFileSync(
     script,
     readFileSync(resolve(process.cwd(), "scripts/preflight.sh")),
   );
+  writeFileSync(
+    resolve(root, "scripts/upstream/notify-merge-needed.py"),
+    "#!/usr/bin/env python3\nimport sys\nsys.exit(0)\n",
+    { mode: 0o755 },
+  );
   const log = resolve(root, "commands.log");
   writeFileSync(log, "");
-  for (const name of ["git", "pnpm", "node", "cargo"]) {
+  for (const name of ["git", "pnpm", "node", "cargo", "python3"]) {
     writeFileSync(
       resolve(root, "bin", name),
       '#!/bin/bash\nprintf "%s %s\\n" "${0##*/}" "$*" >> "$PREFLIGHT_TEST_LOG"\n' +
@@ -60,6 +65,9 @@ describe("preflight exit gate", () => {
     expect(result.commands).toContain("pnpm test:e2e");
     expect(result.commands).toContain(
       "cargo test --manifest-path src-tauri/Cargo.toml",
+    );
+    expect(result.commands).toContain(
+      "python3 scripts/upstream/notify-merge-needed.py --selftest",
     );
     expect(result.output).not.toContain("FAIL:");
   });
