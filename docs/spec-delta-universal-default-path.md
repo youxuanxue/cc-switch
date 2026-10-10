@@ -21,6 +21,7 @@ Plan A 壳把导航改成侧栏按 App 分仓，并把直连 / 路由 / 聚合�
 - 「+」预设挑选步在支持统一供应商的 App 上默认选中「统一」分类。
 - 保存后自动 `sync`，并对勾选 App 将子 Provider **设为当前**；取消勾选时清理 current 指针。
 - 可投影 App 默认勾选：Claude / Codex / Gemini / Pi。
+- 可选 `baseUrls` 按应用覆盖 API 地址（Plan 类 Claude/Codex/Pi 路径不同时）。
 
 ### MODIFIED
 
@@ -45,7 +46,8 @@ Plan A 壳把导航改成侧栏按 App 分仓，并把直连 / 路由 / 聚合�
 | 类型 | 场景 | 期望 |
 |------|------|------|
 | 正向 | 清空 last-view 后启动 | 落到统一供应商页 |
-| 正向 | 侧栏最上方点「统一供应商」，新建并勾选三家，保存 | 三家生成/更新子卡且均为当前；live 已投影 |
+| 正向 | 侧栏最上方点「统一供应商」，新建并勾选 Claude/Codex/Gemini/Pi，保存 | 勾选 App 生成/更新子卡且均为当前（Pi 写入 models.json）；live 已投影 |
+| 正向 | 设置 `baseUrls.claude` / `baseUrls.codex`（或 Pi）后同步 | 各子卡使用覆盖 URL，而非共享 `baseUrl` |
 | 正向 | App「+」打开挑选步 | 默认落在「统一」分类 |
 | 负向 | localStorage 已记 `providers` | 仍打开上次 App 供应商页，不被强制改道 |
 | 负向 | 取消勾选某 App 后同步 | 子卡删除且 current 清空；其余 App 不受影响 |
@@ -54,6 +56,6 @@ Plan A 壳把导航改成侧栏按 App 分仓，并把直连 / 路由 / 聚合�
 
 ## Validation
 
-- 自动化：`readStoredView` 默认 `universal`、有记忆时尊重；`sync_universal_to_apps_*`；挑选步默认统一分类；侧栏/导航含 `universal`。
-- 手动：冷启动无记忆进统一供应商；侧栏钉顶可见；App「+」默认「统一」。
-- 未验证：某 App 写入/启用失败时的部分成功报告；非三家 App 的 Universal 投影、Cursor Provider 化。
+- 自动化：`readStoredView` 默认 `universal`、有记忆时尊重；`sync_universal_to_apps_*`（含 Pi 投影 / scrub）；`universal_provider_base_urls_*`；挑选步默认统一分类；侧栏/导航含 `universal`。
+- 手动：冷启动无记忆进统一供应商；侧栏钉顶可见；App「+」默认「统一」；Plan 网关填 per-app baseUrls 后 sync。
+- 未验证：某 App 写入/启用失败时的部分成功报告；OpenCode / Hermes / Grok / Claude Desktop / mcode 的 Universal 投影、Cursor Provider 化。

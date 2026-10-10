@@ -10,7 +10,11 @@ import { FullScreenPanel } from "@/components/common/FullScreenPanel";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ProviderIcon } from "@/components/ProviderIcon";
 import JsonEditor from "@/components/JsonEditor";
-import type { UniversalProvider, UniversalProviderModels } from "@/types";
+import type {
+  UniversalProvider,
+  UniversalProviderBaseUrls,
+  UniversalProviderModels,
+} from "@/types";
 import {
   universalProviderPresets,
   createUniversalProviderFromPreset,
@@ -57,11 +61,28 @@ export function UniversalProviderFormModal({
 
   // 模型配置
   const [models, setModels] = useState<UniversalProviderModels>({});
+  // Per-app base URL overrides (empty → fall back to baseUrl)
+  const [baseUrls, setBaseUrls] = useState<UniversalProviderBaseUrls>({});
 
   // 保存并同步确认弹窗
   const [syncConfirmOpen, setSyncConfirmOpen] = useState(false);
   const [pendingProvider, setPendingProvider] =
     useState<UniversalProvider | null>(null);
+
+  const trimmedBaseUrls = useCallback(():
+    | UniversalProviderBaseUrls
+    | undefined => {
+    const next: UniversalProviderBaseUrls = {};
+    const claude = baseUrls.claude?.trim();
+    const codex = baseUrls.codex?.trim();
+    const gemini = baseUrls.gemini?.trim();
+    const pi = baseUrls.pi?.trim();
+    if (claude) next.claude = claude;
+    if (codex) next.codex = codex;
+    if (gemini) next.gemini = gemini;
+    if (pi) next.pi = pi;
+    return Object.keys(next).length > 0 ? next : undefined;
+  }, [baseUrls]);
 
   // 初始化表单
   useEffect(() => {
@@ -77,6 +98,7 @@ export function UniversalProviderFormModal({
       setGeminiEnabled(editingProvider.apps.gemini);
       setPiEnabled(editingProvider.apps.pi ?? false);
       setModels(editingProvider.models || {});
+      setBaseUrls(editingProvider.baseUrls || {});
 
       // 尝试匹配预设
       const preset = universalProviderPresets.find(
@@ -97,6 +119,7 @@ export function UniversalProviderFormModal({
       setGeminiEnabled(defaultPreset.defaultApps.gemini);
       setPiEnabled(defaultPreset.defaultApps.pi);
       setModels(deepClone(defaultPreset.defaultModels));
+      setBaseUrls({});
     }
   }, [editingProvider, initialPreset, isOpen]);
 
@@ -111,6 +134,7 @@ export function UniversalProviderFormModal({
         setGeminiEnabled(preset.defaultApps.gemini);
         setPiEnabled(preset.defaultApps.pi);
         setModels(deepClone(preset.defaultModels));
+        setBaseUrls({});
       }
     },
     [isEditMode],
@@ -118,7 +142,11 @@ export function UniversalProviderFormModal({
 
   // 更新模型配置
   const updateModel = useCallback(
-    (app: "claude" | "codex" | "gemini" | "pi", field: string, value: string) => {
+    (
+      app: "claude" | "codex" | "gemini" | "pi",
+      field: string,
+      value: string,
+    ) => {
       setModels((prev) => ({
         ...prev,
         [app]: {
@@ -126,6 +154,13 @@ export function UniversalProviderFormModal({
           [field]: value,
         },
       }));
+    },
+    [],
+  );
+
+  const updateBaseUrlOverride = useCallback(
+    (app: keyof UniversalProviderBaseUrls, value: string) => {
+      setBaseUrls((prev) => ({ ...prev, [app]: value }));
     },
     [],
   );
@@ -195,6 +230,7 @@ requires_openai_auth = true`;
       return;
     }
 
+    const overrides = trimmedBaseUrls();
     const provider: UniversalProvider = editingProvider
       ? {
           ...editingProvider,
@@ -210,6 +246,7 @@ requires_openai_auth = true`;
             pi: piEnabled,
           },
           models,
+          baseUrls: overrides,
         }
       : createUniversalProviderFromPreset(
           selectedPreset || universalProviderPresets[0],
@@ -228,6 +265,7 @@ requires_openai_auth = true`;
         pi: piEnabled,
       };
       provider.models = models;
+      provider.baseUrls = overrides;
       provider.websiteUrl = websiteUrl.trim() || undefined;
       provider.notes = notes.trim() || undefined;
     }
@@ -246,6 +284,7 @@ requires_openai_auth = true`;
     geminiEnabled,
     piEnabled,
     models,
+    trimmedBaseUrls,
     selectedPreset,
     onSave,
     onClose,
@@ -257,6 +296,7 @@ requires_openai_auth = true`;
       return null;
     }
 
+    const overrides = trimmedBaseUrls();
     const provider: UniversalProvider = editingProvider
       ? {
           ...editingProvider,
@@ -272,6 +312,7 @@ requires_openai_auth = true`;
             pi: piEnabled,
           },
           models,
+          baseUrls: overrides,
         }
       : createUniversalProviderFromPreset(
           selectedPreset || universalProviderPresets[0],
@@ -290,6 +331,7 @@ requires_openai_auth = true`;
         pi: piEnabled,
       };
       provider.models = models;
+      provider.baseUrls = overrides;
       provider.websiteUrl = websiteUrl.trim() || undefined;
       provider.notes = notes.trim() || undefined;
     }
@@ -307,6 +349,7 @@ requires_openai_auth = true`;
     geminiEnabled,
     piEnabled,
     models,
+    trimmedBaseUrls,
     selectedPreset,
   ]);
 
@@ -427,7 +470,73 @@ requires_openai_auth = true`;
               onChange={(e) => setBaseUrl(e.target.value)}
               placeholder="https://api.example.com"
             />
+            <p className="text-xs text-fg-2">
+              {t("universalProvider.baseUrlsHint", {
+                defaultValue:
+                  "各应用默认用此地址。Plan 类网关可在下方按应用覆盖（Claude / Codex / Gemini / Pi 路径不同时）。",
+              })}
+            </p>
           </div>
+
+          {(claudeEnabled || codexEnabled || geminiEnabled || piEnabled) && (
+            <div className="space-y-3 rounded-lg border p-3">
+              <Label>
+                {t("universalProvider.baseUrls", {
+                  defaultValue: "按应用覆盖 API 地址（可选）",
+                })}
+              </Label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {claudeEnabled && (
+                  <div className="space-y-1">
+                    <Label className="text-xs">Claude</Label>
+                    <Input
+                      value={baseUrls.claude || ""}
+                      onChange={(e) =>
+                        updateBaseUrlOverride("claude", e.target.value)
+                      }
+                      placeholder={baseUrl || "https://…/apps/anthropic"}
+                    />
+                  </div>
+                )}
+                {codexEnabled && (
+                  <div className="space-y-1">
+                    <Label className="text-xs">Codex</Label>
+                    <Input
+                      value={baseUrls.codex || ""}
+                      onChange={(e) =>
+                        updateBaseUrlOverride("codex", e.target.value)
+                      }
+                      placeholder={baseUrl || "https://…/v1"}
+                    />
+                  </div>
+                )}
+                {geminiEnabled && (
+                  <div className="space-y-1">
+                    <Label className="text-xs">Gemini</Label>
+                    <Input
+                      value={baseUrls.gemini || ""}
+                      onChange={(e) =>
+                        updateBaseUrlOverride("gemini", e.target.value)
+                      }
+                      placeholder={baseUrl || "https://…"}
+                    />
+                  </div>
+                )}
+                {piEnabled && (
+                  <div className="space-y-1">
+                    <Label className="text-xs">Pi</Label>
+                    <Input
+                      value={baseUrls.pi || ""}
+                      onChange={(e) =>
+                        updateBaseUrlOverride("pi", e.target.value)
+                      }
+                      placeholder={baseUrl || "https://…"}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="apiKey">
@@ -687,68 +796,68 @@ requires_openai_auth = true`;
         {/* 配置 JSON 预览 */}
         {isEditMode &&
           (claudeEnabled || codexEnabled || geminiEnabled || piEnabled) && (
-          <div className="space-y-4">
-            <Label>
-              {t("universalProvider.configJsonPreview", {
-                defaultValue: "配置 JSON 预览",
-              })}
-            </Label>
-            <p className="text-xs text-fg-2">
-              {t("universalProvider.configJsonPreviewHint", {
-                defaultValue:
-                  "以下是将要同步到各应用的配置内容（仅覆盖显示的字段，保留其他自定义配置）",
-              })}
-            </p>
+            <div className="space-y-4">
+              <Label>
+                {t("universalProvider.configJsonPreview", {
+                  defaultValue: "配置 JSON 预览",
+                })}
+              </Label>
+              <p className="text-xs text-fg-2">
+                {t("universalProvider.configJsonPreviewHint", {
+                  defaultValue:
+                    "以下是将要同步到各应用的配置内容（仅覆盖显示的字段，保留其他自定义配置）",
+                })}
+              </p>
 
-            {/* Claude JSON */}
-            {claudeConfigJson && (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-sm font-medium">
-                  <ProviderIcon icon="claude" name="Claude" size={16} />
-                  Claude
+              {/* Claude JSON */}
+              {claudeConfigJson && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <ProviderIcon icon="claude" name="Claude" size={16} />
+                    Claude
+                  </div>
+                  <JsonEditor
+                    value={JSON.stringify(claudeConfigJson, null, 2)}
+                    onChange={() => {}}
+                    height={180}
+                    darkMode={isDarkMode}
+                  />
                 </div>
-                <JsonEditor
-                  value={JSON.stringify(claudeConfigJson, null, 2)}
-                  onChange={() => {}}
-                  height={180}
-                  darkMode={isDarkMode}
-                />
-              </div>
-            )}
+              )}
 
-            {/* Codex JSON */}
-            {codexConfigJson && (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-sm font-medium">
-                  <ProviderIcon icon="openai" name="Codex" size={16} />
-                  Codex
+              {/* Codex JSON */}
+              {codexConfigJson && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <ProviderIcon icon="openai" name="Codex" size={16} />
+                    Codex
+                  </div>
+                  <JsonEditor
+                    value={JSON.stringify(codexConfigJson, null, 2)}
+                    onChange={() => {}}
+                    height={280}
+                    darkMode={isDarkMode}
+                  />
                 </div>
-                <JsonEditor
-                  value={JSON.stringify(codexConfigJson, null, 2)}
-                  onChange={() => {}}
-                  height={280}
-                  darkMode={isDarkMode}
-                />
-              </div>
-            )}
+              )}
 
-            {/* Gemini JSON */}
-            {geminiConfigJson && (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-sm font-medium">
-                  <ProviderIcon icon="gemini" name="Gemini" size={16} />
-                  Gemini
+              {/* Gemini JSON */}
+              {geminiConfigJson && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <ProviderIcon icon="gemini" name="Gemini" size={16} />
+                    Gemini
+                  </div>
+                  <JsonEditor
+                    value={JSON.stringify(geminiConfigJson, null, 2)}
+                    onChange={() => {}}
+                    height={140}
+                    darkMode={isDarkMode}
+                  />
                 </div>
-                <JsonEditor
-                  value={JSON.stringify(geminiConfigJson, null, 2)}
-                  onChange={() => {}}
-                  height={140}
-                  darkMode={isDarkMode}
-                />
-              </div>
-            )}
-          </div>
-        )}
+              )}
+            </div>
+          )}
       </div>
 
       {/* 保存并同步确认弹窗 */}

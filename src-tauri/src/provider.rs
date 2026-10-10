@@ -726,10 +726,7 @@ pub struct UniversalProviderBaseUrls {
 
 impl UniversalProviderBaseUrls {
     pub fn is_empty(&self) -> bool {
-        self.claude.is_none()
-            && self.codex.is_none()
-            && self.gemini.is_none()
-            && self.pi.is_none()
+        self.claude.is_none() && self.codex.is_none() && self.gemini.is_none() && self.pi.is_none()
     }
 }
 
@@ -813,7 +810,11 @@ pub struct UniversalProvider {
     #[serde(rename = "baseUrl")]
     pub base_url: String,
     /// Per-app base URL overrides (optional). Empty / omitted → use `base_url`.
-    #[serde(default, rename = "baseUrls", skip_serializing_if = "UniversalProviderBaseUrls::is_empty")]
+    #[serde(
+        default,
+        rename = "baseUrls",
+        skip_serializing_if = "UniversalProviderBaseUrls::is_empty"
+    )]
     pub base_urls: UniversalProviderBaseUrls,
     /// API 密钥
     #[serde(rename = "apiKey")]
@@ -1043,12 +1044,7 @@ requires_openai_auth = true"#
         let pi_models = self.models.pi.as_ref();
         let model = pi_models
             .and_then(|m| m.model.clone())
-            .or_else(|| {
-                self.models
-                    .claude
-                    .as_ref()
-                    .and_then(|m| m.model.clone())
-            })
+            .or_else(|| self.models.claude.as_ref().and_then(|m| m.model.clone()))
             .or_else(|| self.models.codex.as_ref().and_then(|m| m.model.clone()))
             .unwrap_or_else(|| "default".to_string());
 

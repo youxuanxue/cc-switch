@@ -5003,10 +5003,7 @@ wire_api = "responses"
                 child.settings_config["baseUrl"].as_str(),
                 Some("https://api.example.com")
             );
-            assert_eq!(
-                child.settings_config["apiKey"].as_str(),
-                Some("pi-key")
-            );
+            assert_eq!(child.settings_config["apiKey"].as_str(), Some("pi-key"));
             assert_eq!(
                 child.settings_config["api"].as_str(),
                 Some("anthropic-messages")
@@ -5016,10 +5013,7 @@ wire_api = "responses"
                 .expect("read native")
                 .expect("native present");
             assert_eq!(native["apiKey"].as_str(), Some("pi-key"));
-            assert_eq!(
-                native["models"][0]["id"].as_str(),
-                Some("claude-sonnet-5")
-            );
+            assert_eq!(native["models"][0]["id"].as_str(), Some("claude-sonnet-5"));
 
             // Re-sync with richer existing models catalog must preserve it.
             let mut richer = child.clone();
@@ -5045,9 +5039,7 @@ wire_api = "responses"
                 .expect("still there");
             assert_eq!(after.settings_config["apiKey"].as_str(), Some("pi-key-2"));
             assert_eq!(
-                after.settings_config["models"]
-                    .as_array()
-                    .map(|a| a.len()),
+                after.settings_config["models"].as_array().map(|a| a.len()),
                 Some(2),
                 "richer models catalog must be preserved"
             );
