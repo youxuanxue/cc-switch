@@ -1,12 +1,45 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import { getRecordedInvokes, installTauriIpcHarness } from "./tauriIpcHarness";
 
 const READY_SESSION_ID = "11111111-1111-4111-8111-111111111111";
 const SECOND_SESSION_ID = "22222222-2222-4222-8222-222222222222";
 
+const PROJECT_ONE_KEY = "/work/acme/project-one";
+const PROJECT_TWO_KEY = "/work/acme/project-two";
+
+async function openAppChooser(page: Page) {
+  await page.getByRole("button", { name: /^应用：/ }).click();
+  const item = page.getByRole("menuitemradio", { name: /^全部应用/ });
+  await expect(item).toBeVisible();
+}
+
+async function selectAllApps(page: Page) {
+  await openAppChooser(page);
+  await page.getByRole("menuitemradio", { name: /^全部应用/ }).click();
+}
+
 async function selectCursor(page: Page) {
-  await page.getByRole("combobox", { name: "供应商筛选" }).click();
-  await page.getByRole("option", { name: "Cursor" }).click();
+  const appTrigger = page.getByRole("button", { name: /^应用：/ });
+  if (await appTrigger.getByText("Cursor", { exact: true }).isVisible()) {
+    return;
+  }
+  await openAppChooser(page);
+  await page.getByRole("menuitemradio", { name: /^Cursor/ }).click();
+}
+
+async function expandProjectGroup(page: Page, label: string) {
+  const region = page.getByRole("region", { name: "会话列表" });
+  const toggle = region
+    .getByRole("button", { name: new RegExp(`^${label}\\b`) })
+    .first();
+  const expanded = await toggle.getAttribute("aria-expanded");
+  if (expanded !== "true") {
+    await toggle.click();
+  }
+}
+
+function sessionOpenButton(list: Locator, title: string) {
+  return list.getByRole("button", { name: title, exact: true });
 }
 
 test("US-001/US-004 groups Cursor sessions by cwd without exposing unsupported capabilities", async ({
@@ -14,7 +47,8 @@ test("US-001/US-004 groups Cursor sessions by cwd without exposing unsupported c
 }) => {
   await installTauriIpcHarness(page, {
     view: "sessions",
-    listViewMode: "grouped",
+    groupMode: "project",
+    expandedProjects: [PROJECT_ONE_KEY, PROJECT_TWO_KEY],
     sessions: [
       {
         providerId: "cursor",
@@ -60,38 +94,28 @@ test("US-001/US-004 groups Cursor sessions by cwd without exposing unsupported c
   await page.goto("/");
   await selectCursor(page);
 
-  await page
-    .getByRole("button", { name: "展开或折叠 Cursor 供应商分组" })
-    .click();
+  const list = page.getByRole("region", { name: "会话列表" });
   await expect(
-    page.getByRole("button", { name: "展开或折叠 project-one 目录分组" }),
+    list.getByRole("button").filter({ hasText: "project-one" }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "展开或折叠 project-two 目录分组" }),
+    list.getByRole("button").filter({ hasText: "project-two" }),
   ).toBeVisible();
 
-  await page
-    .getByRole("button", { name: "展开或折叠 project-one 目录分组" })
-    .click();
-  await expect(
-    page.getByRole("button", { name: /Cursor Alpha/ }),
-  ).toBeVisible();
-  await expect(page.getByRole("button", { name: /Cursor Beta/ })).toBeVisible();
-  await page.getByRole("button", { name: /Cursor Alpha/ }).click();
+  await expect(sessionOpenButton(list, "Cursor Alpha")).toBeVisible();
+  await expect(sessionOpenButton(list, "Cursor Beta")).toBeVisible();
+  await sessionOpenButton(list, "Cursor Alpha").click();
 
-  await expect(page.getByRole("button", { name: /删除会话/ })).toBeVisible();
-  await expect(page.getByRole("button", { name: /批量管理/ })).toBeVisible();
-  await expect(page.getByText("对话记录")).toBeVisible();
+  await expect(page.getByRole("button", { name: "恢复会话", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "对话记录" })).toBeVisible();
   await expect(page.getByText(/消息数/)).toHaveCount(0);
   await expect(
     page.getByText(/supported|conditional|unsupported/i),
   ).toHaveCount(0);
   await expect(page.getByText("技术详情")).toHaveCount(0);
   await expect(
-    page.getByText(
-      `agent --workspace /work/acme/project-one --resume ${READY_SESSION_ID}`,
-    ),
-  ).toBeVisible();
+    page.getByText(/^agent --workspace /),
+  ).toHaveCount(0);
 
   const calls = await getRecordedInvokes(page);
   expect(calls.some((call) => call.command.startsWith("project"))).toBe(false);
@@ -112,7 +136,9 @@ test("US-001 shows an unavailable Cursor index in the real empty-state journey",
   await page.goto("/");
   await selectCursor(page);
 
-  const warning = page.getByRole("alert");
+  const warning = page.getByRole("status").filter({
+    hasText: "Cursor 会话索引不可用",
+  });
   await expect(warning).toContainText("Cursor 会话索引不可用");
   await expect(warning).toContainText("metadata layout is not recognized");
   await expect(page.getByText("未发现会话", { exact: true })).toHaveCount(0);
@@ -123,6 +149,7 @@ test("US-002 resumes a ready Cursor session only through the dedicated IPC", asy
 }) => {
   await installTauriIpcHarness(page, {
     view: "sessions",
+    expandedProjects: ["/work/acme/ready"],
     sessions: [
       {
         providerId: "cursor",
@@ -136,6 +163,8 @@ test("US-002 resumes a ready Cursor session only through the dedicated IPC", asy
 
   await page.goto("/");
   await selectCursor(page);
+  const list = page.getByRole("region", { name: "会话列表" });
+  await sessionOpenButton(list, "Cursor Ready").click();
   await expect(
     page.getByRole("heading", { name: "Cursor Ready" }),
   ).toBeVisible();
@@ -168,6 +197,7 @@ test("US-002 keeps a canonical workspace through Login and continue", async ({
 }) => {
   await installTauriIpcHarness(page, {
     view: "sessions",
+    expandedProjects: ["/work/acme/missing"],
     sessions: [
       {
         providerId: "cursor",
@@ -194,6 +224,8 @@ test("US-002 keeps a canonical workspace through Login and continue", async ({
 
   await page.goto("/");
   await selectCursor(page);
+  const list = page.getByRole("region", { name: "会话列表" });
+  await sessionOpenButton(list, "Cursor Moved Workspace").click();
   await page
     .getByRole("button", { name: "选择目录并继续", exact: true })
     .click();
@@ -236,6 +268,7 @@ test("US-005 reads Cursor conversation history through the shared session chrome
   const storePath = "/mock/cursor/chats/workspace/store.db";
   await installTauriIpcHarness(page, {
     view: "sessions",
+    expandedProjects: ["/work/acme/ready"],
     sessions: [
       {
         providerId: "cursor",
@@ -268,25 +301,24 @@ test("US-005 reads Cursor conversation history through the shared session chrome
 
   await page.goto("/");
   await selectCursor(page);
+  const list = page.getByRole("region", { name: "会话列表" });
+  await sessionOpenButton(list, "Cursor Transcript").click();
   await expect(
     page.getByRole("heading", { name: "Cursor Transcript" }),
   ).toBeVisible();
-  await expect(page.getByText("对话记录")).toBeVisible();
+  await expect(page.getByRole("button", { name: "对话记录" })).toBeVisible();
   await expect(
-    page.getByText(
-      `agent --workspace /work/acme/ready --resume ${READY_SESSION_ID}`,
-    ),
+    page.getByRole("button", { name: "恢复会话", exact: true }),
   ).toBeVisible();
+  const transcript = page.getByRole("region", { name: "对话内容" });
+  await expect(transcript.getByText(/continue the cursor task/)).toBeVisible();
+  await expect(transcript.getByText("working on it")).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "continue the cursor task" }),
+    page
+      .getByRole("navigation", { name: "对话目录" })
+      .getByRole("button")
+      .filter({ hasText: "continue the cursor task" }),
   ).toBeVisible();
-  await expect(
-    page.getByText("continue the cursor task", { exact: true }),
-  ).toHaveCount(2);
-  await expect(page.getByText("working on it")).toBeVisible();
-  await expect(page.getByText("OS Version: darwin")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /删除会话/ })).toBeVisible();
-
   await page.getByRole("button", { name: "恢复会话", exact: true }).click();
   await expect
     .poll(async () =>
@@ -315,7 +347,7 @@ test("US-003 manages Cursor Official User API Key without echoing or recording i
 }) => {
   const secret = "cursor-e2e-secret";
   await installTauriIpcHarness(page, {
-    view: "settings",
+    view: "auth",
     cursorStatus: {
       installed: true,
       version: "agent 2026.08",
@@ -327,11 +359,8 @@ test("US-003 manages Cursor Official User API Key without echoing or recording i
   });
 
   await page.goto("/");
-  await page.getByRole("tab", { name: "认证", exact: true }).click();
 
-  await expect(
-    page.getByRole("heading", { name: "官方认证中心" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "授权中心" })).toBeVisible();
   await expect(page.getByRole("button", { name: "登录 Cursor" })).toBeVisible();
   await expect(page.getByLabel("Cursor User API Key")).toHaveCount(0);
 
