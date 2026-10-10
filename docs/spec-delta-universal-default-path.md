@@ -22,6 +22,7 @@ Plan A 壳把导航改成侧栏按 App 分仓，并把直连 / 路由 / 聚合�
 - 保存后自动 `sync`，并对勾选 App 将子 Provider **设为当前**；取消勾选时清理 current 指针。
 - 可投影 App 默认勾选：Claude / Codex / Gemini / Pi。
 - 可选 `baseUrls` 按应用覆盖 API 地址（Plan 类 Claude/Codex/Pi 路径不同时）。
+- Universal sync 投影 Pi 时调用 `model_fetch` 对齐上游模型目录；失败则保留已有/占位目录。
 
 ### MODIFIED
 

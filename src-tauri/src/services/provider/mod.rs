@@ -4970,6 +4970,54 @@ wire_api = "responses"
     }
 
     #[test]
+    fn merge_pi_model_catalog_keeps_metadata_and_drops_stale_ids() {
+        use crate::services::model_fetch::FetchedModel;
+
+        let existing = json!([
+            { "id": "keep-me", "name": "Keep", "compat": { "supportsStore": false } },
+            { "id": "stale", "name": "Gone" }
+        ]);
+        let fetched = vec![
+            FetchedModel {
+                id: "keep-me".into(),
+                owned_by: None,
+            },
+            FetchedModel {
+                id: "brand-new".into(),
+                owned_by: Some("org".into()),
+            },
+        ];
+        let merged = ProviderService::merge_pi_model_catalog(&existing, &fetched);
+        let arr = merged.as_array().expect("array");
+        assert_eq!(arr.len(), 2);
+        assert_eq!(arr[0]["id"], "keep-me");
+        assert_eq!(arr[0]["name"], "Keep");
+        assert_eq!(arr[0]["compat"]["supportsStore"], false);
+        assert_eq!(arr[1]["id"], "brand-new");
+        assert_eq!(arr[1]["name"], "brand-new");
+        assert!(arr.iter().all(|m| m["id"] != "stale"));
+    }
+
+    #[test]
+    fn merge_pi_model_catalog_rejects_empty_ids() {
+        use crate::services::model_fetch::FetchedModel;
+
+        let fetched = vec![
+            FetchedModel {
+                id: "  ".into(),
+                owned_by: None,
+            },
+            FetchedModel {
+                id: "ok".into(),
+                owned_by: None,
+            },
+        ];
+        let merged = ProviderService::merge_pi_model_catalog(&json!([]), &fetched);
+        assert_eq!(merged.as_array().map(|a| a.len()), Some(1));
+        assert_eq!(merged[0]["id"], "ok");
+    }
+
+    #[test]
     #[serial]
     fn sync_universal_to_apps_projects_pi_into_models_json() {
         let _agent = crate::pi_config::test_support::TestAgentDir::new();
@@ -5015,7 +5063,8 @@ wire_api = "responses"
             assert_eq!(native["apiKey"].as_str(), Some("pi-key"));
             assert_eq!(native["models"][0]["id"].as_str(), Some("claude-sonnet-5"));
 
-            // Re-sync with richer existing models catalog must preserve it.
+            // Re-sync updates credentials. Upstream fetch against example.com
+            // fails in tests → existing catalog must be kept (not wiped by stub).
             let mut richer = child.clone();
             richer.settings_config["models"] = json!([
                 { "id": "claude-sonnet-5", "name": "Sonnet" },
@@ -5041,7 +5090,12 @@ wire_api = "responses"
             assert_eq!(
                 after.settings_config["models"].as_array().map(|a| a.len()),
                 Some(2),
-                "richer models catalog must be preserved"
+                "failed upstream refresh must keep the existing catalog"
+            );
+            assert_eq!(
+                after.settings_config["models"][0]["name"].as_str(),
+                Some("Sonnet"),
+                "existing model metadata must survive a failed refresh"
             );
 
             // Disable Pi → scrub DB + models.json
@@ -8429,27 +8483,45 @@ impl ProviderService {
             Self::remove_disabled_universal_child(state, AppType::Gemini, &gemini_id);
         }
 
-        // 同步到 Pi（写入 models.json；不覆盖已有更丰富的 models 目录）
+        // 同步到 Pi（写入 models.json；凭据合并后尽量从上游 /models 刷新目录）
         if let Some(mut pi_provider) = provider.to_pi_provider() {
             if let Some(existing) = state.db.get_provider_by_id(&pi_provider.id, "pi")? {
-                let existing_models = existing.settings_config.get("models").cloned();
                 let mut merged = existing.settings_config.clone();
                 let mut patch = pi_provider.settings_config.clone();
-                // Preserve a richer models catalog seeded from specialty / native.
-                if existing_models
-                    .as_ref()
-                    .and_then(Value::as_array)
-                    .is_some_and(|models| !models.is_empty())
-                {
-                    if let Some(obj) = patch.as_object_mut() {
-                        obj.remove("models");
-                    }
+                // Models come from upstream refresh (or the existing catalog on
+                // fetch failure) — never let the stub overwrite a real list.
+                if let Some(obj) = patch.as_object_mut() {
+                    obj.remove("models");
                 }
                 Self::merge_json(&mut merged, &patch);
                 pi_provider.settings_config = merged;
                 pi_provider.meta = existing.meta;
                 pi_provider.created_at = existing.created_at;
                 pi_provider.sort_index = existing.sort_index;
+            }
+            match Self::refresh_universal_pi_models_from_upstream(&mut pi_provider.settings_config)
+            {
+                Ok(count) => {
+                    log::info!("统一供应商 {} 已从上游刷新 Pi 模型目录（{} 个）", id, count);
+                }
+                Err(err) => {
+                    log::warn!(
+                        "统一供应商 {} 刷新 Pi 模型目录失败，保留已有/占位目录: {err}",
+                        id
+                    );
+                    let empty = pi_provider
+                        .settings_config
+                        .get("models")
+                        .and_then(Value::as_array)
+                        .map(|models| models.is_empty())
+                        .unwrap_or(true);
+                    if empty {
+                        if let Some(stub) = provider.to_pi_provider() {
+                            pi_provider.settings_config["models"] =
+                                stub.settings_config["models"].clone();
+                        }
+                    }
+                }
             }
             state.db.save_provider("pi", &pi_provider)?;
             Self::upsert_universal_pi_live(&pi_provider, &mut live_failures);
@@ -8487,6 +8559,84 @@ impl ProviderService {
             log::warn!("统一供应商同步后写入 Pi models.json ({id}) 失败: {err}");
             failures.push("pi".to_string());
         }
+    }
+
+    /// Fetch upstream model ids via `model_fetch` and rewrite `settings.models`.
+    ///
+    /// Existing per-model metadata (name/compat/…) is preserved for matching
+    /// ids; new ids get a minimal `{id, name}` entry. Empty upstream lists are
+    /// treated as failure so a flaky gateway cannot wipe a working catalog.
+    fn refresh_universal_pi_models_from_upstream(settings: &mut Value) -> Result<usize, String> {
+        let base_url = settings
+            .get("baseUrl")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|url| !url.is_empty())
+            .ok_or_else(|| "Pi provider missing baseUrl".to_string())?;
+        let api_key = settings
+            .get("apiKey")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
+        if api_key.is_empty() {
+            return Err("Pi provider missing apiKey".to_string());
+        }
+        let api_format = settings
+            .get("api")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|api| !api.is_empty());
+
+        let fetched = tauri::async_runtime::block_on(crate::services::model_fetch::fetch_models(
+            base_url, &api_key, false, None, None, api_format, None,
+        ))?;
+        if fetched.is_empty() {
+            return Err("upstream returned an empty model list".to_string());
+        }
+
+        let existing = settings
+            .get("models")
+            .cloned()
+            .unwrap_or_else(|| Value::Array(vec![]));
+        let merged = Self::merge_pi_model_catalog(&existing, &fetched);
+        let count = merged.as_array().map(|models| models.len()).unwrap_or(0);
+        settings["models"] = merged;
+        Ok(count)
+    }
+
+    /// Merge a fetched OpenAI/Anthropic model list into Pi's `models` array.
+    ///
+    /// Positive: keep richer existing entries when the id still exists upstream.
+    /// Negative: drop ids that disappeared from upstream (catalog follows the
+    /// gateway); brand-new ids get a minimal stub.
+    fn merge_pi_model_catalog(
+        existing: &Value,
+        fetched: &[crate::services::model_fetch::FetchedModel],
+    ) -> Value {
+        let mut by_id = std::collections::HashMap::new();
+        if let Some(entries) = existing.as_array() {
+            for entry in entries {
+                if let Some(id) = entry.get("id").and_then(Value::as_str) {
+                    if !id.is_empty() {
+                        by_id.insert(id.to_string(), entry.clone());
+                    }
+                }
+            }
+        }
+
+        let models: Vec<Value> = fetched
+            .iter()
+            .filter(|model| !model.id.trim().is_empty())
+            .map(|model| {
+                by_id.remove(&model.id).unwrap_or_else(|| {
+                    serde_json::json!({
+                        "id": model.id,
+                        "name": model.id,
+                    })
+                })
+            })
+            .collect();
+        Value::Array(models)
     }
 
     /// Delete a disabled universal child. If it was the effective current
