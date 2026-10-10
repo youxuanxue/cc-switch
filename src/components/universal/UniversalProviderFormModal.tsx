@@ -53,6 +53,7 @@ export function UniversalProviderFormModal({
   const [claudeEnabled, setClaudeEnabled] = useState(true);
   const [codexEnabled, setCodexEnabled] = useState(true);
   const [geminiEnabled, setGeminiEnabled] = useState(true);
+  const [piEnabled, setPiEnabled] = useState(true);
 
   // 模型配置
   const [models, setModels] = useState<UniversalProviderModels>({});
@@ -74,6 +75,7 @@ export function UniversalProviderFormModal({
       setClaudeEnabled(editingProvider.apps.claude);
       setCodexEnabled(editingProvider.apps.codex);
       setGeminiEnabled(editingProvider.apps.gemini);
+      setPiEnabled(editingProvider.apps.pi ?? false);
       setModels(editingProvider.models || {});
 
       // 尝试匹配预设
@@ -93,6 +95,7 @@ export function UniversalProviderFormModal({
       setClaudeEnabled(defaultPreset.defaultApps.claude);
       setCodexEnabled(defaultPreset.defaultApps.codex);
       setGeminiEnabled(defaultPreset.defaultApps.gemini);
+      setPiEnabled(defaultPreset.defaultApps.pi);
       setModels(deepClone(defaultPreset.defaultModels));
     }
   }, [editingProvider, initialPreset, isOpen]);
@@ -106,6 +109,7 @@ export function UniversalProviderFormModal({
         setClaudeEnabled(preset.defaultApps.claude);
         setCodexEnabled(preset.defaultApps.codex);
         setGeminiEnabled(preset.defaultApps.gemini);
+        setPiEnabled(preset.defaultApps.pi);
         setModels(deepClone(preset.defaultModels));
       }
     },
@@ -114,7 +118,7 @@ export function UniversalProviderFormModal({
 
   // 更新模型配置
   const updateModel = useCallback(
-    (app: "claude" | "codex" | "gemini", field: string, value: string) => {
+    (app: "claude" | "codex" | "gemini" | "pi", field: string, value: string) => {
       setModels((prev) => ({
         ...prev,
         [app]: {
@@ -203,6 +207,7 @@ requires_openai_auth = true`;
             claude: claudeEnabled,
             codex: codexEnabled,
             gemini: geminiEnabled,
+            pi: piEnabled,
           },
           models,
         }
@@ -220,6 +225,7 @@ requires_openai_auth = true`;
         claude: claudeEnabled,
         codex: codexEnabled,
         gemini: geminiEnabled,
+        pi: piEnabled,
       };
       provider.models = models;
       provider.websiteUrl = websiteUrl.trim() || undefined;
@@ -238,6 +244,7 @@ requires_openai_auth = true`;
     claudeEnabled,
     codexEnabled,
     geminiEnabled,
+    piEnabled,
     models,
     selectedPreset,
     onSave,
@@ -262,6 +269,7 @@ requires_openai_auth = true`;
             claude: claudeEnabled,
             codex: codexEnabled,
             gemini: geminiEnabled,
+            pi: piEnabled,
           },
           models,
         }
@@ -279,6 +287,7 @@ requires_openai_auth = true`;
         claude: claudeEnabled,
         codex: codexEnabled,
         gemini: geminiEnabled,
+        pi: piEnabled,
       };
       provider.models = models;
       provider.websiteUrl = websiteUrl.trim() || undefined;
@@ -296,6 +305,7 @@ requires_openai_auth = true`;
     claudeEnabled,
     codexEnabled,
     geminiEnabled,
+    piEnabled,
     models,
     selectedPreset,
   ]);
@@ -513,6 +523,13 @@ requires_openai_auth = true`;
                 onCheckedChange={setGeminiEnabled}
               />
             </div>
+            <div className="flex items-center justify-between rounded-lg border p-3">
+              <div className="flex items-center gap-2">
+                <ProviderIcon icon="pi" name="Pi" size={20} />
+                <span className="font-medium">Pi</span>
+              </div>
+              <Switch checked={piEnabled} onCheckedChange={setPiEnabled} />
+            </div>
           </div>
         </div>
 
@@ -631,10 +648,45 @@ requires_openai_auth = true`;
               </div>
             </div>
           )}
+
+          {/* Pi 模型 */}
+          {piEnabled && (
+            <div className="space-y-3 rounded-lg border p-4">
+              <div className="flex items-center gap-2 font-medium">
+                <ProviderIcon icon="pi" name="Pi" size={16} />
+                Pi
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <Label className="text-xs">
+                    {t("universalProvider.model", { defaultValue: "模型" })}
+                  </Label>
+                  <Input
+                    value={models.pi?.model || ""}
+                    onChange={(e) => updateModel("pi", "model", e.target.value)}
+                    placeholder="claude-sonnet-5"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">
+                    {t("universalProvider.piApi", {
+                      defaultValue: "协议 (api)",
+                    })}
+                  </Label>
+                  <Input
+                    value={models.pi?.api || ""}
+                    onChange={(e) => updateModel("pi", "api", e.target.value)}
+                    placeholder="anthropic-messages / openai-completions"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* 配置 JSON 预览 */}
-        {isEditMode && (claudeEnabled || codexEnabled || geminiEnabled) && (
+        {isEditMode &&
+          (claudeEnabled || codexEnabled || geminiEnabled || piEnabled) && (
           <div className="space-y-4">
             <Label>
               {t("universalProvider.configJsonPreview", {

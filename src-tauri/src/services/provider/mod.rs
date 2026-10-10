@@ -4971,6 +4971,108 @@ wire_api = "responses"
 
     #[test]
     #[serial]
+    fn sync_universal_to_apps_projects_pi_into_models_json() {
+        let _agent = crate::pi_config::test_support::TestAgentDir::new();
+        with_test_home(|state, _home| {
+            let mut universal = UniversalProvider::new(
+                "shared-pi".into(),
+                "Shared Pi".into(),
+                "custom".into(),
+                "https://api.example.com".into(),
+                "pi-key".into(),
+            );
+            universal.apps.pi = true;
+            universal.models.pi = Some(crate::provider::PiModelConfig {
+                model: Some("claude-sonnet-5".into()),
+                api: Some("anthropic-messages".into()),
+            });
+            state
+                .db
+                .save_universal_provider(&universal)
+                .expect("save universal");
+
+            ProviderService::sync_universal_to_apps(state, "shared-pi").expect("sync");
+
+            let child_id = "universal-pi-shared-pi";
+            let child = state
+                .db
+                .get_provider_by_id(child_id, "pi")
+                .expect("lookup")
+                .expect("pi child");
+            assert_eq!(
+                child.settings_config["baseUrl"].as_str(),
+                Some("https://api.example.com")
+            );
+            assert_eq!(
+                child.settings_config["apiKey"].as_str(),
+                Some("pi-key")
+            );
+            assert_eq!(
+                child.settings_config["api"].as_str(),
+                Some("anthropic-messages")
+            );
+
+            let native = crate::pi_config::read_pi_native_provider(child_id)
+                .expect("read native")
+                .expect("native present");
+            assert_eq!(native["apiKey"].as_str(), Some("pi-key"));
+            assert_eq!(
+                native["models"][0]["id"].as_str(),
+                Some("claude-sonnet-5")
+            );
+
+            // Re-sync with richer existing models catalog must preserve it.
+            let mut richer = child.clone();
+            richer.settings_config["models"] = json!([
+                { "id": "claude-sonnet-5", "name": "Sonnet" },
+                { "id": "claude-opus-5", "name": "Opus" }
+            ]);
+            state.db.save_provider("pi", &richer).expect("seed richer");
+            crate::pi_config::replace_pi_provider_if_present(child_id, &richer.settings_config)
+                .expect("seed native richer");
+
+            universal.api_key = "pi-key-2".into();
+            state
+                .db
+                .save_universal_provider(&universal)
+                .expect("save updated");
+            ProviderService::sync_universal_to_apps(state, "shared-pi").expect("re-sync");
+
+            let after = state
+                .db
+                .get_provider_by_id(child_id, "pi")
+                .expect("lookup after")
+                .expect("still there");
+            assert_eq!(after.settings_config["apiKey"].as_str(), Some("pi-key-2"));
+            assert_eq!(
+                after.settings_config["models"]
+                    .as_array()
+                    .map(|a| a.len()),
+                Some(2),
+                "richer models catalog must be preserved"
+            );
+
+            // Disable Pi → scrub DB + models.json
+            universal.apps.pi = false;
+            state
+                .db
+                .save_universal_provider(&universal)
+                .expect("disable");
+            ProviderService::sync_universal_to_apps(state, "shared-pi").expect("sync disable");
+            assert!(state
+                .db
+                .get_provider_by_id(child_id, "pi")
+                .expect("lookup disabled")
+                .is_none());
+            assert!(
+                !crate::pi_config::pi_provider_exists(child_id).expect("exists check"),
+                "native models.json entry must be removed"
+            );
+        });
+    }
+
+    #[test]
+    #[serial]
     fn add_first_managed_codex_with_missing_account_leaves_no_provider_or_live_state() {
         with_test_home(|state, _| {
             crate::settings::reload_settings().expect("reload settings");
@@ -8221,8 +8323,9 @@ impl ProviderService {
         // 删除统一供应商
         state.db.delete_universal_provider(id)?;
 
-        // Always scrub child rows for all three apps. apps.* may be stale relative
-        // to leftover children if the user disabled an app without syncing first.
+        // Always scrub child rows for all projected apps. apps.* may be stale
+        // relative to leftover children if the user disabled an app without
+        // syncing first.
         if provider.is_some() {
             Self::remove_disabled_universal_child(
                 state,
@@ -8238,6 +8341,11 @@ impl ProviderService {
                 state,
                 AppType::Gemini,
                 &format!("universal-gemini-{id}"),
+            );
+            Self::remove_disabled_universal_child(
+                state,
+                AppType::Pi,
+                &format!("universal-pi-{id}"),
             );
         }
 
@@ -8329,6 +8437,35 @@ impl ProviderService {
             Self::remove_disabled_universal_child(state, AppType::Gemini, &gemini_id);
         }
 
+        // 同步到 Pi（写入 models.json；不覆盖已有更丰富的 models 目录）
+        if let Some(mut pi_provider) = provider.to_pi_provider() {
+            if let Some(existing) = state.db.get_provider_by_id(&pi_provider.id, "pi")? {
+                let existing_models = existing.settings_config.get("models").cloned();
+                let mut merged = existing.settings_config.clone();
+                let mut patch = pi_provider.settings_config.clone();
+                // Preserve a richer models catalog seeded from specialty / native.
+                if existing_models
+                    .as_ref()
+                    .and_then(Value::as_array)
+                    .is_some_and(|models| !models.is_empty())
+                {
+                    if let Some(obj) = patch.as_object_mut() {
+                        obj.remove("models");
+                    }
+                }
+                Self::merge_json(&mut merged, &patch);
+                pi_provider.settings_config = merged;
+                pi_provider.meta = existing.meta;
+                pi_provider.created_at = existing.created_at;
+                pi_provider.sort_index = existing.sort_index;
+            }
+            state.db.save_provider("pi", &pi_provider)?;
+            Self::upsert_universal_pi_live(&pi_provider, &mut live_failures);
+        } else {
+            let pi_id = format!("universal-pi-{id}");
+            Self::remove_disabled_universal_child(state, AppType::Pi, &pi_id);
+        }
+
         if live_failures.is_empty() {
             Ok(true)
         } else {
@@ -8339,10 +8476,40 @@ impl ProviderService {
         }
     }
 
+    /// Upsert the universal Pi child into `models.json`.
+    ///
+    /// Pi's normal `enable` path syncs native → DB when the key already exists,
+    /// which would clobber the just-written universal credentials — so sync
+    /// pushes DB → native explicitly.
+    fn upsert_universal_pi_live(provider: &Provider, failures: &mut Vec<String>) {
+        let id = provider.id.as_str();
+        let result = (|| -> Result<(), AppError> {
+            if crate::pi_config::pi_provider_exists(id)? {
+                crate::pi_config::replace_pi_provider_if_present(id, &provider.settings_config)?;
+            } else {
+                crate::pi_config::insert_pi_provider(id, &provider.settings_config)?;
+            }
+            Ok(())
+        })();
+        if let Err(err) = result {
+            log::warn!("统一供应商同步后写入 Pi models.json ({id}) 失败: {err}");
+            failures.push("pi".to_string());
+        }
+    }
+
     /// Delete a disabled universal child. If it was the effective current
     /// provider, clear the local current pointer so sync does not leave a
     /// dangling selection after activation-on-sync made that child current.
     fn remove_disabled_universal_child(state: &AppState, app_type: AppType, child_id: &str) {
+        // Pi manages live presence in models.json; use the Pi delete path so
+        // native and DB stay aligned.
+        if app_type == AppType::Pi {
+            if let Err(err) = Self::delete(state, AppType::Pi, child_id) {
+                log::warn!("删除统一 Pi 子供应商 {child_id} 失败: {err}");
+            }
+            return;
+        }
+
         let was_current = match crate::mode::current::provider_for(
             &state.db,
             &app_type,

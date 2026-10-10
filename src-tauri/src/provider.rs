@@ -705,6 +705,32 @@ pub struct UniversalProviderApps {
     pub codex: bool,
     #[serde(default)]
     pub gemini: bool,
+    #[serde(default)]
+    pub pi: bool,
+}
+
+/// Optional per-app base URL overrides. Plan products (Ali Token Plan, Volc
+/// Agent Plan, …) often need different paths for Anthropic vs OpenAI vs Gemini
+/// vs Pi while sharing one API key — keep the shared `base_url` as default.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+pub struct UniversalProviderBaseUrls {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub claude: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub codex: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gemini: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pi: Option<String>,
+}
+
+impl UniversalProviderBaseUrls {
+    pub fn is_empty(&self) -> bool {
+        self.claude.is_none()
+            && self.codex.is_none()
+            && self.gemini.is_none()
+            && self.pi.is_none()
+    }
 }
 
 /// Claude 模型配置
@@ -747,6 +773,17 @@ pub struct GeminiModelConfig {
     pub model: Option<String>,
 }
 
+/// Pi 模型配置（写入 `~/.pi/agent/models.json` 的单节点）
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct PiModelConfig {
+    /// 主模型 id（至少写入 models 数组的一项）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    /// Pi 协议：`openai-completions` / `anthropic-messages` 等
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub api: Option<String>,
+}
+
 /// 各应用的模型配置
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct UniversalProviderModels {
@@ -756,6 +793,8 @@ pub struct UniversalProviderModels {
     pub codex: Option<CodexModelConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub gemini: Option<GeminiModelConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pi: Option<PiModelConfig>,
 }
 
 /// 统一供应商（跨应用共享配置）
@@ -773,6 +812,9 @@ pub struct UniversalProvider {
     /// API 基础地址
     #[serde(rename = "baseUrl")]
     pub base_url: String,
+    /// Per-app base URL overrides (optional). Empty / omitted → use `base_url`.
+    #[serde(default, rename = "baseUrls", skip_serializing_if = "UniversalProviderBaseUrls::is_empty")]
+    pub base_urls: UniversalProviderBaseUrls,
     /// API 密钥
     #[serde(rename = "apiKey")]
     pub api_key: String,
@@ -821,6 +863,7 @@ impl UniversalProvider {
             provider_type,
             apps: UniversalProviderApps::default(),
             base_url,
+            base_urls: UniversalProviderBaseUrls::default(),
             api_key,
             models: UniversalProviderModels::default(),
             website_url: None,
@@ -833,12 +876,20 @@ impl UniversalProvider {
         }
     }
 
+    fn resolved_base_url<'a>(&'a self, override_url: Option<&'a str>) -> &'a str {
+        override_url
+            .map(str::trim)
+            .filter(|url| !url.is_empty())
+            .unwrap_or(self.base_url.as_str())
+    }
+
     /// 生成 Claude 供应商配置
     pub fn to_claude_provider(&self) -> Option<Provider> {
         if !self.apps.claude {
             return None;
         }
 
+        let base_url = self.resolved_base_url(self.base_urls.claude.as_deref());
         let models = self.models.claude.as_ref();
         let model = models
             .and_then(|m| m.model.clone())
@@ -855,7 +906,7 @@ impl UniversalProvider {
 
         let settings_config = serde_json::json!({
             "env": {
-                "ANTHROPIC_BASE_URL": self.base_url,
+                "ANTHROPIC_BASE_URL": base_url,
                 "ANTHROPIC_AUTH_TOKEN": self.api_key,
                 "ANTHROPIC_MODEL": model,
                 "ANTHROPIC_DEFAULT_HAIKU_MODEL": haiku,
@@ -895,7 +946,9 @@ impl UniversalProvider {
             .unwrap_or_else(|| "high".to_string());
 
         // Codex/OpenAI 的 base_url 既可能是纯 origin（需要补 /v1），也可能包含自定义前缀（不应强行补版本）
-        let base_trimmed = self.base_url.trim_end_matches('/');
+        let base_trimmed = self
+            .resolved_base_url(self.base_urls.codex.as_deref())
+            .trim_end_matches('/');
         let origin_only = match base_trimmed.split_once("://") {
             Some((_scheme, rest)) => !rest.contains('/'),
             None => !base_trimmed.contains('/'),
@@ -955,10 +1008,11 @@ requires_openai_auth = true"#
         let model = models
             .and_then(|m| m.model.clone())
             .unwrap_or_else(|| "gemini-2.5-pro".to_string());
+        let base_url = self.resolved_base_url(self.base_urls.gemini.as_deref());
 
         let settings_config = serde_json::json!({
             "env": {
-                "GOOGLE_GEMINI_BASE_URL": self.base_url,
+                "GOOGLE_GEMINI_BASE_URL": base_url,
                 "GEMINI_API_KEY": self.api_key,
                 "GEMINI_MODEL": model,
             }
@@ -978,6 +1032,92 @@ requires_openai_auth = true"#
             icon_color: self.icon_color.clone(),
             in_failover_queue: false,
         })
+    }
+
+    /// 生成 Pi 供应商配置（`models.json` 单节点）
+    pub fn to_pi_provider(&self) -> Option<Provider> {
+        if !self.apps.pi {
+            return None;
+        }
+
+        let pi_models = self.models.pi.as_ref();
+        let model = pi_models
+            .and_then(|m| m.model.clone())
+            .or_else(|| {
+                self.models
+                    .claude
+                    .as_ref()
+                    .and_then(|m| m.model.clone())
+            })
+            .or_else(|| self.models.codex.as_ref().and_then(|m| m.model.clone()))
+            .unwrap_or_else(|| "default".to_string());
+
+        let raw_base = self.resolved_base_url(self.base_urls.pi.as_deref());
+        let api = pi_models
+            .and_then(|m| m.api.as_deref())
+            .map(str::trim)
+            .filter(|api| !api.is_empty())
+            .map(str::to_string)
+            .unwrap_or_else(|| Self::default_pi_api(raw_base).to_string());
+
+        let base_url = if api == "openai-completions" {
+            Self::openai_style_base_url(raw_base)
+        } else {
+            raw_base.trim_end_matches('/').to_string()
+        };
+
+        let settings_config = serde_json::json!({
+            "name": self.name,
+            "baseUrl": base_url,
+            "apiKey": self.api_key,
+            "api": api,
+            "models": [{
+                "id": model,
+                "name": model,
+            }],
+        });
+
+        Some(Provider {
+            id: format!("universal-pi-{}", self.id),
+            name: self.name.clone(),
+            settings_config,
+            website_url: self.website_url.clone(),
+            category: Some("aggregator".to_string()),
+            created_at: self.created_at,
+            sort_index: self.sort_index,
+            notes: self.notes.clone(),
+            meta: self.meta.clone(),
+            icon: self.icon.clone().or_else(|| Some("pi".to_string())),
+            icon_color: self.icon_color.clone(),
+            in_failover_queue: false,
+        })
+    }
+
+    fn default_pi_api(base_url: &str) -> &'static str {
+        let trimmed = base_url.trim_end_matches('/');
+        if trimmed.ends_with("/v1")
+            || trimmed.contains("compatible-mode")
+            || trimmed.contains("/api/plan/v3")
+        {
+            "openai-completions"
+        } else {
+            "anthropic-messages"
+        }
+    }
+
+    fn openai_style_base_url(base_url: &str) -> String {
+        let base_trimmed = base_url.trim_end_matches('/');
+        let origin_only = match base_trimmed.split_once("://") {
+            Some((_scheme, rest)) => !rest.contains('/'),
+            None => !base_trimmed.contains('/'),
+        };
+        if base_trimmed.ends_with("/v1") {
+            base_trimmed.to_string()
+        } else if origin_only {
+            format!("{base_trimmed}/v1")
+        } else {
+            base_trimmed.to_string()
+        }
     }
 }
 
@@ -1093,7 +1233,7 @@ mod tests {
     use super::{
         ClaudeModelConfig, CodexCopilotApiFormat, CodexModelConfig, GeminiModelConfig,
         LocalProxyRequestOverrides, OpenCodeProviderConfig, Provider, ProviderManager,
-        ProviderMeta, UniversalProvider,
+        ProviderMeta, UniversalProvider, UniversalProviderBaseUrls,
     };
     use serde_json::json;
     use std::collections::HashMap;
@@ -1577,6 +1717,101 @@ mod tests {
 
         assert!(toml.contains("base_url = \"https://example.com/openai\""));
         assert!(!toml.contains("https://example.com/openai/v1"));
+    }
+
+    #[test]
+    fn universal_provider_base_urls_override_per_app() {
+        let mut p = UniversalProvider::new(
+            "plan".to_string(),
+            "Plan".to_string(),
+            "custom".to_string(),
+            "https://example.com/default".to_string(),
+            "sk-test".to_string(),
+        );
+        p.apps.claude = true;
+        p.apps.codex = true;
+        p.apps.gemini = true;
+        p.apps.pi = true;
+        p.base_urls = UniversalProviderBaseUrls {
+            claude: Some("https://example.com/apps/anthropic".to_string()),
+            codex: Some("https://example.com/api/plan/v3".to_string()),
+            gemini: Some("https://example.com/gemini".to_string()),
+            pi: Some("https://example.com/compatible-mode/v1".to_string()),
+        };
+        p.models.pi = Some(super::PiModelConfig {
+            model: Some("plan-model".to_string()),
+            api: Some("openai-completions".to_string()),
+        });
+
+        let claude = p.to_claude_provider().expect("claude");
+        assert_eq!(
+            claude.settings_config["env"]["ANTHROPIC_BASE_URL"].as_str(),
+            Some("https://example.com/apps/anthropic")
+        );
+
+        let codex = p.to_codex_provider().expect("codex");
+        let toml = codex.settings_config["config"].as_str().expect("toml");
+        assert!(toml.contains("base_url = \"https://example.com/api/plan/v3\""));
+
+        let gemini = p.to_gemini_provider().expect("gemini");
+        assert_eq!(
+            gemini.settings_config["env"]["GOOGLE_GEMINI_BASE_URL"].as_str(),
+            Some("https://example.com/gemini")
+        );
+
+        let pi = p.to_pi_provider().expect("pi");
+        assert_eq!(pi.id, "universal-pi-plan");
+        assert_eq!(
+            pi.settings_config["baseUrl"].as_str(),
+            Some("https://example.com/compatible-mode/v1")
+        );
+        assert_eq!(
+            pi.settings_config["api"].as_str(),
+            Some("openai-completions")
+        );
+        assert_eq!(pi.settings_config["apiKey"].as_str(), Some("sk-test"));
+        assert_eq!(
+            pi.settings_config["models"][0]["id"].as_str(),
+            Some("plan-model")
+        );
+    }
+
+    #[test]
+    fn universal_provider_pi_defaults_anthropic_on_origin() {
+        let mut p = UniversalProvider::new(
+            "relay".to_string(),
+            "Relay".to_string(),
+            "newapi".to_string(),
+            "https://api.example.com".to_string(),
+            "sk-test".to_string(),
+        );
+        p.apps.pi = true;
+        p.models.pi = Some(super::PiModelConfig {
+            model: Some("claude-sonnet-5".to_string()),
+            api: None,
+        });
+
+        let pi = p.to_pi_provider().expect("pi");
+        assert_eq!(
+            pi.settings_config["api"].as_str(),
+            Some("anthropic-messages")
+        );
+        assert_eq!(
+            pi.settings_config["baseUrl"].as_str(),
+            Some("https://api.example.com")
+        );
+    }
+
+    #[test]
+    fn universal_provider_pi_disabled_returns_none() {
+        let p = UniversalProvider::new(
+            "x".into(),
+            "X".into(),
+            "custom".into(),
+            "https://example.com".into(),
+            "sk".into(),
+        );
+        assert!(p.to_pi_provider().is_none());
     }
 
     // ── resolve_usage_credentials (per-app credential extraction) ──

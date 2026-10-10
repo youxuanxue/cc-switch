@@ -789,6 +789,7 @@ export interface UniversalProviderApps {
   claude: boolean;
   codex: boolean;
   gemini: boolean;
+  pi: boolean;
 }
 
 // Claude 模型配置
@@ -810,11 +811,27 @@ export interface GeminiModelConfig {
   model?: string;
 }
 
+// Pi 模型配置
+export interface PiModelConfig {
+  model?: string;
+  /** Pi 协议：openai-completions / anthropic-messages 等 */
+  api?: string;
+}
+
 // 各应用的模型配置
 export interface UniversalProviderModels {
   claude?: ClaudeModelConfig;
   codex?: CodexModelConfig;
   gemini?: GeminiModelConfig;
+  pi?: PiModelConfig;
+}
+
+/** Optional per-app base URL overrides when protocols need different paths. */
+export interface UniversalProviderBaseUrls {
+  claude?: string;
+  codex?: string;
+  gemini?: string;
+  pi?: string;
 }
 
 // 统一供应商（跨应用共享配置）
@@ -824,6 +841,8 @@ export interface UniversalProvider {
   providerType: string; // "newapi" | "custom" 等
   apps: UniversalProviderApps;
   baseUrl: string;
+  /** Per-app overrides; omit / empty → use `baseUrl`. */
+  baseUrls?: UniversalProviderBaseUrls;
   apiKey: string;
   models: UniversalProviderModels;
   websiteUrl?: string;
