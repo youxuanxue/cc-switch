@@ -1,12 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildCdResumeCommand,
   extractCodexPromptPreview,
+  extractCursorDisplayContent,
+  formatMessageTime,
   formatSessionMessagePreview,
+  getSessionLastText,
   getSessionResumeI18nKeys,
+  getSessionTimeBucket,
   groupSessionsByProject,
   groupSessionsByProviderAndDirectory,
+  groupSessionsByTime,
+  isArchivedSession,
   resolveWtsProjectIdentity,
-  extractCursorDisplayContent,
   shouldHideCodexMessageFromToc,
   shouldHideCursorMessageFromToc,
 } from "@/components/sessions/utils";
@@ -153,108 +159,118 @@ describe("session utils", () => {
     );
   });
 
-  it("groups sessions by provider and project directory", () => {
+  it("groups sessions by project directory, newest group first and unknown last", () => {
     const sessions: SessionMeta[] = [
       {
         providerId: "codex",
-        sessionId: "codex-1",
-        projectDir: "/workspace/app",
+        sessionId: "unknown",
+        projectDir: "  ",
+        lastActiveAt: 50,
       },
       {
         providerId: "codex",
-        sessionId: "codex-2",
-        projectDir: "/workspace/app",
-      },
-      {
-        providerId: "claude",
-        sessionId: "claude-1",
-        projectDir: "/workspace/docs",
-      },
-    ];
-
-    const groups = groupSessionsByProviderAndDirectory(sessions, "未知目录");
-
-    expect(groups).toHaveLength(2);
-    expect(groups[0].providerId).toBe("codex");
-    expect(groups[0].sessions.map((session) => session.sessionId)).toEqual([
-      "codex-1",
-      "codex-2",
-    ]);
-    expect(groups[0].directories).toHaveLength(1);
-    expect(groups[0].directories[0]).toMatchObject({
-      projectDir: "/workspace/app",
-      label: "app",
-    });
-    expect(
-      groups[0].directories[0].sessions.map((session) => session.sessionId),
-    ).toEqual(["codex-1", "codex-2"]);
-    expect(groups[1].providerId).toBe("claude");
-    expect(groups[1].directories[0].label).toBe("docs");
-  });
-
-  it("uses an unknown directory group for sessions without project directories", () => {
-    const sessions: SessionMeta[] = [
-      {
-        providerId: "codex",
-        sessionId: "codex-1",
-        projectDir: null,
-      },
-      {
-        providerId: "codex",
-        sessionId: "codex-2",
-        projectDir: "   ",
-      },
-    ];
-
-    const groups = groupSessionsByProviderAndDirectory(sessions, "未知目录");
-
-    expect(groups).toHaveLength(1);
-    expect(groups[0].directories).toHaveLength(1);
-    expect(groups[0].directories[0]).toMatchObject({
-      projectDir: null,
-      label: "未知目录",
-    });
-    expect(
-      groups[0].directories[0].sessions.map((session) => session.sessionId),
-    ).toEqual(["codex-1", "codex-2"]);
-  });
-
-  it("preserves filtered session order inside provider and directory groups", () => {
-    const sessions: SessionMeta[] = [
-      {
-        providerId: "codex",
-        sessionId: "newest",
+        sessionId: "app-new",
         projectDir: "/workspace/app",
         lastActiveAt: 30,
       },
       {
-        providerId: "codex",
-        sessionId: "middle",
+        providerId: "claude",
+        sessionId: "docs",
         projectDir: "/workspace/docs",
-        lastActiveAt: 20,
+        lastActiveAt: 40,
       },
       {
-        providerId: "codex",
-        sessionId: "oldest",
+        providerId: "claude",
+        sessionId: "app-old",
         projectDir: "/workspace/app",
         lastActiveAt: 10,
       },
     ];
 
-    const groups = groupSessionsByProviderAndDirectory(sessions, "未知目录");
+    const groups = groupSessionsByProject(sessions, "未知目录");
 
-    expect(groups[0].sessions.map((session) => session.sessionId)).toEqual([
-      "newest",
-      "middle",
-      "oldest",
-    ]);
-    expect(groups[0].directories.map((group) => group.label)).toEqual([
+    expect(groups.map((group) => group.label)).toEqual([
+      "未知目录",
       "app",
       "docs",
     ]);
+    expect(groups[0].projectDir).toBeNull();
+    expect(groups[1].sessions.map((session) => session.sessionId)).toEqual([
+      "app-new",
+      "app-old",
+    ]);
+    expect(groups[2].projectDir).toBe("/workspace/docs");
+  });
+
+  it("buckets sessions into today / yesterday / this week / earlier", () => {
+    // 2026-10-01 is a Thursday; the week starts on Monday 2026-09-28
+    const now = new Date(2026, 9, 1, 8, 15).getTime();
+    const at = (day: number, hour = 12) =>
+      new Date(2026, 8, day, hour).getTime();
+    const sessions: SessionMeta[] = [
+      { providerId: "claude", sessionId: "a", lastActiveAt: now - 60000 },
+      { providerId: "claude", sessionId: "b", lastActiveAt: at(30) },
+      { providerId: "claude", sessionId: "c", lastActiveAt: at(28, 9) },
+      { providerId: "claude", sessionId: "d", lastActiveAt: at(27) },
+    ];
+
+    expect(getSessionTimeBucket(at(28, 0), now)).toBe("thisWeek");
     expect(
-      groups[0].directories[0].sessions.map((session) => session.sessionId),
-    ).toEqual(["newest", "oldest"]);
+      groupSessionsByTime(sessions, now).map((group) => [
+        group.bucket,
+        group.sessions.map((session) => session.sessionId),
+      ]),
+    ).toEqual([
+      ["today", ["a"]],
+      ["yesterday", ["b"]],
+      ["thisWeek", ["c"]],
+      ["earlier", ["d"]],
+    ]);
+  });
+
+  it("hides the summary when it repeats the title and marks archived sessions", () => {
+    expect(
+      getSessionLastText({
+        providerId: "gemini",
+        sessionId: "g",
+        title: "fix: flaky test",
+        summary: "fix: flaky test",
+      }),
+    ).toBe("");
+    expect(
+      isArchivedSession({
+        providerId: "codex",
+        sessionId: "x",
+        sourcePath: "/Users/me/.codex/archived_sessions/rollout.jsonl",
+      }),
+    ).toBe(true);
+    expect(
+      isArchivedSession({
+        providerId: "claude",
+        sessionId: "c",
+        sourcePath: "/Users/me/archived_sessions/a.jsonl",
+      }),
+    ).toBe(false);
+  });
+
+  it("quotes the project directory in the cd-and-resume command", () => {
+    expect(buildCdResumeCommand("/tmp/it's", "claude --resume x")).toBe(
+      "cd '/tmp/it'\\''s' && claude --resume x",
+    );
+  });
+
+  it("formats message times with the date, adding the year only for past years", () => {
+    const thisYear = new Date().getFullYear();
+    const recent = new Date(thisYear, 0, 15, 9, 5).getTime();
+    const older = new Date(thisYear - 1, 11, 30, 23, 10).getTime();
+
+    expect(formatMessageTime(undefined)).toBe("");
+    // 今年：带月日和时分，不带年份
+    expect(formatMessageTime(recent)).toMatch(/15/);
+    expect(formatMessageTime(recent)).not.toContain(String(thisYear));
+    // 往年：带上年份
+    expect(formatMessageTime(older)).toContain(String(thisYear - 1));
+    expect(formatMessageTime(older)).toMatch(/30/);
   });
 
   it("groups Cursor sessions directly by metadata cwd without a Project entity", () => {

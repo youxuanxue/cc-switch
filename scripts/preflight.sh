@@ -29,6 +29,8 @@ if [[ "$area" == all || "$area" == frontend ]]; then
   check cursor-session-ssot node scripts/check-cursor-session-ssot.mjs
   check session-chrome-ssot node scripts/check-session-chrome-ssot.mjs
   check session-live-ssot node scripts/check-session-live-ssot.mjs
+  check skills-core-ssot node scripts/check-skills-core-ssot.mjs
+  check gemini-model-fetch-ssot node scripts/check-gemini-model-fetch-ssot.mjs
   check browser-acceptance pnpm test:e2e
 fi
 if [[ "$area" == all || "$area" == backend ]]; then

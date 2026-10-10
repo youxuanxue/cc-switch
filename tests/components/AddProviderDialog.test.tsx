@@ -5,7 +5,6 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { useEffect } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AddProviderDialog } from "@/components/providers/AddProviderDialog";
@@ -35,6 +34,10 @@ vi.mock("@/components/ui/dialog", () => ({
 
 let mockFormValues: ProviderFormValues;
 let mockFormReady = true;
+// 表单把预设投影到配置文件上之后交给对话框的底（Codex、Gemini CLI、Grok Build）。
+let mockProjectedBase: Record<string, unknown> | null = null;
+// 投影成那份底的草稿（预设或模板）。
+let mockProjectedDraft: Record<string, unknown> | undefined;
 let submitReadyCallbacks: Array<(isReady: boolean) => void> = [];
 
 vi.mock("@/components/providers/forms/ProviderForm", () => ({
@@ -42,10 +45,29 @@ vi.mock("@/components/providers/forms/ProviderForm", () => ({
     onSubmit,
     onSubmitReadyChange,
     onManageAuthAccounts,
+    onEditorBaseChange,
+    onUniversalPresetSelect,
+    onManageUniversalProviders,
   }: {
     onSubmit: (values: ProviderFormValues) => void;
     onSubmitReadyChange?: (isReady: boolean) => void;
     onManageAuthAccounts?: (target: "codex_oauth") => void;
+    onEditorBaseChange?: (
+      base: Record<string, unknown> | null,
+      draft?: Record<string, unknown>,
+    ) => void;
+    onUniversalPresetSelect?: (preset: {
+      name: string;
+      providerType: string;
+      defaultApps: {
+        claude: boolean;
+        codex: boolean;
+        gemini: boolean;
+      };
+      defaultModels: Record<string, unknown>;
+      isCustomTemplate?: boolean;
+    }) => void;
+    onManageUniversalProviders?: () => void;
   }) => {
     useEffect(() => {
       if (onSubmitReadyChange) {
@@ -53,6 +75,9 @@ vi.mock("@/components/providers/forms/ProviderForm", () => ({
         onSubmitReadyChange(mockFormReady);
       }
     }, [onSubmitReadyChange]);
+    useEffect(() => {
+      onEditorBaseChange?.(mockProjectedBase, mockProjectedDraft);
+    }, [onEditorBaseChange]);
     return (
       <form
         id="provider-form"
@@ -67,6 +92,27 @@ vi.mock("@/components/providers/forms/ProviderForm", () => ({
         >
           manage-auth
         </button>
+        {onUniversalPresetSelect && (
+          <button
+            type="button"
+            onClick={() =>
+              onUniversalPresetSelect({
+                name: "Custom Universal",
+                providerType: "custom",
+                defaultApps: { claude: true, codex: true, gemini: true },
+                defaultModels: {},
+                isCustomTemplate: true,
+              })
+            }
+          >
+            pick-universal-preset
+          </button>
+        )}
+        {onManageUniversalProviders && (
+          <button type="button" onClick={() => onManageUniversalProviders()}>
+            manage-universal
+          </button>
+        )}
       </form>
     );
   },
@@ -82,24 +128,18 @@ vi.mock("@/components/universal", () => ({
 }));
 
 vi.mock("@/components/universal/UniversalProviderFormModal", () => ({
-  UniversalProviderFormModal: () => null,
+  UniversalProviderFormModal: ({
+    isOpen,
+  }: {
+    isOpen: boolean;
+  }) => (isOpen ? <div data-testid="universal-form-modal" /> : null),
 }));
-
-async function openAppSpecificTab() {
-  const user = userEvent.setup();
-  const tab = screen.getByRole("tab", { name: /高级 ·/ });
-  await user.click(tab);
-  await waitFor(() => expect(tab).toHaveAttribute("data-state", "active"));
-  await waitFor(() =>
-    expect(
-      screen.getByRole("button", { name: "common.add" }),
-    ).toBeInTheDocument(),
-  );
-}
 
 describe("AddProviderDialog", () => {
   beforeEach(() => {
     mockFormReady = true;
+    mockProjectedBase = null;
+    mockProjectedDraft = undefined;
     submitReadyCallbacks = [];
     mockFormValues = {
       name: "Test Provider",
@@ -116,7 +156,7 @@ describe("AddProviderDialog", () => {
     };
   });
 
-  it("默认打开统一供应商 Tab", () => {
+  it("Claude 添加路径可通过预设选择打开统一供应商表单与管理面板", async () => {
     render(
       <AddProviderDialog
         open
@@ -126,14 +166,31 @@ describe("AddProviderDialog", () => {
       />,
     );
 
+    await screen.findByRole("button", { name: "pick-universal-preset" });
+    fireEvent.click(screen.getByRole("button", { name: "pick-universal-preset" }));
+    expect(screen.getByTestId("universal-form-modal")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "manage-universal" }));
     expect(screen.getByTestId("universal-panel")).toBeInTheDocument();
-    expect(
-      screen.getByRole("tab", { name: "provider.tabUniversal" }),
-    ).toHaveAttribute("data-state", "active");
-    expect(screen.getByRole("tab", { name: /高级 ·/ })).toHaveAttribute(
-      "data-state",
-      "inactive",
+  });
+
+  it("OpenCode 不暴露统一供应商入口", async () => {
+    render(
+      <AddProviderDialog
+        open
+        onOpenChange={vi.fn()}
+        appId="opencode"
+        onSubmit={vi.fn()}
+      />,
     );
+
+    await screen.findByRole("button", { name: "manage-auth" });
+    expect(
+      screen.queryByRole("button", { name: "pick-universal-preset" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "manage-universal" }),
+    ).not.toBeInTheDocument();
   });
 
   it("使用 ProviderForm 返回的自定义端点", async () => {
@@ -148,10 +205,11 @@ describe("AddProviderDialog", () => {
         onSubmit={handleSubmit}
       />,
     );
-    await openAppSpecificTab();
 
+    // Claude 的表单要等 live 底读回来才渲染。
+    await screen.findByRole("button", { name: "manage-auth" });
     fireEvent.click(
-      screen.getByRole("button", {
+      await screen.findByRole("button", {
         name: "common.add",
       }),
     );
@@ -162,6 +220,8 @@ describe("AddProviderDialog", () => {
     expect(submitted.meta?.custom_endpoints).toEqual(
       mockFormValues.meta?.custom_endpoints,
     );
+    // 保存时带上打开时的 live 底，后端据此把全局改动写进 live、三方比较。
+    expect(submitted.editorSave).toEqual({ base: {}, onConflict: "refuse" });
     expect(handleOpenChange).toHaveBeenCalledWith(false);
   });
 
@@ -185,10 +245,10 @@ describe("AddProviderDialog", () => {
         onSubmit={handleSubmit}
       />,
     );
-    await openAppSpecificTab();
 
+    await screen.findByRole("button", { name: "manage-auth" });
     fireEvent.click(
-      screen.getByRole("button", {
+      await screen.findByRole("button", {
         name: "common.add",
       }),
     );
@@ -203,6 +263,68 @@ describe("AddProviderDialog", () => {
         lastUsed: undefined,
       },
     });
+  });
+
+  it.each(["codex", "gemini", "grokbuild"] as const)(
+    "%s 新增时带上表单投影出的底，和编辑器同一套保存规则",
+    async (appId) => {
+      const handleSubmit = vi.fn().mockResolvedValue(undefined);
+      const projected = { config: '[ui]\ntheme = "dark"\n' };
+      const draft = { config: "" };
+      mockProjectedBase = projected;
+      mockProjectedDraft = draft;
+      mockFormValues = {
+        name: "Draft",
+        websiteUrl: "",
+        settingsConfig: JSON.stringify(projected),
+      };
+
+      render(
+        <AddProviderDialog
+          open
+          onOpenChange={vi.fn()}
+          appId={appId}
+          onSubmit={handleSubmit}
+        />,
+      );
+
+      await screen.findByRole("button", { name: "manage-auth" });
+      fireEvent.click(
+        await screen.findByRole("button", { name: "common.add" }),
+      );
+
+      await waitFor(() => expect(handleSubmit).toHaveBeenCalledTimes(1));
+      expect(handleSubmit.mock.calls[0][0].editorSave).toEqual({
+        base: projected,
+        draft,
+        onConflict: "refuse",
+      });
+    },
+  );
+
+  it("投影还没回来或失败时只存供应商，不带底", async () => {
+    const handleSubmit = vi.fn().mockResolvedValue(undefined);
+    mockProjectedBase = null;
+    mockFormValues = {
+      name: "Draft",
+      websiteUrl: "",
+      settingsConfig: JSON.stringify({ auth: {}, config: "" }),
+    };
+
+    render(
+      <AddProviderDialog
+        open
+        onOpenChange={vi.fn()}
+        appId="codex"
+        onSubmit={handleSubmit}
+      />,
+    );
+
+    await screen.findByRole("button", { name: "manage-auth" });
+    fireEvent.click(await screen.findByRole("button", { name: "common.add" }));
+
+    await waitFor(() => expect(handleSubmit).toHaveBeenCalledTimes(1));
+    expect(handleSubmit.mock.calls[0][0].editorSave).toBeUndefined();
   });
 
   it("submits the optional managed account from the Codex Official preset", async () => {
@@ -237,9 +359,8 @@ describe("AddProviderDialog", () => {
         onSubmit={handleSubmit}
       />,
     );
-    await openAppSpecificTab();
 
-    fireEvent.click(screen.getByRole("button", { name: "common.add" }));
+    fireEvent.click(await screen.findByRole("button", { name: "common.add" }));
 
     await waitFor(() => expect(handleSubmit).toHaveBeenCalledTimes(1));
     expect(handleSubmit).toHaveBeenCalledWith(
@@ -266,7 +387,6 @@ describe("AddProviderDialog", () => {
       onSubmit: vi.fn(),
     };
     const { rerender } = render(<AddProviderDialog open {...props} />);
-    await openAppSpecificTab();
 
     fireEvent.click(screen.getByRole("button", { name: "manage-auth" }));
     expect(screen.getByTestId("auth-settings-panel")).toHaveTextContent(
@@ -315,7 +435,7 @@ context_window = 500000
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "common.add" }));
+    fireEvent.click(await screen.findByRole("button", { name: "common.add" }));
 
     await waitFor(() => expect(handleSubmit).toHaveBeenCalledTimes(1));
 
@@ -358,7 +478,7 @@ context_window = 500000
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "common.add" }));
+    fireEvent.click(await screen.findByRole("button", { name: "common.add" }));
     await waitFor(() => expect(handleSubmit).toHaveBeenCalledTimes(1));
     expect(handleSubmit.mock.calls[0][0]).toMatchObject({
       providerKey: "pi-provider",

@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { TFunction } from "i18next";
-import { toast } from "sonner";
+import { toast } from "@/lib/toast";
 
 export interface FetchedModel {
   id: string;
@@ -16,7 +16,10 @@ export interface ModelFetchOptions {
  * 从供应商获取可用模型列表
  *
  * 根据 `apiFormat` 使用对应协议的模型端点，默认走 OpenAI 兼容的 GET /v1/models。
- * 优先用 `modelsUrl` 精确覆写；否则后端会对 baseURL 生成候选列表并按序尝试。
+ * 优先用 `modelsUrl` 精确覆写；否则后端会对 baseURL 生成候选列表并按序尝试
+ * （含"剥离 /anthropic 等兼容子路径"兜底）。
+ *
+ * OpenAI/Anthropic `data[].id`；智谱 Responses `models[].slug`；Gemini Native `models[].name`。
  */
 export async function fetchModelsForConfig(
   baseUrl: string,

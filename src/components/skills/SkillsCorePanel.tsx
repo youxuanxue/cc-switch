@@ -308,19 +308,43 @@ const SkillsCorePanel = React.forwardRef<
                           : ""}
                       </div>
                     </div>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      disabled={busy}
-                      onClick={() =>
-                        void run(() => skillsCoreApi.uninstall([skill.name]))
-                      }
-                    >
-                      {t("skills.uninstall")}
-                    </Button>
+                    <div className="flex shrink-0 gap-1">
+                      {skill.behind_catalog ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={busy}
+                          onClick={() =>
+                            void run(() => skillsCoreApi.upgrade(skill.name))
+                          }
+                        >
+                          {t("skills.core.upgrade")}
+                        </Button>
+                      ) : null}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={busy}
+                        onClick={() =>
+                          void run(() => skillsCoreApi.uninstall([skill.name]))
+                        }
+                      >
+                        {t("skills.uninstall")}
+                      </Button>
+                    </div>
                   </div>
                 ))
               )}
+              {doctor.library.some((skill) => skill.behind_catalog) ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => void run(() => skillsCoreApi.upgrade())}
+                >
+                  {t("skills.core.upgradeAll")}
+                </Button>
+              ) : null}
               <div className="flex gap-2">
                 <input
                   className="h-9 flex-1 rounded-md border bg-background px-3 text-sm"

@@ -151,3 +151,32 @@ export function TerminalSettings({
     </section>
   );
 }
+
+/** 首选终端的下拉框（设置 → 通用 → 窗口与终端那一行的控件）。 */
+export function TerminalSelect({
+  value,
+  onChange,
+  className,
+}: TerminalSettingsProps & { className?: string }) {
+  const { t } = useTranslation();
+  const terminals = getTerminalOptions();
+  const currentValue = value || getDefaultTerminal();
+
+  return (
+    <Select value={currentValue} onValueChange={onChange}>
+      <SelectTrigger
+        className={className ?? "w-[200px]"}
+        aria-label={t("settings.terminal.title")}
+      >
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {terminals.map((terminal) => (
+          <SelectItem key={terminal.value} value={terminal.value}>
+            {t(terminal.labelKey)}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
