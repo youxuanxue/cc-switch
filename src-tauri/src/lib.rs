@@ -1674,6 +1674,8 @@ pub fn run() {
             commands::get_usage_data_sources,
             // Stream health check
             commands::stream_check_provider,
+            commands::get_stream_check_config,
+            commands::save_stream_check_config,
             // Session manager
             commands::list_sessions,
             commands::list_wts_workspaces,

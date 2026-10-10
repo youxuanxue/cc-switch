@@ -291,7 +291,9 @@ dev-rules **保留**项目 `.cursor/skills` 编辑入口；**删除**的是 home
 
 ## 上游合并说明（legacy UnifiedSkillsPanel）
 
-上游曾有的 **「检查更新 → 全部更新」** 批量升级 UI（`UnifiedSkillsPanel` 路径）在本 fork 的 upstream 合并中**刻意不移植**。Skills Core 是 SSOT：货架对齐走 `follow_catalog` / `sync` / `upgrade`（及 doctor 的 behind 信号），Discover 仍用于从 catalog 安装；批量「update all」UX 可在后续 PR 单独补，不得复活第二套 writer 或矩阵开关。
+上游曾有的 **「检查更新 → 全部更新」** 批量升级 UI（`UnifiedSkillsPanel` 路径）在本 fork 的 upstream 合并中**刻意不移植**。Skills Core 是 SSOT：货架对齐走 `follow_catalog` / `sync` / `upgrade`（及 doctor 的 behind 信号），Discover 仍用于从 catalog 安装；库列表对 `behind_catalog` 提供单条/全部 `upgrade`。不得复活第二套 writer 或矩阵开关。
+
+v7 设置壳不得再次吞掉 fork 的 **Skill 存储位置 / 同步方式**（`SkillStorageLocationSettings` / `SkillSyncMethodSettings`，挂在设置 → 通用）；`check-skills-core-ssot` 机械守卫该接线。
 
 ## 验证（Core 实现 PR 承担）
 

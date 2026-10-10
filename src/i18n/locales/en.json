@@ -3265,6 +3265,10 @@
         "thinkingSignature": "Thinking Signature Rectification",
         "thinkingSignatureDescription": "When an Anthropic-type provider returns thinking signature incompatibility or illegal request errors, automatically removes incompatible thinking-related blocks and retries once with the same provider",
         "title": "Rectifier"
+      },
+      "connectivityCheck": {
+        "title": "Connectivity Check Settings",
+        "description": "Configure timeout, retries, and the slow-response threshold for provider reachability checks"
       }
     },
     "appConfig": {
@@ -3854,7 +3858,26 @@
     "windowBehavior": "Window Behavior",
     "windowBehaviorHint": "Configure window minimize and Claude plugin integration policies.",
     "wslShell": "Shell",
-    "wslShellFlag": "Flag"
+    "wslShellFlag": "Flag",
+    "skillStorage": {
+      "title": "Skill Storage Location",
+      "description": "Choose where CC Switch stores the master copies of your skills",
+      "ccSwitch": "CC Switch",
+      "unified": "~/.agents/skills",
+      "ccSwitchHint": "Skills are stored in ~/.cc-switch/skills/ and synced to each app via symlink or copy.",
+      "unifiedHint": "Skills are stored in ~/.agents/skills/, the Agent Skills open standard. Compatible tools (Claude Code, Codex, Gemini CLI, etc.) discover skills here natively.",
+      "confirmTitle": "Migrate Skill Storage",
+      "confirmMessage": "{{count}} skill(s) will be moved to the new location. Continue?",
+      "migrationSuccess": "Successfully migrated {{count}} skill(s)",
+      "migrationPartial": "Migrated {{migrated}} skill(s), {{errors}} error(s). Check logs for details."
+    },
+    "skillSync": {
+      "title": "Skill Sync Method",
+      "description": "Choose how to sync Skills files",
+      "symlink": "Symlink",
+      "copy": "Copy Files",
+      "symlinkHint": "Symlinks save disk space and enable real-time sync. Note: May require admin privileges or Developer Mode on Windows"
+    }
   },
   "skills": {
     "addRepo": "Add Skill Repository",
@@ -3909,7 +3932,9 @@
       "loading": "Loading skills control plane…",
       "open": "Open and confirm the workbench",
       "remove": "Leave",
-      "sync": "Sync"
+      "sync": "Sync",
+      "upgrade": "Upgrade",
+      "upgradeAll": "Upgrade all"
     },
     "count": "{{count}} skills",
     "description": "Discover and install skills from popular repositories to extend Claude Code/Codex/Gemini capabilities",
@@ -4217,7 +4242,14 @@
     "reachable": "{{providerName}} is reachable ({{responseTimeMs}}ms)",
     "reachableSlow": "{{providerName}} reachable but slow ({{responseTimeMs}}ms)",
     "unreachable": "{{providerName}} unreachable: {{message}}",
-    "unreachableHint": "Could not establish a connection (DNS / connect / TLS / timeout). Check the base_url and your network."
+    "unreachableHint": "Could not establish a connection (DNS / connect / TLS / timeout). Check the base_url and your network.",
+    "configSaved": "Connectivity check settings saved",
+    "configSaveFailed": "Save failed",
+    "connectivityNote": "Connectivity check only probes whether the provider address is reachable; it does not send a real model request. Any response counts as \"reachable\" — which does not guarantee that auth or model settings are correct.",
+    "checkParams": "Check Parameters",
+    "timeout": "Timeout (seconds)",
+    "maxRetries": "Max Retries",
+    "degradedThreshold": "Slow-response threshold (ms)"
   },
   "subscription": {
     "copilotPremium": "Premium",

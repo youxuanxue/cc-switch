@@ -32,6 +32,22 @@ function createConformingFixture() {
   );
   writeFixtureFile(
     root,
+    "src/components/settings/sections/GeneralSection.tsx",
+    [
+      'import { SkillStorageLocationSettings } from "@/components/settings/SkillStorageLocationSettings";',
+      'import { SkillSyncMethodSettings } from "@/components/settings/SkillSyncMethodSettings";',
+      "export function GeneralSection() {",
+      "  return (",
+      "    <>",
+      "      <SkillStorageLocationSettings />",
+      "      <SkillSyncMethodSettings />",
+      "    </>",
+      "  );",
+      "}",
+    ].join("\n"),
+  );
+  writeFixtureFile(
+    root,
     "src-tauri/src/lib.rs",
     [
       "pub fn register() {",

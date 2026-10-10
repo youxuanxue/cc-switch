@@ -3265,6 +3265,10 @@
         "thinkingSignature": "Thinking 签名整流",
         "thinkingSignatureDescription": "当 Anthropic 类型供应商返回 thinking 签名不兼容或非法请求等错误时，自动移除不兼容的 thinking 相关块并对同一供应商重试一次",
         "title": "整流器"
+      },
+      "connectivityCheck": {
+        "title": "连通检测配置",
+        "description": "配置供应商地址探测的超时、重试和较慢阈值"
       }
     },
     "appConfig": {
@@ -3854,7 +3858,26 @@
     "windowBehavior": "窗口行为",
     "windowBehaviorHint": "配置窗口最小化与 Claude 插件联动策略。",
     "wslShell": "Shell",
-    "wslShellFlag": "标志"
+    "wslShellFlag": "标志",
+    "skillStorage": {
+      "title": "Skills 存储位置",
+      "description": "选择 CC Switch 存放 Skills 主副本的目录",
+      "ccSwitch": "CC Switch",
+      "unified": "~/.agents/skills",
+      "ccSwitchHint": "技能存储在 ~/.cc-switch/skills/，由 CC Switch 统一管理并同步到各应用。",
+      "unifiedHint": "技能存储在 ~/.agents/skills/，遵循 Agent Skills 开放标准。兼容的工具（Claude Code、Codex、Gemini CLI 等）可直接发现此目录中的技能。",
+      "confirmTitle": "迁移技能存储",
+      "confirmMessage": "将移动 {{count}} 个技能到新位置，是否继续？",
+      "migrationSuccess": "已成功迁移 {{count}} 个技能",
+      "migrationPartial": "迁移了 {{migrated}} 个技能，{{errors}} 个失败，请查看日志"
+    },
+    "skillSync": {
+      "title": "Skills 同步方式",
+      "description": "选择 Skills 的文件同步策略",
+      "symlink": "软连接",
+      "copy": "文件复制",
+      "symlinkHint": "软连接节省磁盘空间并支持实时同步。注意：Windows 可能需要管理员权限或开启开发者模式"
+    }
   },
   "skills": {
     "addRepo": "添加技能仓库",
@@ -3909,7 +3932,9 @@
       "foreign": "外来物",
       "broken": "断链",
       "sync": "同步",
-      "installFromCatalogOnly": "请在主面板从货架安装，不要把发现页仓库名当成 catalog install"
+      "installFromCatalogOnly": "请在主面板从货架安装，不要把发现页仓库名当成 catalog install",
+      "upgrade": "升级",
+      "upgradeAll": "全部升级"
     },
     "count": "共 {{count}} 个技能",
     "description": "从流行的仓库发现并安装技能，扩展 Claude Code/Codex/Gemini 的能力",
@@ -4217,7 +4242,14 @@
     "reachable": "{{providerName}} 连通正常 ({{responseTimeMs}}ms)",
     "reachableSlow": "{{providerName}} 连通但较慢 ({{responseTimeMs}}ms)",
     "unreachable": "{{providerName}} 无法连通: {{message}}",
-    "unreachableHint": "无法建立连接（DNS / 连接 / TLS / 超时）。请检查 base_url 与网络。"
+    "unreachableHint": "无法建立连接（DNS / 连接 / TLS / 超时）。请检查 base_url 与网络。",
+    "configSaved": "连通检测配置已保存",
+    "configSaveFailed": "保存失败",
+    "connectivityNote": "连通检测仅探测供应商地址是否可达，不发送真实模型请求。收到任意响应即视为“可达”——这不代表鉴权或模型配置一定正确。",
+    "checkParams": "检查参数",
+    "timeout": "超时时间（秒）",
+    "maxRetries": "最大重试次数",
+    "degradedThreshold": "较慢阈值（毫秒）"
   },
   "subscription": {
     "copilotPremium": "高级请求",

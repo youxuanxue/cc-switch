@@ -13,6 +13,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { isLinux } from "@/lib/platform";
 import { TerminalSelect } from "@/components/settings/TerminalSettings";
+import { SkillStorageLocationSettings } from "@/components/settings/SkillStorageLocationSettings";
+import { SkillSyncMethodSettings } from "@/components/settings/SkillSyncMethodSettings";
+import { useInstalledSkills } from "@/hooks/useSkills";
 import {
   SettingsBlock,
   SettingsCard,
@@ -42,6 +45,7 @@ export function GeneralSection({
 }: GeneralSectionProps) {
   const { t } = useTranslation();
   const { theme, setTheme } = useTheme();
+  const { data: installedSkills } = useInstalledSkills();
 
   return (
     <>
@@ -218,6 +222,28 @@ export function GeneralSection({
             }
           />
         </SettingsCard>
+      </SettingsBlock>
+
+      <SettingsBlock
+        title={t("settings.skillStorage.title")}
+        help={{
+          title: t("settings.skillStorage.title"),
+          body: t("settings.skillStorage.description"),
+        }}
+      >
+        <div className="space-y-5 rounded-panel border border-border bg-surface p-5">
+          <SkillStorageLocationSettings
+            value={settings.skillStorageLocation ?? "cc_switch"}
+            installedCount={installedSkills?.length ?? 0}
+            onMigrated={(location) =>
+              void onAutoSave({ skillStorageLocation: location })
+            }
+          />
+          <SkillSyncMethodSettings
+            value={settings.skillSyncMethod ?? "auto"}
+            onChange={(method) => void onAutoSave({ skillSyncMethod: method })}
+          />
+        </div>
       </SettingsBlock>
     </>
   );

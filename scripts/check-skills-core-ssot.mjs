@@ -3,6 +3,7 @@
 /**
  * Skills Core SSOT:
  * - App must render SkillsCorePanel for the skills view (not UnifiedSkillsPanel)
+ * - Settings general must expose SkillStorageLocation / SkillSyncMethod controls
  * - Tauri must register skills_core_* invoke commands
  */
 
@@ -14,6 +15,7 @@ const FINDING_CODES = {
   appImport: "SKILLS_CORE_APP_IMPORT",
   appRender: "SKILLS_CORE_APP_RENDER",
   legacyPanel: "SKILLS_CORE_LEGACY_PANEL",
+  settingsStorage: "SKILLS_CORE_SETTINGS_STORAGE",
   tauriCommands: "SKILLS_CORE_TAURI_COMMANDS",
 };
 
@@ -112,6 +114,33 @@ if (!existsSync(appPath)) {
       "src/App.tsx",
       "App must not reference legacy UnifiedSkillsPanel",
     );
+  }
+}
+
+const generalSectionPath = resolve(
+  root,
+  "src/components/settings/sections/GeneralSection.tsx",
+);
+if (!existsSync(generalSectionPath)) {
+  addFinding(
+    FINDING_CODES.settingsStorage,
+    "src/components/settings/sections/GeneralSection.tsx",
+    "GeneralSection is missing; Skill storage/sync settings cannot be verified",
+  );
+} else {
+  const generalSource = readFileSync(generalSectionPath, "utf8");
+  const generalImports = importedSymbols(generalSource);
+  for (const symbol of [
+    "SkillStorageLocationSettings",
+    "SkillSyncMethodSettings",
+  ]) {
+    if (!generalImports.has(symbol)) {
+      addFinding(
+        FINDING_CODES.settingsStorage,
+        "src/components/settings/sections/GeneralSection.tsx",
+        `GeneralSection must import ${symbol} so Skills Core storage remains configurable after upstream shell merges`,
+      );
+    }
   }
 }
 

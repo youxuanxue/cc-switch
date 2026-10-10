@@ -25,14 +25,24 @@ pub async fn stream_check_provider(
 
     // Copilot 端点是动态的（随 OAuth token 解析），需预先取出 host 再探测；
     // 其余供应商传 None，由服务层从 settings_config 提取 base_url。无需鉴权。
+    let config = state.db.get_stream_check_config()?;
     let base_url_override = resolve_copilot_base_url_override(provider, &copilot_state).await?;
-    StreamCheckService::check_with_retry(
-        &app_type,
-        provider,
-        &StreamCheckConfig::default(),
-        base_url_override,
-    )
-    .await
+    StreamCheckService::check_with_retry(&app_type, provider, &config, base_url_override).await
+}
+
+/// 获取连通性检查配置
+#[tauri::command]
+pub fn get_stream_check_config(state: State<'_, AppState>) -> Result<StreamCheckConfig, AppError> {
+    state.db.get_stream_check_config()
+}
+
+/// 保存连通性检查配置
+#[tauri::command]
+pub fn save_stream_check_config(
+    state: State<'_, AppState>,
+    config: StreamCheckConfig,
+) -> Result<(), AppError> {
+    state.db.save_stream_check_config(&config)
 }
 
 /// Copilot 供应商的 base_url 需要从 OAuth 管理器动态解析（按账号或默认端点）。

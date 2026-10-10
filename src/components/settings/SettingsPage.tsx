@@ -38,6 +38,7 @@ import { AboutSection } from "@/components/settings/AboutSection";
 import { RoutingSection } from "@/components/settings/sections/RoutingSection";
 import { GlobalProxySettings } from "@/components/settings/GlobalProxySettings";
 import { LogConfigPanel } from "@/components/settings/LogConfigPanel";
+import { ConnectivityCheckConfigPanel } from "@/components/usage/ConnectivityCheckConfigPanel";
 import { GeneralSection } from "@/components/settings/sections/GeneralSection";
 import { AppConfigSection } from "@/components/settings/sections/AppConfigSection";
 import {
@@ -249,17 +250,30 @@ export function SettingsPage({
         return <RoutingSection onOpenApp={onOpenApp} />;
       case "network":
         return (
-          <SettingsBlock
-            title={t("settings.advanced.globalProxy.title")}
-            help={{
-              title: t("settings.advanced.globalProxy.title"),
-              body: t("settings.advanced.globalProxy.description"),
-            }}
-          >
-            <div className="rounded-panel border border-border bg-surface p-5">
-              <GlobalProxySettings />
-            </div>
-          </SettingsBlock>
+          <>
+            <SettingsBlock
+              title={t("settings.advanced.globalProxy.title")}
+              help={{
+                title: t("settings.advanced.globalProxy.title"),
+                body: t("settings.advanced.globalProxy.description"),
+              }}
+            >
+              <div className="rounded-panel border border-border bg-surface p-5">
+                <GlobalProxySettings />
+              </div>
+            </SettingsBlock>
+            <SettingsBlock
+              title={t("settings.advanced.connectivityCheck.title")}
+              help={{
+                title: t("settings.advanced.connectivityCheck.title"),
+                body: t("settings.advanced.connectivityCheck.description"),
+              }}
+            >
+              <div className="rounded-panel border border-border bg-surface p-5">
+                <ConnectivityCheckConfigPanel />
+              </div>
+            </SettingsBlock>
+          </>
         );
       case "data":
         return (
