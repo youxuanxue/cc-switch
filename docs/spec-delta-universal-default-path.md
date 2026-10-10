@@ -2,55 +2,53 @@
 
 ## Background
 
-主界面按 App 分仓配置，用户需对 Claude / Codex / Gemini 等逐个添加并启用同一张供应商卡，与「一处配置、处处生效」相反。
+Plan A 壳把导航改成侧栏按 App 分仓，并把直连 / 路由 / 聚合做成每 App 的连接策略。这改善了「怎么连」，但凭据仍按工具拆开——与「一处配置、处处生效」相反。
 
-产品内已有承接件，无需新实体：
+承接件不变，无需新实体：
 
 - `UniversalProvider` + `sync_universal_to_apps`（意图 SSOT）
-- 各 app 的 live adapter（落盘微调）
-- Local Proxy（可选运行时：热切换 / 协议转换 / failover）
+- 各 app live adapter / Mode（落盘与运行时微调）
+- Local Proxy（可选热切换 / 协议转换 / failover）
 
-问题在默认路径：专属供应商是主入口，统一供应商不够显眼。
+直连 / 路由 / 聚合保持 per-App 适配层，不升成跨 App 配置首页。
 
 ## Delta
 
 ### ADDED
 
-- 「+」预设挑选步在支持统一供应商的 App 上**默认选中「统一」分类**；点选统一预设后进入统一供应商创建流（名称、API Key、Base URL、勾选目标 App）。
-- 保存后自动 `sync`，并对勾选 App 将对应子 Provider **设为当前**（普通 switch 或已接管时的 proxy hot-switch）。
-- 可投影的 App **默认勾选**（首期：Claude / Codex / Gemini）。
+- 侧栏全局页 **「统一供应商」**：与 MCP / Skills 同级的一等入口，可列表 / 添加 / 同步 / 删除。
+- 「+」预设挑选步在支持统一供应商的 App 上默认选中「统一」分类。
+- 保存后自动 `sync`，并对勾选 App 将子 Provider **设为当前**；取消勾选时清理 current 指针。
+- 可投影 App 默认勾选（首期：Claude / Codex / Gemini）。
 
 ### MODIFIED
 
-- 应用专属预设仍可在挑选步其它分类中选用，不再作为默认落点。
-- 对齐上游后的两步添加流（选预设 → 填表）；不恢复旧的「统一 / 专属」双 Tab。
-- App Switcher 本轮不改；用户仍可用它查看各 App 投影与例外。
+- 应用专属预设仍可在挑选步其它分类选用，不再作为默认落点。
+- 对齐上游两步添加流；不恢复旧双 Tab。
 
 ### REMOVED
 
-- 无。不删除专属供应商、Proxy、模型槽或 adapter；不新增「超级 Profile / 全局配置中心」页面。
+- 无。不删除专属供应商、Proxy、模型槽、ModeTabs；不新增「超级 Profile」页。
 
 ### 明确不做（本 delta）
 
 - 不重做整站信息架构。
 - 不把 Cursor 纳入 Provider 切换。
-- 不在本轮扩展 OpenCode / Hermes / Pi / Grok / Claude Desktop 的 Universal 投影（后续可加）。
+- 不在本轮扩展 OpenCode / Hermes / Pi / Grok / Claude Desktop / mcode 的 Universal 投影。
+- 不用「聚合」冒充跨 App 处处生效。
 
 ## Scenarios
 
 | 类型 | 场景 | 期望 |
 |------|------|------|
-| 正向 | 新建统一供应商，勾选三家，保存 | 三家各生成/更新 `universal-{app}-{id}`，且均为当前；live 已投影 |
-| 正向 | 修改 Key / URL 后保存 | 勾选 App 的子 Provider 与 live 同步更新 |
-| 负向 | 取消勾选某 App 后保存 | 该 App 子 Provider 删除或不再由该 Universal 驱动；其余不受影响 |
-| 负向 | 某 App live 写入失败 | 其余 App 仍同步成功；失败被明确报告（非整体假成功） |
-| 回归 | 已有专属供应商列表 / 切换 / Proxy 接管 | 行为不变，仍可从高级入口使用 |
+| 正向 | 侧栏打开统一供应商，新建并勾选三家，保存 | 三家生成/更新子卡且均为当前；live 已投影 |
+| 正向 | App「+」打开挑选步 | 默认落在「统一」分类 |
+| 负向 | 取消勾选某 App 后同步 | 子卡删除且 current 清空；其余 App 不受影响 |
+| 负向 | 某 App 写入/启用失败 | 其余成功；失败被明确报告 |
+| 回归 | 直连/路由/聚合、专属供应商列表 | 行为不变 |
 
 ## Validation
 
-- 自动化：
-  - `sync_universal_to_apps_activates_enabled_child_when_not_current`
-  - `sync_universal_to_apps_removes_disabled_child_provider`
-  - `AddProviderDialog`「默认打开统一供应商 Tab」
-- 手动：主界面「+」默认落在统一供应商；完成后无需再逐 App 点启用即可在对应 CLI 验证（按既有生效方式：Claude/Gemini 即时，Codex 视热重载/重启）。
-- 未在本 delta 验证：非三家 App 的 Universal 投影、Cursor Provider 化。
+- 自动化：`sync_universal_to_apps_*`、挑选步默认统一分类、侧栏/导航含 `universal` 全局页。
+- 手动：侧栏进入统一供应商页完成添加；App「+」默认「统一」；无需再逐 App 点启用。
+- 未验证：非三家 App 的 Universal 投影、Cursor Provider 化。

@@ -15,6 +15,7 @@ import {
   Download,
   ExternalLink,
   KeyRound,
+  Layers,
   MoreHorizontal,
   Plus,
   RefreshCw,
@@ -114,6 +115,10 @@ import {
 import SkillsCorePanel, {
   type SkillsCorePanelHandle,
 } from "@/components/skills/SkillsCorePanel";
+import {
+  UniversalProviderPanel,
+  type UniversalProviderPanelHandle,
+} from "@/components/universal";
 import { DeepLinkImportDialog } from "@/components/DeepLinkImportDialog";
 import { FirstRunNoticeDialog } from "@/components/FirstRunNoticeDialog";
 import { WhatsNewNotice } from "@/components/WhatsNewDialog";
@@ -297,6 +302,7 @@ function App() {
   useUsageCacheBridge();
 
   const skillsCorePanelRef = useRef<SkillsCorePanelHandle>(null);
+  const universalPanelRef = useRef<UniversalProviderPanelHandle>(null);
   const skillsPageRef =
     useRef<import("@/components/skills/SkillsPage").SkillsPageHandle>(null);
 
@@ -1485,6 +1491,36 @@ function App() {
             >
               <div className="px-6 pb-10 pt-4">
                 <AuthCenterPanel showIntro={false} />
+              </div>
+            </div>
+          </>
+        );
+      case "universal":
+        return (
+          <>
+            <AppPageHeader
+              icon={<Layers className="h-5 w-5" strokeWidth={1.5} />}
+              title={t("nav.universal")}
+              actions={
+                <Button
+                  variant="quiet"
+                  size="regular"
+                  onClick={() => universalPanelRef.current?.openCreate()}
+                >
+                  <Plus className="h-4 w-4" />
+                  {t("universalProvider.add")}
+                </Button>
+              }
+            />
+            <div
+              id="main-content"
+              className="min-h-0 flex-1 overflow-y-auto scroll-stable"
+            >
+              <div className="px-6 pb-10 pt-4">
+                <UniversalProviderPanel
+                  ref={universalPanelRef}
+                  variant="page"
+                />
               </div>
             </div>
           </>

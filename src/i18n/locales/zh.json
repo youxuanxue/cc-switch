@@ -1304,6 +1304,7 @@
     "settingsHasUpdate": "设置 · CC Switch 有新版本",
     "skipToContent": "跳到主要内容",
     "todayCost": "今日 {{cost}}",
+    "universal": "统一供应商",
     "usage": "用量统计"
   },
   "newLayoutNotice": {
@@ -4302,7 +4303,7 @@
     "deleteConfirmTitle": "删除统一供应商",
     "deleteError": "删除统一供应商失败",
     "deleted": "统一供应商已删除",
-    "description": "统一供应商可以同时管理 Claude、Codex 和 Gemini 的配置。修改后会自动同步到所有启用的应用。",
+    "description": "一处配置，同步到 Claude、Codex、Gemini：保存后会写入各应用并设为当前。",
     "duplicate": "复制",
     "duplicateError": "复制统一供应商失败",
     "duplicatedAndSynced": "统一供应商已复制、同步并设为当前",

@@ -1,18 +1,36 @@
-import { useState, useCallback, useEffect } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
-import { Layers } from "lucide-react";
+import { Layers, Plus } from "lucide-react";
 import { toast } from "@/lib/toast";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { Button } from "@/components/ui/button";
 import { UniversalProviderCard } from "./UniversalProviderCard";
 import { UniversalProviderFormModal } from "./UniversalProviderFormModal";
 import { universalProvidersApi } from "@/lib/api";
 import type { UniversalProvider, UniversalProvidersMap } from "@/types";
 import { deepClone } from "@/utils/deepClone";
 
-export function UniversalProviderPanel() {
+export type UniversalProviderPanelHandle = {
+  openCreate: () => void;
+};
+
+type UniversalProviderPanelProps = {
+  /** `page`：侧栏全局页（标题由 AppPageHeader 承担）；`embedded`：管理全屏内嵌 */
+  variant?: "embedded" | "page";
+};
+
+export const UniversalProviderPanel = forwardRef<
+  UniversalProviderPanelHandle,
+  UniversalProviderPanelProps
+>(function UniversalProviderPanel({ variant = "embedded" }, ref) {
   const { t } = useTranslation();
 
-  // 状态
   const [providers, setProviders] = useState<UniversalProvidersMap>({});
   const [loading, setLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -29,7 +47,13 @@ export function UniversalProviderPanel() {
     name: string;
   }>({ open: false, id: "", name: "" });
 
-  // 加载数据
+  const openCreate = useCallback(() => {
+    setEditingProvider(null);
+    setIsFormOpen(true);
+  }, []);
+
+  useImperativeHandle(ref, () => ({ openCreate }), [openCreate]);
+
   const loadProviders = useCallback(async () => {
     try {
       setLoading(true);
@@ -51,13 +75,11 @@ export function UniversalProviderPanel() {
     loadProviders();
   }, [loadProviders]);
 
-  // 添加/编辑供应商
   const handleSave = useCallback(
     async (provider: UniversalProvider) => {
       try {
         await universalProvidersApi.upsert(provider);
 
-        // 新建模式下自动同步到各应用
         if (!editingProvider) {
           await universalProvidersApi.sync(provider.id);
         }
@@ -85,7 +107,6 @@ export function UniversalProviderPanel() {
     [editingProvider, loadProviders, t],
   );
 
-  // 保存并同步供应商
   const handleSaveAndSync = useCallback(
     async (provider: UniversalProvider) => {
       try {
@@ -110,7 +131,6 @@ export function UniversalProviderPanel() {
     [loadProviders, t],
   );
 
-  // 删除供应商
   const handleDelete = useCallback(async () => {
     if (!deleteConfirm.id) return;
 
@@ -132,7 +152,6 @@ export function UniversalProviderPanel() {
     }
   }, [deleteConfirm.id, loadProviders, t]);
 
-  // 同步供应商
   const handleSync = useCallback(async () => {
     if (!syncConfirm.id) return;
 
@@ -155,7 +174,6 @@ export function UniversalProviderPanel() {
     }
   }, [syncConfirm.id, t]);
 
-  // 打开同步确认
   const handleSyncClick = useCallback(
     (id: string) => {
       const provider = providers[id];
@@ -168,7 +186,6 @@ export function UniversalProviderPanel() {
     [providers],
   );
 
-  // 复制供应商
   const handleDuplicate = useCallback(
     async (provider: UniversalProvider) => {
       const duplicated: UniversalProvider = {
@@ -198,13 +215,11 @@ export function UniversalProviderPanel() {
     [loadProviders, t],
   );
 
-  // 打开编辑
   const handleEdit = useCallback((provider: UniversalProvider) => {
     setEditingProvider(provider);
     setIsFormOpen(true);
   }, []);
 
-  // 打开删除确认
   const handleDeleteClick = useCallback(
     (id: string) => {
       const provider = providers[id];
@@ -218,21 +233,30 @@ export function UniversalProviderPanel() {
   );
 
   const providerList = Object.values(providers);
+  const addLabel = t("universalProvider.add", {
+    defaultValue: "添加统一供应商",
+  });
 
   return (
     <div className="space-y-4">
-      {/* 头部 */}
-      <div className="flex items-center gap-2">
-        <Layers className="h-5 w-5 text-primary" />
-        <h2 className="text-lg font-semibold">
-          {t("universalProvider.title", { defaultValue: "统一供应商" })}
-        </h2>
-        <span className="rounded-full bg-subtle px-2 py-0.5 text-xs text-fg-2">
-          {providerList.length}
-        </span>
-      </div>
+      {variant === "embedded" ? (
+        <div className="flex items-center gap-2">
+          <Layers className="h-5 w-5 text-primary" />
+          <h2 className="text-lg font-semibold">
+            {t("universalProvider.title", { defaultValue: "统一供应商" })}
+          </h2>
+          <span className="rounded-full bg-subtle px-2 py-0.5 text-xs text-fg-2">
+            {providerList.length}
+          </span>
+          <div className="ms-auto">
+            <Button variant="quiet" size="regular" onClick={openCreate}>
+              <Plus className="h-4 w-4" />
+              {addLabel}
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
-      {/* 描述 */}
       <p className="text-sm text-fg-2">
         {t("universalProvider.description", {
           defaultValue:
@@ -240,7 +264,6 @@ export function UniversalProviderPanel() {
         })}
       </p>
 
-      {/* 供应商列表 */}
       {loading ? (
         <div className="flex items-center justify-center py-12">
           <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
@@ -258,6 +281,15 @@ export function UniversalProviderPanel() {
               defaultValue: "点击下方「添加统一供应商」按钮创建一个",
             })}
           </p>
+          <Button
+            className="mt-4"
+            variant="quiet"
+            size="regular"
+            onClick={openCreate}
+          >
+            <Plus className="h-4 w-4" />
+            {addLabel}
+          </Button>
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -274,7 +306,6 @@ export function UniversalProviderPanel() {
         </div>
       )}
 
-      {/* 表单模态框 */}
       <UniversalProviderFormModal
         isOpen={isFormOpen}
         onClose={() => {
@@ -286,7 +317,6 @@ export function UniversalProviderPanel() {
         editingProvider={editingProvider}
       />
 
-      {/* 删除确认对话框 */}
       <ConfirmDialog
         isOpen={deleteConfirm.open}
         title={t("universalProvider.deleteConfirmTitle", {
@@ -301,7 +331,6 @@ export function UniversalProviderPanel() {
         onCancel={() => setDeleteConfirm({ open: false, id: "", name: "" })}
       />
 
-      {/* 同步确认对话框 */}
       <ConfirmDialog
         isOpen={syncConfirm.open}
         title={t("universalProvider.syncConfirmTitle", {
@@ -319,4 +348,4 @@ export function UniversalProviderPanel() {
       />
     </div>
   );
-}
+});

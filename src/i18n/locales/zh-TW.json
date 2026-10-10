@@ -1304,6 +1304,7 @@
     "settingsHasUpdate": "設定 · CC Switch 有新版本",
     "skipToContent": "跳到主要內容",
     "todayCost": "今日 {{cost}}",
+    "universal": "統一供應商",
     "usage": "用量統計"
   },
   "newLayoutNotice": {
@@ -4291,7 +4292,7 @@
     "deleteConfirmTitle": "刪除通用供應商",
     "deleteError": "刪除通用供應商失敗",
     "deleted": "通用供應商已刪除",
-    "description": "通用供應商可以同時管理 Claude、Codex 和 Gemini 的設定。修改後會自動同步至所有啟用的應用程式。",
+    "description": "一處設定，同步到 Claude、Codex、Gemini：儲存後會寫入各應用並設為目前。",
     "duplicate": "複製",
     "duplicateError": "複製通用供應商失敗",
     "duplicatedAndSynced": "通用供應商已複製、同步並設為目前",

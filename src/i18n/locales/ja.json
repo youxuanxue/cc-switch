@@ -1304,6 +1304,7 @@
     "settingsHasUpdate": "設定 · CC Switch の新しいバージョンがあります",
     "skipToContent": "メインコンテンツへスキップ",
     "todayCost": "今日 {{cost}}",
+    "universal": "統一プロバイダー",
     "usage": "使用量"
   },
   "newLayoutNotice": {
@@ -4285,7 +4286,7 @@
     "deleteConfirmTitle": "統合プロバイダーを削除",
     "deleteError": "統合プロバイダーの削除に失敗しました",
     "deleted": "統合プロバイダーを削除しました",
-    "description": "統合プロバイダーは Claude、Codex、Gemini の設定を同時に管理します。変更は有効なすべてのアプリに自動的に同期されます。",
+    "description": "一箇所で設定し、Claude・Codex・Gemini に同期：保存後に各アプリへ書き込み、現在のプロバイダーに設定します。",
     "duplicate": "複製",
     "duplicateError": "統合プロバイダーの複製に失敗しました",
     "duplicatedAndSynced": "統合プロバイダーを複製・同期し、現在のプロバイダーに設定しました",

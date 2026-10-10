@@ -1304,6 +1304,7 @@
     "settingsHasUpdate": "Settings · a new CC Switch version is available",
     "skipToContent": "Skip to main content",
     "todayCost": "Today {{cost}}",
+    "universal": "Universal",
     "usage": "Usage"
   },
   "newLayoutNotice": {
@@ -4302,7 +4303,7 @@
     "deleteConfirmTitle": "Delete Universal Provider",
     "deleteError": "Failed to delete universal provider",
     "deleted": "Universal provider deleted",
-    "description": "Universal providers manage Claude, Codex, and Gemini configurations simultaneously. Changes are automatically synced to all enabled apps.",
+    "description": "Configure once, sync to Claude, Codex, and Gemini: save writes each app and sets it as current.",
     "duplicate": "Duplicate",
     "duplicateError": "Failed to duplicate universal provider",
     "duplicatedAndSynced": "Universal provider duplicated, synced, and set as current",
