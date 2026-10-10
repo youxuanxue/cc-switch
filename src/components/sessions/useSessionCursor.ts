@@ -53,7 +53,6 @@ export function useSessionCursor({
   };
 
   return {
-    cursorSessionIndex,
     cursorPrimaryAction,
     setCursorPrimaryAction,
     cursorResumeCommand,
