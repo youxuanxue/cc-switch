@@ -68,7 +68,7 @@ export function UniversalProviderPanel() {
                 defaultValue: "统一供应商已更新",
               })
             : t("universalProvider.addedAndSynced", {
-                defaultValue: "统一供应商已添加并同步",
+                defaultValue: "统一供应商已添加、同步并设为当前",
               }),
         );
         loadProviders();
@@ -93,7 +93,7 @@ export function UniversalProviderPanel() {
         await universalProvidersApi.sync(provider.id);
         toast.success(
           t("universalProvider.savedAndSynced", {
-            defaultValue: "已保存并同步到所有应用",
+            defaultValue: "已保存、同步并设为各勾选应用的当前供应商",
           }),
         );
         loadProviders();
@@ -139,7 +139,9 @@ export function UniversalProviderPanel() {
     try {
       await universalProvidersApi.sync(syncConfirm.id);
       toast.success(
-        t("universalProvider.synced", { defaultValue: "已同步到所有应用" }),
+        t("universalProvider.synced", {
+          defaultValue: "已同步并设为各勾选应用的当前供应商",
+        }),
       );
     } catch (error) {
       console.error("Failed to sync universal provider:", error);
@@ -180,7 +182,7 @@ export function UniversalProviderPanel() {
         await universalProvidersApi.sync(duplicated.id);
         toast.success(
           t("universalProvider.duplicatedAndSynced", {
-            defaultValue: "统一供应商已复制并同步",
+            defaultValue: "统一供应商已复制、同步并设为当前",
           }),
         );
         loadProviders();
@@ -234,7 +236,7 @@ export function UniversalProviderPanel() {
       <p className="text-sm text-muted-foreground">
         {t("universalProvider.description", {
           defaultValue:
-            "统一供应商可以同时管理 Claude、Codex 和 Gemini 的配置。修改后会自动同步到所有启用的应用。",
+            "一处配置，同步到 Claude、Codex、Gemini：保存后会写入各应用并设为当前。",
         })}
       </p>
 

@@ -103,6 +103,7 @@
     "connectivityCheck": "檢測連通",
     "tabProvider": "供應商",
     "tabUniversal": "通用供應商",
+    "tabAppSpecific": "進階 · {{app}}",
     "noProviders": "尚未新增任何供應商",
     "noProvidersDescription": "如果您已有設定，請點擊「匯入目前設定」，所有資料將安全儲存在 default 供應商中",
     "noProvidersDescriptionSnippet": "除 API Key 和請求位址外的資料（如外掛程式設定）會被儲存至通用設定片段，用於在不同供應商之間共用",

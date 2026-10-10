@@ -103,6 +103,7 @@
     "connectivityCheck": "接続チェック",
     "tabProvider": "プロバイダー",
     "tabUniversal": "統一プロバイダー",
+    "tabAppSpecific": "詳細 · {{app}}",
     "noProviders": "まだプロバイダーがありません",
     "noProvidersDescription": "既存の設定がある場合は「現在の設定をインポート」をクリックしてください。すべてのデータが default プロバイダーに安全に保存されます",
     "noProvidersDescriptionSnippet": "API キーとリクエスト URL 以外のデータ（プラグインなど）は共通設定スニペットに保存され、プロバイダー間で共有できます",

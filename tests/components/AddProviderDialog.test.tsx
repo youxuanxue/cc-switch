@@ -5,6 +5,7 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { useEffect } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AddProviderDialog } from "@/components/providers/AddProviderDialog";
@@ -76,6 +77,26 @@ vi.mock("@/components/providers/AuthSettingsPanel", () => ({
     target ? <div data-testid="auth-settings-panel">{target}</div> : null,
 }));
 
+vi.mock("@/components/universal", () => ({
+  UniversalProviderPanel: () => <div data-testid="universal-panel" />,
+}));
+
+vi.mock("@/components/universal/UniversalProviderFormModal", () => ({
+  UniversalProviderFormModal: () => null,
+}));
+
+async function openAppSpecificTab() {
+  const user = userEvent.setup();
+  const tab = screen.getByRole("tab", { name: /高级 ·/ });
+  await user.click(tab);
+  await waitFor(() => expect(tab).toHaveAttribute("data-state", "active"));
+  await waitFor(() =>
+    expect(
+      screen.getByRole("button", { name: "common.add" }),
+    ).toBeInTheDocument(),
+  );
+}
+
 describe("AddProviderDialog", () => {
   beforeEach(() => {
     mockFormReady = true;
@@ -95,6 +116,26 @@ describe("AddProviderDialog", () => {
     };
   });
 
+  it("默认打开统一供应商 Tab", () => {
+    render(
+      <AddProviderDialog
+        open
+        onOpenChange={vi.fn()}
+        appId="claude"
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("universal-panel")).toBeInTheDocument();
+    expect(
+      screen.getByRole("tab", { name: "provider.tabUniversal" }),
+    ).toHaveAttribute("data-state", "active");
+    expect(screen.getByRole("tab", { name: /高级 ·/ })).toHaveAttribute(
+      "data-state",
+      "inactive",
+    );
+  });
+
   it("使用 ProviderForm 返回的自定义端点", async () => {
     const handleSubmit = vi.fn().mockResolvedValue(undefined);
     const handleOpenChange = vi.fn();
@@ -107,6 +148,7 @@ describe("AddProviderDialog", () => {
         onSubmit={handleSubmit}
       />,
     );
+    await openAppSpecificTab();
 
     fireEvent.click(
       screen.getByRole("button", {
@@ -143,6 +185,7 @@ describe("AddProviderDialog", () => {
         onSubmit={handleSubmit}
       />,
     );
+    await openAppSpecificTab();
 
     fireEvent.click(
       screen.getByRole("button", {
@@ -194,6 +237,7 @@ describe("AddProviderDialog", () => {
         onSubmit={handleSubmit}
       />,
     );
+    await openAppSpecificTab();
 
     fireEvent.click(screen.getByRole("button", { name: "common.add" }));
 
@@ -222,6 +266,7 @@ describe("AddProviderDialog", () => {
       onSubmit: vi.fn(),
     };
     const { rerender } = render(<AddProviderDialog open {...props} />);
+    await openAppSpecificTab();
 
     fireEvent.click(screen.getByRole("button", { name: "manage-auth" }));
     expect(screen.getByTestId("auth-settings-panel")).toHaveTextContent(

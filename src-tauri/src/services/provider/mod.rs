@@ -4110,6 +4110,114 @@ wire_api = "responses"
             );
         });
     }
+
+    #[test]
+    #[serial]
+    fn sync_universal_to_apps_activates_enabled_child_when_not_current() {
+        with_test_home(|state, _home| {
+            let other = Provider::with_id(
+                "other-claude".to_string(),
+                "Other".to_string(),
+                json!({
+                    "env": {
+                        "ANTHROPIC_BASE_URL": "https://api.other.example",
+                        "ANTHROPIC_AUTH_TOKEN": "other-key"
+                    }
+                }),
+                None,
+            );
+            state
+                .db
+                .save_provider("claude", &other)
+                .expect("seed other provider");
+            state
+                .db
+                .set_current_provider("claude", &other.id)
+                .expect("set other current");
+            crate::settings::set_current_provider(&AppType::Claude, Some(&other.id))
+                .expect("set local other current");
+            write_json_file(&get_claude_settings_path(), &other.settings_config)
+                .expect("seed other live");
+
+            let mut universal = UniversalProvider::new(
+                "shared".to_string(),
+                "Shared Relay".to_string(),
+                "custom".to_string(),
+                "https://api.new.example".to_string(),
+                "new-key".to_string(),
+            );
+            universal.apps.claude = true;
+            universal.apps.codex = false;
+            universal.apps.gemini = false;
+            state
+                .db
+                .save_universal_provider(&universal)
+                .expect("save universal provider");
+
+            ProviderService::sync_universal_to_apps(state, "shared")
+                .expect("sync universal provider");
+
+            let child_id = "universal-claude-shared";
+            let current = crate::settings::get_effective_current_provider(
+                state.db.as_ref(),
+                &AppType::Claude,
+            )
+            .expect("read current");
+            assert_eq!(current.as_deref(), Some(child_id));
+
+            let live: Value = read_json_file(&get_claude_settings_path()).expect("read live");
+            assert_eq!(
+                live["env"]["ANTHROPIC_BASE_URL"].as_str(),
+                Some("https://api.new.example")
+            );
+            assert_eq!(
+                live["env"]["ANTHROPIC_AUTH_TOKEN"].as_str(),
+                Some("new-key")
+            );
+        });
+    }
+
+    #[test]
+    #[serial]
+    fn sync_universal_to_apps_removes_disabled_child_provider() {
+        with_test_home(|state, _home| {
+            let mut universal = UniversalProvider::new(
+                "shared".to_string(),
+                "Shared Relay".to_string(),
+                "custom".to_string(),
+                "https://api.new.example".to_string(),
+                "new-key".to_string(),
+            );
+            universal.apps.claude = true;
+            universal.apps.codex = false;
+            universal.apps.gemini = false;
+            state
+                .db
+                .save_universal_provider(&universal)
+                .expect("save universal provider");
+            ProviderService::sync_universal_to_apps(state, "shared").expect("initial sync");
+
+            let child_id = "universal-claude-shared";
+            assert!(state
+                .db
+                .get_provider_by_id(child_id, "claude")
+                .expect("lookup")
+                .is_some());
+
+            universal.apps.claude = false;
+            state
+                .db
+                .save_universal_provider(&universal)
+                .expect("save disabled universal");
+            ProviderService::sync_universal_to_apps(state, "shared").expect("sync after disable");
+
+            assert!(state
+                .db
+                .get_provider_by_id(child_id, "claude")
+                .expect("lookup after delete")
+                .is_none());
+        });
+    }
 }
 
 impl ProviderService {
@@ -6863,7 +6971,7 @@ impl ProviderService {
                 claude_provider.settings_config = merged;
             }
             state.db.save_provider("claude", &claude_provider)?;
-            Self::project_universal_child_to_live(
+            Self::activate_universal_child(
                 state,
                 AppType::Claude,
                 &claude_provider.id,
@@ -6884,7 +6992,7 @@ impl ProviderService {
                 codex_provider.settings_config = merged;
             }
             state.db.save_provider("codex", &codex_provider)?;
-            Self::project_universal_child_to_live(
+            Self::activate_universal_child(
                 state,
                 AppType::Codex,
                 &codex_provider.id,
@@ -6904,7 +7012,7 @@ impl ProviderService {
                 gemini_provider.settings_config = merged;
             }
             state.db.save_provider("gemini", &gemini_provider)?;
-            Self::project_universal_child_to_live(
+            Self::activate_universal_child(
                 state,
                 AppType::Gemini,
                 &gemini_provider.id,
@@ -6919,41 +7027,26 @@ impl ProviderService {
             Ok(true)
         } else {
             Err(AppError::Message(format!(
-                "统一供应商已保存到数据库，但以下应用的配置文件未能写入，仍是旧内容：{}。请重试同步，或切换一次该应用的供应商。",
+                "统一供应商已保存到数据库，但以下应用未能设为当前或写入配置：{}。请重试同步，或手动启用该应用的供应商。",
                 live_failures.join("、")
             )))
         }
     }
 
-    /// Re-project a generated universal child only when it is the effective
-    /// current provider for that app. Failures are collected by the caller so
-    /// the other applications can continue syncing.
-    fn project_universal_child_to_live(
+    /// Set the generated universal child as the current provider for the app
+    /// (normal switch or proxy hot-switch). Failures are collected so the other
+    /// applications can continue syncing.
+    fn activate_universal_child(
         state: &AppState,
         app_type: AppType,
         child_id: &str,
         failures: &mut Vec<String>,
     ) {
-        let is_current = match crate::settings::get_effective_current_provider(&state.db, &app_type)
-        {
-            Ok(current) => current.as_deref() == Some(child_id),
-            Err(err) => {
-                log::warn!(
-                    "读取 {} 当前供应商失败，跳过统一供应商的 live 重投影: {err}",
-                    app_type.as_str()
-                );
-                failures.push(app_type.as_str().to_string());
-                return;
-            }
-        };
-        if !is_current {
-            return;
-        }
-
-        if let Err(err) = Self::sync_current_provider_for_app(state, app_type.clone()) {
+        if let Err(err) = Self::switch(state, app_type.clone(), child_id) {
             log::warn!(
-                "统一供应商同步后重写 {} live 配置失败: {err}",
-                app_type.as_str()
+                "统一供应商同步后启用 {} 供应商 {} 失败: {err}",
+                app_type.as_str(),
+                child_id
             );
             failures.push(app_type.as_str().to_string());
         }

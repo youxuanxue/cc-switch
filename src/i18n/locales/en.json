@@ -103,6 +103,7 @@
     "connectivityCheck": "Connectivity check",
     "tabProvider": "Provider",
     "tabUniversal": "Universal",
+    "tabAppSpecific": "Advanced · {{app}}",
     "noProviders": "No providers added yet",
     "noProvidersDescription": "If you already have a config, click \"Import Current Config\" — all data will be safely saved in a default provider",
     "noProvidersDescriptionSnippet": "Settings other than API key and endpoint (e.g. plugins) will be saved to a common config snippet for sharing across providers",

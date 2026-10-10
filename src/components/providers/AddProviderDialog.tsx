@@ -56,7 +56,7 @@ export function AddProviderDialog({
     appId !== "grokbuild" &&
     appId !== "claude-desktop";
   const [activeTab, setActiveTab] = useState<"app-specific" | "universal">(
-    "app-specific",
+    "universal",
   );
   const [universalFormOpen, setUniversalFormOpen] = useState(false);
   const [selectedUniversalPreset, setSelectedUniversalPreset] =
@@ -67,7 +67,10 @@ export function AddProviderDialog({
 
   useEffect(() => {
     setAuthSettingsTarget(null);
-  }, [appId, open]);
+    if (open && showUniversalTab) {
+      setActiveTab("universal");
+    }
+  }, [appId, open, showUniversalTab]);
 
   const closeDialog = useCallback(() => {
     setAuthSettingsTarget(null);
@@ -125,7 +128,7 @@ export function AddProviderDialog({
         await universalProvidersApi.sync(provider.id);
         toast.success(
           t("universalProvider.addedAndSynced", {
-            defaultValue: "统一供应商已添加并同步",
+            defaultValue: "统一供应商已添加、同步并设为当前",
           }),
         );
       } catch (error) {
@@ -415,13 +418,20 @@ export function AddProviderDialog({
           onValueChange={(v) => setActiveTab(v as "app-specific" | "universal")}
         >
           <TabsList className="grid w-full grid-cols-2 mb-6">
-            <TabsTrigger value="app-specific">
-              {t(`apps.${appId}`)} {t("provider.tabProvider")}
-            </TabsTrigger>
             <TabsTrigger value="universal">
               {t("provider.tabUniversal")}
             </TabsTrigger>
+            <TabsTrigger value="app-specific">
+              {t("provider.tabAppSpecific", {
+                app: t(`apps.${appId}`),
+                defaultValue: "高级 · {{app}}",
+              })}
+            </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="universal" className="mt-0">
+            <UniversalProviderPanel />
+          </TabsContent>
 
           <TabsContent value="app-specific" className="mt-0">
             <ProviderForm
@@ -434,10 +444,6 @@ export function AddProviderDialog({
               onSubmitReadyChange={handleSubmitReadyChange}
               showButtons={false}
             />
-          </TabsContent>
-
-          <TabsContent value="universal" className="mt-0">
-            <UniversalProviderPanel />
           </TabsContent>
         </Tabs>
       ) : (
