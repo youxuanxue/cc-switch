@@ -2901,6 +2901,7 @@
     "liveTerminalLaunched": "In-app terminal started",
     "liveTerminalMacOnly": "In-app terminal is currently macOS-only",
     "liveTerminalNoSession": "Select a session first",
+    "liveTerminalCursorNotReady": "Cursor session is not ready; cannot open the in-app terminal",
     "liveTerminalRunning": "Running",
     "liveTerminalSpawnFailed": "Failed to start in-app terminal",
     "liveTerminalSpawning": "Starting…",

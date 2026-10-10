@@ -87,6 +87,24 @@ export async function spawnProviderLiveTerminal() {
   return sessionsApi.spawnPty({});
 }
 `,
+    "src/components/sessions/useSessionLiveTerminal.ts": `
+export function useSessionLiveTerminal({ cursorPrimaryAction }) {
+  if (readerSession.providerId === "cursor") {
+    if (!cursorPrimaryAction || cursorPrimaryAction.disabled) {
+      return { kind: "unavailable" };
+    }
+    return spawnCursorLiveTerminal({});
+  }
+  return spawnProviderLiveTerminal({});
+}
+`,
+    "src/components/sessions/SessionManagerPage.tsx": `
+import { useSessionLiveTerminal } from "./useSessionLiveTerminal";
+export function SessionManagerPage() {
+  useSessionLiveTerminal({});
+  return null;
+}
+`,
   };
 }
 

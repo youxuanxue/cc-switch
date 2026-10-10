@@ -2902,6 +2902,7 @@
     "liveTerminalLaunched": "站內終端已啟動",
     "liveTerminalMacOnly": "站內終端目前僅支援 macOS",
     "liveTerminalNoSession": "請先選擇一個工作階段",
+    "liveTerminalCursorNotReady": "Cursor 工作階段尚未就緒，無法開啟站內終端",
     "liveTerminalRunning": "執行中",
     "liveTerminalSpawnFailed": "站內終端啟動失敗",
     "liveTerminalSpawning": "啟動中…",

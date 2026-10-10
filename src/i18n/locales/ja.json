@@ -2901,6 +2901,7 @@
     "liveTerminalLaunched": "アプリ内ターミナルを起動しました",
     "liveTerminalMacOnly": "アプリ内ターミナルは現在 macOS のみ対応です",
     "liveTerminalNoSession": "先にセッションを選択してください",
+    "liveTerminalCursorNotReady": "Cursor セッションの準備ができていないため、アプリ内ターミナルを開けません",
     "liveTerminalRunning": "実行中",
     "liveTerminalSpawnFailed": "アプリ内ターミナルの起動に失敗しました",
     "liveTerminalSpawning": "起動中…",

@@ -182,9 +182,17 @@ requireImports(
 
 requireImports(
   pagePath,
-  ["SessionReader"],
+  ["SessionReader", "SessionReaderForkChrome"],
   FINDING_CODES.page,
-  "Session Manager must consume the shared SessionReader chrome",
+  "Session Manager must consume SessionReader and fork reader chrome",
+);
+
+const forkChromePath = "src/components/sessions/SessionReaderForkChrome.tsx";
+requireImports(
+  forkChromePath,
+  ["CursorResumeGate", "LiveTerminalPane"],
+  FINDING_CODES.page,
+  "Fork reader chrome must host CursorResumeGate and LiveTerminalPane",
 );
 
 const readerSource = sources.get(readerPath);

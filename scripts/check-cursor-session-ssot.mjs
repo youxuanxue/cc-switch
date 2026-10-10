@@ -11,6 +11,8 @@ const FINDING_CODES = {
   resume: "CURSOR_RESUME_OWNER_BYPASS",
   deletion: "CURSOR_DELETE_OWNER_BYPASS",
   terminal: "CURSOR_GENERIC_TERMINAL_BYPASS",
+  prune: "SESSION_PRUNE_OWNER_BYPASS",
+  live: "SESSION_LIVE_HOOK_BYPASS",
 };
 const RESUME_STATE_LITERALS = [
   "platformUnavailable",
@@ -137,20 +139,44 @@ requireImports(
   "Cursor resume composition must use the shared state derivation",
 );
 requireImports(
+  "src/components/sessions/SessionReaderForkChrome.tsx",
+  ["CursorResumeGate"],
+  FINDING_CODES.resume,
+  "Fork reader chrome must host CursorResumeGate",
+);
+requireImports(
   "src/components/sessions/SessionManagerPage.tsx",
   [
-    "CursorResumeGate",
+    "SessionReaderForkChrome",
     "useSessionResumeStateQuery",
     "getSessionResumeI18nKeys",
   ],
   FINDING_CODES.resume,
-  "Session Manager must delegate Cursor resume to CursorResumeGate and the shared resume-state owner",
+  "Session Manager must compose Cursor resume through SessionReaderForkChrome and the shared resume-state owner",
+);
+requireImports(
+  "src/components/sessions/useSessionCursor.ts",
+  ["useCursorSessionIndex"],
+  FINDING_CODES.index,
+  "Session Cursor hook must own Cursor index diagnostics through the shared hook",
 );
 requireImports(
   "src/components/sessions/SessionManagerPage.tsx",
-  ["useCursorSessionIndex"],
+  ["useSessionCursor"],
   FINDING_CODES.index,
-  "Session Manager must own Cursor index diagnostics through the shared hook",
+  "Session Manager must compose Cursor index/resume state through useSessionCursor",
+);
+requireImports(
+  "src/components/sessions/SessionManagerPage.tsx",
+  ["useSessionLiveTerminal"],
+  FINDING_CODES.live,
+  "Session Manager must compose in-app live terminal through useSessionLiveTerminal",
+);
+requireImports(
+  "src/components/sessions/SessionManagerPage.tsx",
+  ["useSessionPrune", "SessionManagerPruneDialogs"],
+  FINDING_CODES.prune,
+  "Session Manager must compose prune dialogs through useSessionPrune",
 );
 requireImports(
   "src/components/sessions/SessionManagerPage.tsx",
@@ -159,34 +185,38 @@ requireImports(
   "Session Manager delete decisions must use isSessionDeletable",
 );
 
-const sessionManagerPath = "src/components/sessions/SessionManagerPage.tsx";
-const sessionManagerSource = sources.get(sessionManagerPath);
-if (sessionManagerSource !== undefined) {
+const sessionCursorHookPath = "src/components/sessions/useSessionCursor.ts";
+const sessionCursorHookSource = sources.get(sessionCursorHookPath);
+if (sessionCursorHookSource !== undefined) {
   const cursorIndexCalls = [
-    ...sessionManagerSource.matchAll(/\buseCursorSessionIndex\s*\(/g),
+    ...sessionCursorHookSource.matchAll(/\buseCursorSessionIndex\s*\(/g),
   ];
   if (cursorIndexCalls.length === 0) {
     addFinding(
       FINDING_CODES.index,
-      sessionManagerPath,
-      "Session Manager must consume useCursorSessionIndex",
+      sessionCursorHookPath,
+      "useSessionCursor must consume useCursorSessionIndex",
     );
   }
   const cursorFilteredIndexQuery =
     /^useCursorSessionIndex\s*\(\s*providerFilter\s*===\s*["']cursor["']\s*\)/;
   for (const call of cursorIndexCalls) {
     if (
-      !cursorFilteredIndexQuery.test(sessionManagerSource.slice(call.index))
+      !cursorFilteredIndexQuery.test(sessionCursorHookSource.slice(call.index))
     ) {
       addFinding(
         FINDING_CODES.index,
-        sessionManagerPath,
-        "Session Manager Cursor index query must be enabled only by the Cursor filter",
-        lineNumber(sessionManagerSource, call.index),
+        sessionCursorHookPath,
+        "useSessionCursor Cursor index query must be enabled only by the Cursor filter",
+        lineNumber(sessionCursorHookSource, call.index),
       );
     }
   }
+}
 
+const sessionManagerPath = "src/components/sessions/SessionManagerPage.tsx";
+const sessionManagerSource = sources.get(sessionManagerPath);
+if (sessionManagerSource !== undefined) {
   const genericResumeCalls = [
     ...sessionManagerSource.matchAll(/\buseSessionResumeStateQuery\s*\(/g),
   ];
@@ -213,6 +243,31 @@ if (sessionManagerSource !== undefined) {
       );
     }
   }
+
+  if (/from\s+["']\.\/liveTerminalSpawn["']/.test(sessionManagerSource)) {
+    addFinding(
+      FINDING_CODES.live,
+      sessionManagerPath,
+      "Session Manager must not import liveTerminalSpawn; use useSessionLiveTerminal",
+    );
+  }
+  if (/sessionsApi\.pruneSessionStorage\s*\(/.test(sessionManagerSource)) {
+    addFinding(
+      FINDING_CODES.prune,
+      sessionManagerPath,
+      "Session Manager must not call sessionsApi.pruneSessionStorage; use useSessionPrune",
+    );
+  }
+  if (
+    /from\s+["']\.\/CursorResumeGate["']/.test(sessionManagerSource) ||
+    /from\s+["']\.\/LiveTerminalPane["']/.test(sessionManagerSource)
+  ) {
+    addFinding(
+      FINDING_CODES.resume,
+      sessionManagerPath,
+      "Session Manager must host CursorResumeGate/LiveTerminalPane via SessionReaderForkChrome",
+    );
+  }
 }
 
 const authOwnerFiles = new Set([
@@ -227,12 +282,20 @@ const resumeOwnerFiles = new Set([
   "src/lib/api/cursor.ts",
 ]);
 const indexHookConsumerFiles = new Set([
-  "src/components/sessions/SessionManagerPage.tsx",
+  "src/components/sessions/useSessionCursor.ts",
   "src/hooks/useCursorSessionIndex.ts",
 ]);
 const indexApiOwnerFiles = new Set([
   "src/hooks/useCursorSessionIndex.ts",
   "src/lib/api/cursor.ts",
+]);
+const pruneCallOwnerFiles = new Set([
+  "src/components/sessions/useSessionPrune.ts",
+  "src/lib/api/sessions.ts",
+]);
+const liveSpawnImportOwnerFiles = new Set([
+  "src/components/sessions/useSessionLiveTerminal.ts",
+  "src/components/sessions/liveTerminalSpawn.ts",
 ]);
 const deleteOwnerFile = "src/components/sessions/sessionCapabilities.ts";
 const authApiPattern =
@@ -249,6 +312,9 @@ const indexInvokePattern =
   /invoke\s*\(\s*["']get_cursor_session_index_status["']/g;
 const genericTerminalPattern =
   /sessionsApi\.(?:launchTerminal|spawnPty)\s*\(|invoke\s*\(\s*["'](?:launch_session_terminal|spawn_session_pty)["']/g;
+const pruneApiPattern = /sessionsApi\.pruneSessionStorage\s*\(/g;
+const liveSpawnImportPattern =
+  /from\s+["'][^"']*liveTerminalSpawn["']/g;
 
 for (const [file, source] of sources) {
   if (!indexHookConsumerFiles.has(file)) {
@@ -258,7 +324,7 @@ for (const [file, source] of sources) {
       addFinding(
         FINDING_CODES.index,
         file,
-        "Cursor index diagnostics must be consumed only by SessionManagerPage",
+        "Cursor index diagnostics must be consumed only by useSessionCursor",
         lineNumber(source, match.index),
       );
     }
@@ -363,6 +429,30 @@ for (const [file, source] of sources) {
         file,
         "Cursor code must use dedicated Cursor launch IPC, never launch_session_terminal",
         lineNumber(source, terminalMatch.index),
+      );
+    }
+  }
+
+  if (!pruneCallOwnerFiles.has(file)) {
+    const pruneMatch = /sessionsApi\.pruneSessionStorage\s*\(/.exec(source);
+    if (pruneMatch) {
+      addFinding(
+        FINDING_CODES.prune,
+        file,
+        "sessionsApi.pruneSessionStorage must stay inside useSessionPrune",
+        lineNumber(source, pruneMatch.index),
+      );
+    }
+  }
+
+  if (!liveSpawnImportOwnerFiles.has(file)) {
+    const spawnImport = /from\s+["'][^"']*liveTerminalSpawn["']/.exec(source);
+    if (spawnImport) {
+      addFinding(
+        FINDING_CODES.live,
+        file,
+        "liveTerminalSpawn must be imported only by useSessionLiveTerminal",
+        lineNumber(source, spawnImport.index),
       );
     }
   }
