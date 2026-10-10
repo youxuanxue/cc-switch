@@ -21,6 +21,7 @@ check() {
 }
 
 check whitespace git diff --check
+check upstream-merge-notify python3 scripts/upstream/notify-merge-needed.py --selftest
 if [[ "$area" == all || "$area" == frontend ]]; then
   check typecheck pnpm typecheck
   check formatting pnpm format:check
