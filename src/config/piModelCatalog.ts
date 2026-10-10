@@ -279,6 +279,15 @@ export const piModelCatalog = {
       maxTokens: 262_144,
     },
   },
+  "moonshotai/kimi-k2.8-preview": {
+    capabilities: {
+      name: "Kimi K2.8 Preview",
+      reasoning: true,
+      input: ["text", "image"],
+      contextWindow: 262_144,
+      maxTokens: 262_144,
+    },
+  },
   "moonshotai/kimi-k3": {
     capabilities: {
       name: "Kimi K3",
@@ -524,11 +533,56 @@ export const piModelCatalog = {
       maxTokens: 16_384,
     },
   },
+  "volcengine/doubao-seed-2.0-lite": {
+    capabilities: {
+      name: "Doubao Seed 2.0 Lite",
+      reasoning: true,
+      input: ["text"],
+      contextWindow: 128_000,
+      maxTokens: 16_384,
+    },
+  },
+  "volcengine/doubao-seed-2.0-mini": {
+    capabilities: {
+      name: "Doubao Seed 2.0 Mini",
+      reasoning: true,
+      input: ["text"],
+      contextWindow: 128_000,
+      maxTokens: 16_384,
+    },
+  },
+  "volcengine/doubao-seed-2.1-lite": {
+    capabilities: {
+      name: "Doubao Seed 2.1 Lite",
+      reasoning: true,
+      input: ["text"],
+      contextWindow: 128_000,
+      maxTokens: 16_384,
+    },
+  },
   "volcengine/doubao-seed-2.1-pro": {
     capabilities: {
       name: "Doubao Seed 2.1 Pro",
       reasoning: true,
       input: ["text", "image"],
+      contextWindow: 128_000,
+      maxTokens: 16_384,
+    },
+  },
+  "volcengine/doubao-seed-2.1-turbo": {
+    capabilities: {
+      name: "Doubao Seed 2.1 Turbo",
+      reasoning: true,
+      input: ["text"],
+      contextWindow: 128_000,
+      maxTokens: 16_384,
+    },
+  },
+  "volcengine/doubao-seed-evolving": {
+    capabilities: {
+      name: "Doubao Seed Evolving",
+      reasoning: true,
+      input: ["text"],
       contextWindow: 128_000,
       maxTokens: 16_384,
     },

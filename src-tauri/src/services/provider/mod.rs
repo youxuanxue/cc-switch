@@ -5018,6 +5018,51 @@ wire_api = "responses"
     }
 
     #[test]
+    fn volc_agent_plan_base_url_matches_plan_not_coding_or_payg() {
+        assert!(ProviderService::is_volc_agent_plan_base_url(
+            "https://ark.cn-beijing.volces.com/api/plan/v3"
+        ));
+        assert!(ProviderService::is_volc_agent_plan_base_url(
+            "https://ARK.CN-BEIJING.VOLCES.COM/api/plan"
+        ));
+        assert!(!ProviderService::is_volc_agent_plan_base_url(
+            "https://ark.cn-beijing.volces.com/api/coding/v3"
+        ));
+        assert!(!ProviderService::is_volc_agent_plan_base_url(
+            "https://ark.cn-beijing.volces.com/api/v3"
+        ));
+        assert!(!ProviderService::is_volc_agent_plan_base_url(
+            "https://api.example.com/api/plan/v3"
+        ));
+    }
+
+    #[test]
+    fn volc_agent_plan_console_catalog_expands_stub_while_keeping_metadata() {
+        let catalog = ProviderService::volc_agent_plan_console_catalog();
+        let ids: Vec<&str> = catalog.iter().map(|m| m.id.as_str()).collect();
+        assert!(ids.contains(&"ark-code-latest"));
+        assert!(ids.contains(&"Doubao-Seed-2.1-pro"));
+        assert!(ids.contains(&"DeepSeek-V4-Flash"));
+        assert!(ids.contains(&"Kimi-K2.7-Code"));
+        assert!(ids.contains(&"GLM-5.3"));
+        assert!(ids.contains(&"MiniMax-M3"));
+        assert_eq!(ids.len(), 16);
+
+        let existing = json!([{
+            "id": "ark-code-latest",
+            "name": "Ark Code Latest",
+            "compat": { "supportsStore": false }
+        }]);
+        let merged = ProviderService::merge_pi_model_catalog(&existing, &catalog);
+        let arr = merged.as_array().expect("array");
+        assert_eq!(arr.len(), 16);
+        assert_eq!(arr[0]["id"], "ark-code-latest");
+        assert_eq!(arr[0]["name"], "Ark Code Latest");
+        assert_eq!(arr[0]["compat"]["supportsStore"], false);
+        assert!(arr.iter().any(|m| m["id"] == "Doubao-Seed-2.1-pro"));
+    }
+
+    #[test]
     #[serial]
     fn sync_universal_to_apps_projects_pi_into_models_json() {
         let _agent = crate::pi_config::test_support::TestAgentDir::new();
@@ -8566,6 +8611,12 @@ impl ProviderService {
     /// Existing per-model metadata (name/compat/…) is preserved for matching
     /// ids; new ids get a minimal `{id, name}` entry. Empty upstream lists are
     /// treated as failure so a flaky gateway cannot wipe a working catalog.
+    ///
+    /// Volcengine Agent Plan (`…/api/plan/…`) does not expose OpenAI-compatible
+    /// `/models` with the plan Bearer key (404). When live fetch fails, fall
+    /// back to the console Agent Plan language catalog
+    /// (`console.volcengine.com/.../subscription/agent-plan`); those display
+    /// names are accepted as `model` ids on `/api/plan/v3`.
     fn refresh_universal_pi_models_from_upstream(settings: &mut Value) -> Result<usize, String> {
         let base_url = settings
             .get("baseUrl")
@@ -8587,12 +8638,22 @@ impl ProviderService {
             .map(str::trim)
             .filter(|api| !api.is_empty());
 
-        let fetched = tauri::async_runtime::block_on(crate::services::model_fetch::fetch_models(
-            base_url, &api_key, false, None, None, api_format, None,
-        ))?;
-        if fetched.is_empty() {
-            return Err("upstream returned an empty model list".to_string());
-        }
+        let fetched =
+            match tauri::async_runtime::block_on(crate::services::model_fetch::fetch_models(
+                base_url, &api_key, false, None, None, api_format, None,
+            )) {
+                Ok(models) if !models.is_empty() => models,
+                Ok(_) | Err(_) if Self::is_volc_agent_plan_base_url(base_url) => {
+                    log::info!(
+                    "Pi model_fetch unavailable for Volc Agent Plan; using console catalog fallback"
+                );
+                    Self::volc_agent_plan_console_catalog()
+                }
+                Ok(_) => {
+                    return Err("upstream returned an empty model list".to_string());
+                }
+                Err(err) => return Err(err),
+            };
 
         let existing = settings
             .get("models")
@@ -8602,6 +8663,41 @@ impl ProviderService {
         let count = merged.as_array().map(|models| models.len()).unwrap_or(0);
         settings["models"] = merged;
         Ok(count)
+    }
+
+    fn is_volc_agent_plan_base_url(base_url: &str) -> bool {
+        let lower = base_url.to_ascii_lowercase();
+        lower.contains("ark.cn-beijing.volces.com") && lower.contains("/api/plan")
+    }
+
+    /// Language models shown on the Volc Agent Plan console (plus the
+    /// `ark-code-latest` router). Vision / speech / embedding entries are
+    /// omitted — Pi's coding path only needs chat models.
+    fn volc_agent_plan_console_catalog() -> Vec<crate::services::model_fetch::FetchedModel> {
+        const IDS: &[&str] = &[
+            "ark-code-latest",
+            "Doubao-Seed-2.1-pro",
+            "Doubao-Seed-2.0-mini",
+            "Doubao-Seed-2.1-turbo",
+            "Doubao-Seed-Evolving",
+            "Doubao-Seed-2.1-lite",
+            "Doubao-Seed-2.0-lite",
+            "DeepSeek-V4.1-Flash",
+            "DeepSeek-V4-Flash",
+            "DeepSeek-V4-Pro",
+            "Kimi-K2.7-Code",
+            "Kimi-K2.8-Preview",
+            "Kimi-K3",
+            "GLM-5.3",
+            "GLM-5.3-Flash",
+            "MiniMax-M3",
+        ];
+        IDS.iter()
+            .map(|id| crate::services::model_fetch::FetchedModel {
+                id: (*id).to_string(),
+                owned_by: Some("volcengine".to_string()),
+            })
+            .collect()
     }
 
     /// Merge a fetched OpenAI/Anthropic model list into Pi's `models` array.

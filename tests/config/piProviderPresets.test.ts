@@ -131,6 +131,29 @@ describe("Pi provider presets", () => {
     });
   });
 
+  // Agent Plan 控制台语言目录（/subscription/agent-plan）；无 Bearer /models
+  it("ships the Volcengine Agent Plan console language catalog", () => {
+    const preset = piProviderPresets.find((item) => item.name === "火山 Agent Plan");
+    expect(preset?.settingsConfig.models.map((model) => model.id)).toEqual([
+      "ark-code-latest",
+      "Doubao-Seed-2.1-pro",
+      "Doubao-Seed-2.0-mini",
+      "Doubao-Seed-2.1-turbo",
+      "Doubao-Seed-Evolving",
+      "Doubao-Seed-2.1-lite",
+      "Doubao-Seed-2.0-lite",
+      "DeepSeek-V4.1-Flash",
+      "DeepSeek-V4-Flash",
+      "DeepSeek-V4-Pro",
+      "Kimi-K2.7-Code",
+      "Kimi-K2.8-Preview",
+      "Kimi-K3",
+      "GLM-5.3",
+      "GLM-5.3-Flash",
+      "MiniMax-M3",
+    ]);
+  });
+
   it("keeps provider-specific OpenAI compatibility metadata", () => {
     const preset = (name: string) => {
       const found = piProviderPresets.find((item) => item.name === name);
