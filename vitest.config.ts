@@ -10,6 +10,7 @@ export default defineConfig({
     },
   },
   test: {
+    include: ["{src,tests}/**/*.{test,spec}.{ts,tsx,js,jsx}"],
     environment: "jsdom",
     include: ["{src,tests}/**/*.{test,spec}.{js,jsx,ts,tsx}"],
     exclude: [...configDefaults.exclude, "tests/e2e/**"],
