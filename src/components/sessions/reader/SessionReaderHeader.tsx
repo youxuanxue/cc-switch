@@ -82,6 +82,13 @@ export interface SessionReaderHeaderProps {
   onOpenTerminalSettings: () => void;
   onReload: () => void;
   onDelete: () => void;
+  /** Cursor / shared resume owner: overrides resumeCommand launch */
+  resumePrimary?: {
+    label: string;
+    disabled: boolean;
+    onClick: () => void;
+  } | null;
+  allowDelete?: boolean;
 }
 
 export const SessionReaderHeader = memo(function SessionReaderHeader({
@@ -104,13 +111,15 @@ export const SessionReaderHeader = memo(function SessionReaderHeader({
   onOpenTerminalSettings,
   onReload,
   onDelete,
+  resumePrimary,
+  allowDelete,
 }: SessionReaderHeaderProps) {
   const { t } = useTranslation();
   const rt = useReaderT();
   const appId = isSessionAppId(session.providerId) ? session.providerId : null;
   const isCodex = session.providerId === "codex";
   const command = session.resumeCommand;
-  const deletable = canDeleteSession(session);
+  const deletable = allowDelete ?? canDeleteSession(session);
 
   const launchLabel = launchTerminal
     ? t("sessionManager.resumeIn", {
@@ -134,7 +143,20 @@ export const SessionReaderHeader = memo(function SessionReaderHeader({
     );
 
   let resume: ReactNode;
-  if (command && launchLabel) {
+  if (resumePrimary && launchLabel) {
+    resume = (
+      <Button
+        variant="solid"
+        size="regular"
+        onClick={resumePrimary.onClick}
+        disabled={resumePrimary.disabled}
+        className="shrink-0 pe-3.5 ps-3"
+      >
+        <Play className="h-3.5 w-3.5" strokeWidth={2} />
+        {resumePrimary.label}
+      </Button>
+    );
+  } else if (command && launchLabel) {
     resume = (
       <div className="flex shrink-0">
         <Button

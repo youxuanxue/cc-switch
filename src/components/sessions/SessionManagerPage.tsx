@@ -9,6 +9,7 @@ import {
 import { toast } from "@/lib/toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  CalendarClock,
   Check,
   ChevronDown,
   History,
@@ -16,9 +17,11 @@ import {
   MoreHorizontal,
 } from "lucide-react";
 import { useSessionSearch } from "@/hooks/useSessionSearch";
+import { useCursorSessionIndex } from "@/hooks/useCursorSessionIndex";
 import {
   piKeys,
   useDeleteSessionMutation,
+  useSessionResumeStateQuery,
   useSessionsQuery,
   useSettingsQuery,
 } from "@/lib/query";
@@ -48,9 +51,26 @@ import { SessionReader } from "./reader/SessionReader";
 import { sessionKeys, useSessionTranscript } from "@/lib/query/sessions";
 import { SessionDeleteDialog, SessionSourcesDialog } from "./SessionDialogs";
 import {
-  canDeleteSession,
+  CursorResumeGate,
+  type CursorResumePrimaryAction,
+} from "./CursorResumeGate";
+import { LiveTerminalPane } from "./LiveTerminalPane";
+import {
+  spawnCursorLiveTerminal,
+  spawnProviderLiveTerminal,
+} from "./liveTerminalSpawn";
+import {
+  STALE_CLEANUP_DEFAULT_DAYS,
+  isSessionDeletable,
+  normalizeStaleCleanupDays,
+  sessionMessageSourcePath,
+} from "./sessionCapabilities";
+import { StaleSessionCleanupDialog } from "./StaleSessionCleanupDialog";
+import { StaleWtsWorktreeCleanupDialog } from "./StaleWtsWorktreeCleanupDialog";
+import {
   formatRelativeTime,
   getSessionKey,
+  getSessionResumeI18nKeys,
   groupSessionsByProject,
   groupSessionsByTime,
   isSessionAppId,
@@ -66,8 +86,22 @@ const GROUP_MODE_STORAGE_KEY = "cc-switch.sessionManager.groupMode";
 // 按项目分组时默认全部收起，只记住用户手动展开过的项目。
 // 换了新键：旧的 collapsedProjects 记的是「收起了哪些」，语义相反，直接弃用。
 const EXPANDED_STORAGE_KEY = "cc-switch.sessionManager.expandedProjects";
+const SESSION_STALE_CLEANUP_DAYS_STORAGE_KEY =
+  "cc-switch.sessionManager.staleCleanupDays";
 
-type AppFilter = SessionAppId | "all";
+type AppFilter = SessionAppId | "all" | "cursor";
+type ReaderPane = "transcript" | "terminal";
+
+const readStaleCleanupDays = (): number => {
+  try {
+    const stored = Number(
+      window.localStorage.getItem(SESSION_STALE_CLEANUP_DAYS_STORAGE_KEY),
+    );
+    return normalizeStaleCleanupDays(stored) ?? STALE_CLEANUP_DEFAULT_DAYS;
+  } catch {
+    return STALE_CLEANUP_DEFAULT_DAYS;
+  }
+};
 type GroupMode = "time" | "project";
 type DeleteSource = "row" | "reader" | "bar";
 
@@ -161,11 +195,36 @@ export function SessionManagerPage({
   const deleteSourceRef = useRef<DeleteSource>("row");
   const [isBatchDeleting, setIsBatchDeleting] = useState(false);
   const [whereOpen, setWhereOpen] = useState(false);
+  const [staleCleanupOpen, setStaleCleanupOpen] = useState(false);
+  const [wtsCleanupOpen, setWtsCleanupOpen] = useState(false);
+  const [staleCleanupDays, setStaleCleanupDays] = useState(readStaleCleanupDays);
+  const [readerPane, setReaderPane] = useState<ReaderPane>("transcript");
+  const [terminalVisited, setTerminalVisited] = useState(false);
+  const [cursorPrimaryAction, setCursorPrimaryAction] =
+    useState<CursorResumePrimaryAction | null>(null);
+  const [, setCursorResumeCommand] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
+  const providerFilter = appFilter;
+  const cursorSessionIndex = useCursorSessionIndex(providerFilter === "cursor");
 
   useEffect(() => {
+    if (appId === "cursor") {
+      setAppFilter("cursor");
+      return;
+    }
     setAppFilter(isSessionAppId(appId) ? appId : "claude");
   }, [appId]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        SESSION_STALE_CLEANUP_DAYS_STORAGE_KEY,
+        String(staleCleanupDays),
+      );
+    } catch {
+      // ignore
+    }
+  }, [staleCleanupDays]);
 
   useEffect(() => {
     try {
@@ -206,10 +265,13 @@ export function SessionManagerPage({
 
   const scopedSessions = useMemo(
     () =>
-      sessions.filter((session) =>
-        (availableApps as string[]).includes(session.providerId),
-      ),
-    [sessions, availableApps],
+      sessions.filter((session) => {
+        if (session.providerId === "cursor") {
+          return appFilter === "all" || appFilter === "cursor";
+        }
+        return (availableApps as string[]).includes(session.providerId);
+      }),
+    [sessions, availableApps, appFilter],
   );
 
   const counts = useMemo(() => {
@@ -290,8 +352,24 @@ export function SessionManagerPage({
 
   const transcript = useSessionTranscript(
     readerSession?.providerId,
+    readerSession
+      ? sessionMessageSourcePath(readerSession) ?? readerSession.sourcePath
+      : undefined,
+  );
+  const { data: resumeState } = useSessionResumeStateQuery(
+    readerSession?.providerId,
+    readerSession?.sessionId,
     readerSession?.sourcePath,
   );
+  const resumeCopy = getSessionResumeI18nKeys(resumeState?.appearance);
+  const isCursorReaderSession = readerSession?.providerId === "cursor";
+
+  useEffect(() => {
+    setReaderPane("transcript");
+    setTerminalVisited(false);
+    setCursorPrimaryAction(null);
+    setCursorResumeCommand(null);
+  }, [readerKey]);
 
   const deleteSessionMutation = useDeleteSessionMutation();
   const isDeleting = deleteSessionMutation.isPending || isBatchDeleting;
@@ -408,7 +486,7 @@ export function SessionManagerPage({
   const enterSelection = (session?: SessionMeta) => {
     setSelectionMode(true);
     setSelectedKeys(
-      session && canDeleteSession(session)
+      session && isSessionDeletable(session)
         ? new Set([getSessionKey(session)])
         : new Set(),
     );
@@ -421,7 +499,7 @@ export function SessionManagerPage({
   };
 
   const toggleSelected = (session: SessionMeta, checked: boolean) => {
-    if (!canDeleteSession(session)) return;
+    if (!isSessionDeletable(session)) return;
     const key = getSessionKey(session);
     setSelectedKeys((current) => {
       const next = new Set(current);
@@ -435,7 +513,7 @@ export function SessionManagerPage({
     () =>
       sessions.filter(
         (session) =>
-          selectedKeys.has(getSessionKey(session)) && canDeleteSession(session),
+          selectedKeys.has(getSessionKey(session)) && isSessionDeletable(session),
       ),
     [sessions, selectedKeys],
   );
@@ -448,7 +526,7 @@ export function SessionManagerPage({
   ).length;
 
   const openDelete = (targets: SessionMeta[], source: DeleteSource) => {
-    const deletable = targets.filter(canDeleteSession);
+    const deletable = targets.filter(isSessionDeletable);
     if (deletable.length === 0) return;
     deleteSourceRef.current = source;
     setDeleteTargets(deletable);
@@ -461,7 +539,7 @@ export function SessionManagerPage({
 
   const handleDeleteConfirm = async () => {
     if (!deleteTargets || deleteTargets.length === 0 || isDeleting) return;
-    const targets = deleteTargets.filter(canDeleteSession);
+    const targets = deleteTargets.filter(isSessionDeletable);
     const source = deleteSourceRef.current;
     setDeleteTargets(null);
     if (targets.length === 0) return;
@@ -587,10 +665,196 @@ export function SessionManagerPage({
 
   const refreshList = async () => {
     await refetch();
+    if (providerFilter === "cursor") {
+      await cursorSessionIndex.refresh();
+    }
     toast.success(
       t("sessionManager.listRefreshed", { defaultValue: "已刷新会话列表" }),
     );
   };
+
+  const handlePruneEmptyCursorBuckets = async () => {
+    try {
+      const result = await sessionsApi.pruneSessionStorage();
+      await queryClient.invalidateQueries({ queryKey: ["sessions"] });
+      const total =
+        result.cursor.bucketsRemoved +
+        result.cursor.staleChatsRemoved +
+        result.cursor.orphanDirsRemoved +
+        result.claudePartitionsRemoved +
+        result.codexEmptyDirsRemoved +
+        result.geminiPartitionsRemoved +
+        result.grokPartitionsRemoved +
+        result.cursorDesktopWorkspacesRemoved +
+        result.wtsWorktrees.removed +
+        result.wtsWorktrees.gitRemoved;
+      if (total === 0) {
+        if (
+          result.cursor.bucketsRetained > 0 ||
+          result.cursor.scannableChatsRetained > 0 ||
+          result.cursorDesktopWorkspacesRetained > 0 ||
+          result.wtsWorktrees.retained > 0
+        ) {
+          toast.success(
+            t("sessionManager.pruneSessionStorageRetained", {
+              defaultValue:
+                "未发现可清理的空目录。Cursor 仍有 {{cursorBuckets}} 个 Agent CLI 分区 / {{cursorChats}} 个有效会话；Cursor Desktop 仍保留 {{desktopWorkspaces}} 个工作区元数据；git 仍注册 {{wtsWorktrees}} 个 WTS worktree。若要删除会话本身，请使用「全部未活跃」。",
+              cursorBuckets: result.cursor.bucketsRetained,
+              cursorChats: result.cursor.scannableChatsRetained,
+              desktopWorkspaces: result.cursorDesktopWorkspacesRetained,
+              wtsWorktrees: result.wtsWorktrees.retained,
+            }),
+          );
+          return;
+        }
+        toast.success(
+          t("sessionManager.pruneSessionStorageNone", {
+            defaultValue: "没有可清理的空会话目录",
+          }),
+        );
+        return;
+      }
+      toast.success(
+        t("sessionManager.pruneSessionStorageSuccess", {
+          defaultValue:
+            "已清理 Cursor {{cursorBuckets}} 分区 / {{cursorStale}} 无效会话 / {{cursorOrphans}} 孤儿目录，Claude {{claude}}，Codex {{codex}}，Gemini {{gemini}}，Grok {{grok}}，Cursor Desktop {{desktop}} 个工作区元数据，WTS worktree {{wtsRemoved}}（git 移除 {{wtsGitRemoved}}）",
+          cursorBuckets: result.cursor.bucketsRemoved,
+          cursorStale: result.cursor.staleChatsRemoved,
+          cursorOrphans: result.cursor.orphanDirsRemoved,
+          claude: result.claudePartitionsRemoved,
+          codex: result.codexEmptyDirsRemoved,
+          gemini: result.geminiPartitionsRemoved,
+          grok: result.grokPartitionsRemoved,
+          desktop: result.cursorDesktopWorkspacesRemoved,
+          wtsRemoved: result.wtsWorktrees.removed,
+          wtsGitRemoved: result.wtsWorktrees.gitRemoved,
+        }),
+      );
+      if (result.wtsWorktrees.skippedDirty > 0) {
+        toast.message(
+          t("sessionManager.pruneWtsWorktreesSkippedDirty", {
+            defaultValue:
+              "跳过 {{count}} 个含未提交改动的 WTS worktree，未删除。",
+            count: result.wtsWorktrees.skippedDirty,
+          }),
+        );
+      }
+    } catch (error) {
+      toast.error(
+        extractErrorMessage(error) ||
+          t("sessionManager.pruneSessionStorageFailed", {
+            defaultValue: "清理空会话目录失败",
+          }),
+      );
+    }
+  };
+
+  const openLiveTerminalPane = useCallback(() => {
+    setTerminalVisited(true);
+    setReaderPane("terminal");
+  }, []);
+
+  const handleLiveTerminalSpawn = useCallback(
+    async ({ cols, rows }: { cols: number; rows: number }) => {
+      if (!readerSession) {
+        return {
+          kind: "unavailable" as const,
+          reason: t("sessionManager.liveTerminalNoSession", {
+            defaultValue: "请先选择一个会话",
+          }),
+        };
+      }
+      if (!isMac()) {
+        return {
+          kind: "unavailable" as const,
+          reason: t("sessionManager.liveTerminalMacOnly", {
+            defaultValue: "站内终端目前仅支持 macOS",
+          }),
+        };
+      }
+      if (readerSession.providerId === "cursor") {
+        return spawnCursorLiveTerminal({
+          sessionId: readerSession.sessionId,
+          cols,
+          rows,
+        });
+      }
+      if (!readerSession.resumeCommand) {
+        return {
+          kind: "unavailable" as const,
+          reason: t("sessionManager.noResumeCommand", {
+            defaultValue: "此会话无法恢复",
+          }),
+        };
+      }
+      const result = await spawnProviderLiveTerminal({
+        session: readerSession,
+        cols,
+        rows,
+      });
+      if (result.kind === "unavailable") {
+        return {
+          kind: "unavailable" as const,
+          reason: t("sessionManager.noResumeCommand", {
+            defaultValue: "此会话无法恢复",
+          }),
+        };
+      }
+      return result;
+    },
+    [readerSession, t],
+  );
+
+  const handleReaderLaunch = useCallback(() => {
+    if (!readerSession) return;
+    if (readerSession.providerId === "cursor") {
+      cursorPrimaryAction?.onClick();
+      return;
+    }
+    void handleLaunch(readerSession);
+  }, [cursorPrimaryAction, handleLaunch, readerSession]);
+
+  const cursorIndexUnavailableReason =
+    providerFilter === "cursor" &&
+    cursorSessionIndex.status?.state === "indexUnavailable"
+      ? cursorSessionIndex.status.reason
+      : providerFilter === "cursor" && cursorSessionIndex.isError
+        ? extractErrorMessage(cursorSessionIndex.error)
+        : null;
+
+  const readerResumePrimary = useMemo(() => {
+    if (!readerSession || !terminalName) return null;
+    if (isCursorReaderSession) {
+      if (!cursorPrimaryAction) return null;
+      return {
+        label: cursorPrimaryAction.label,
+        disabled: cursorPrimaryAction.disabled,
+        onClick: () => cursorPrimaryAction.onClick(),
+      };
+    }
+    if (!readerSession.resumeCommand) return null;
+    return {
+      label: t(resumeCopy.labelKey),
+      disabled: false,
+      onClick: () => void handleLaunch(readerSession),
+    };
+  }, [
+    cursorPrimaryAction,
+    handleLaunch,
+    isCursorReaderSession,
+    readerSession,
+    resumeCopy.labelKey,
+    t,
+    terminalName,
+  ]);
+
+  const liveTerminalEnabled = Boolean(
+    readerSession &&
+      isMac() &&
+      (isCursorReaderSession
+        ? cursorPrimaryAction && !cursorPrimaryAction.disabled
+        : readerSession.resumeCommand),
+  );
 
   const reloadMessages = async () => {
     const result = (await transcript.refetch()) as { error?: unknown };
@@ -619,7 +883,11 @@ export function SessionManagerPage({
   };
 
   const appName = (app: string) =>
-    isSessionAppId(app) ? APP_DISPLAY_NAME[app] : app;
+    app === "cursor"
+      ? t("sessionManager.cursor", { defaultValue: "Cursor" })
+      : isSessionAppId(app)
+        ? APP_DISPLAY_NAME[app]
+        : app;
   const showAppIcon = appFilter === "all";
   const totalCount = scopedSessions.length;
   const currentCount =
@@ -916,10 +1184,17 @@ export function SessionManagerPage({
         hint={
           appFilter === "all"
             ? undefined
-            : t("sessionManager.emptyAppHint", {
-                defaultValue: "CC Switch 读取 {{path}} 下的会话数据",
-                path: SESSION_SOURCE_PATHS[appFilter][0],
-              })
+            : appFilter === "cursor"
+              ? t("sessionManager.emptyAppHint", {
+                  defaultValue: "CC Switch 读取 {{path}} 下的会话数据",
+                  path: "~/.cursor/chats",
+                })
+              : isSessionAppId(appFilter)
+                ? t("sessionManager.emptyAppHint", {
+                    defaultValue: "CC Switch 读取 {{path}} 下的会话数据",
+                    path: SESSION_SOURCE_PATHS[appFilter][0],
+                  })
+                : undefined
         }
         action={t("common.refresh", { defaultValue: "刷新" })}
         onAction={() => void refreshList()}
@@ -991,6 +1266,17 @@ export function SessionManagerPage({
                     defaultValue: "选择多个…",
                   })}
                 </DropdownMenuItem>
+                {matches.length > 0 && (
+                  <DropdownMenuItem
+                    className={sessionMenuItemClass}
+                    onSelect={() => setStaleCleanupOpen(true)}
+                  >
+                    <CalendarClock className="me-2 h-4 w-4 text-fg-2" />
+                    {t("sessionManager.staleCleanupTooltip", {
+                      defaultValue: "清理会话",
+                    })}
+                  </DropdownMenuItem>
+                )}
                 {onOpenTerminalSettings && (
                   <DropdownMenuItem
                     className={sessionMenuItemClass}
@@ -1039,11 +1325,70 @@ export function SessionManagerPage({
               setReaderKey(getSessionKey(orderedSessions[readerIndex + 1]))
             }
             onBack={backToList}
-            onLaunch={() => void handleLaunch(readerSession)}
+            onLaunch={handleReaderLaunch}
             onCopy={handleCopy}
             onOpenTerminalSettings={onOpenTerminalSettings ?? (() => undefined)}
             onReload={() => void reloadMessages()}
             onDelete={() => openDelete([readerSession], "reader")}
+            resumePrimary={readerResumePrimary}
+            allowDelete={isSessionDeletable(readerSession)}
+            afterHeader={
+              isCursorReaderSession ? (
+                <div className="shrink-0 border-b border-border px-6 pb-3">
+                  <CursorResumeGate
+                    session={readerSession}
+                    appearance={resumeState?.appearance}
+                    onPrimaryActionChange={setCursorPrimaryAction}
+                    onResumeCommandChange={setCursorResumeCommand}
+                  />
+                </div>
+              ) : undefined
+            }
+            toolbarAddon={
+              isMac() ? (
+                <div className="flex shrink-0 items-center gap-2 border-b border-border px-6 py-2">
+                  <SegmentedControl<ReaderPane>
+                    aria-label={t("sessionManager.readerPane", {
+                      defaultValue: "阅读视图",
+                    })}
+                    value={readerPane}
+                    onValueChange={(value) => {
+                      if (value === "terminal") {
+                        openLiveTerminalPane();
+                        return;
+                      }
+                      setReaderPane("transcript");
+                    }}
+                    className="h-8 shrink-0 rounded-[8px] [&>button]:rounded-[5px] [&>button]:px-3"
+                    items={[
+                      {
+                        value: "transcript",
+                        label: t("sessionManager.conversationHistory", {
+                          defaultValue: "对话记录",
+                        }),
+                      },
+                      {
+                        value: "terminal",
+                        label: t("sessionManager.liveTerminal", {
+                          defaultValue: "站内终端",
+                        }),
+                        disabled: !liveTerminalEnabled,
+                      },
+                    ]}
+                  />
+                </div>
+              ) : undefined
+            }
+            alternateBody={
+              readerPane === "terminal" && terminalVisited ? (
+                <LiveTerminalPane
+                  active={readerPane === "terminal"}
+                  onSpawn={handleLiveTerminalSpawn}
+                  onBlocked={() => setReaderPane("transcript")}
+                  sessionKey={getSessionKey(readerSession)}
+                />
+              ) : undefined
+            }
           />
         )}
 
@@ -1072,12 +1417,19 @@ export function SessionManagerPage({
                       className="h-4 w-4 text-fg-2"
                       strokeWidth={2}
                     />
-                  ) : (
+                  ) : isSessionAppId(appFilter) ? (
                     <AppGlyph
                       app={appFilter}
                       size={16}
                       badgeClassName="bg-surface"
                     />
+                  ) : (
+                    <span
+                      aria-hidden="true"
+                      className="flex h-4 w-4 items-center justify-center rounded-[4px] bg-subtle text-[9px] font-bold text-fg-2"
+                    >
+                      Cu
+                    </span>
                   )}
                   <span>
                     {appFilter === "all"
@@ -1237,6 +1589,19 @@ export function SessionManagerPage({
               </div>
             )}
 
+          {providerFilter === "cursor" && cursorIndexUnavailableReason && (
+            <div role="status" className="mx-6 mt-3 shrink-0">
+              <Notice
+                tone="warning"
+                title={t("sessionManager.cursorIndexUnavailable", {
+                  defaultValue: "Cursor 会话索引不可用",
+                })}
+              >
+                {cursorIndexUnavailableReason}
+              </Notice>
+            </div>
+          )}
+
           {selectionMode && (
             <div className="flex shrink-0 items-center gap-1.5 whitespace-nowrap px-6 pt-2 text-caption text-fg-2">
               <span className="tabular-nums">
@@ -1258,7 +1623,7 @@ export function SessionManagerPage({
                   setSelectedKeys((current) => {
                     const next = new Set(current);
                     matches
-                      .filter(canDeleteSession)
+                      .filter(isSessionDeletable)
                       .forEach((session) => next.add(getSessionKey(session)));
                     return next;
                   })
@@ -1385,6 +1750,37 @@ export function SessionManagerPage({
       <SessionSourcesDialog
         open={whereOpen}
         onClose={() => setWhereOpen(false)}
+      />
+      <StaleSessionCleanupDialog
+        open={staleCleanupOpen}
+        onOpenChange={setStaleCleanupOpen}
+        sessions={matches}
+        initialDays={staleCleanupDays}
+        onConfirm={(targets, mode, days) => {
+          if (mode === "stale") {
+            setStaleCleanupDays(days);
+          }
+          setStaleCleanupOpen(false);
+          openDelete(targets, "bar");
+        }}
+        onPruneEmptyCursorBuckets={handlePruneEmptyCursorBuckets}
+        onCleanupStaleWtsWorktrees={() => {
+          setStaleCleanupOpen(false);
+          setWtsCleanupOpen(true);
+        }}
+      />
+      <StaleWtsWorktreeCleanupDialog
+        open={wtsCleanupOpen}
+        onOpenChange={setWtsCleanupOpen}
+        onCompleted={async (removed) => {
+          await queryClient.invalidateQueries({ queryKey: ["sessions"] });
+          toast.success(
+            t("sessionManager.wtsCleanupSuccess", {
+              defaultValue: "已移除 {{count}} 个旧 WTS worktree",
+              count: removed,
+            }),
+          );
+        }}
       />
     </div>
   );

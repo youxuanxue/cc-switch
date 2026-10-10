@@ -8,6 +8,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
+import type { SessionReaderHeaderProps } from "./SessionReaderHeader";
 import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ArrowDown } from "lucide-react";
@@ -145,6 +146,11 @@ export interface SessionReaderProps {
   onOpenTerminalSettings: () => void;
   onReload: () => void;
   onDelete: () => void;
+  resumePrimary?: SessionReaderHeaderProps["resumePrimary"];
+  allowDelete?: boolean;
+  afterHeader?: ReactNode;
+  alternateBody?: ReactNode;
+  toolbarAddon?: ReactNode;
 }
 
 /**
@@ -167,6 +173,11 @@ export function SessionReader({
   onOpenTerminalSettings,
   onReload,
   onDelete,
+  resumePrimary,
+  allowDelete,
+  afterHeader,
+  alternateBody,
+  toolbarAddon,
 }: SessionReaderProps) {
   const { t } = useTranslation();
   const rt = useReaderT();
@@ -752,7 +763,10 @@ export function SessionReader({
           onOpenTerminalSettings={onOpenTerminalSettings}
           onReload={onReload}
           onDelete={onDelete}
+          resumePrimary={resumePrimary}
+          allowDelete={allowDelete}
         />
+        {afterHeader}
         <SessionReaderToolbar
           session={session}
           failed={failed}
@@ -786,9 +800,10 @@ export function SessionReader({
           onStepFind={stepFind}
           onExportMarkdown={exportMarkdownFile}
         />
+        {toolbarAddon}
         <div className="flex min-h-0 flex-1">
           <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-            {body}
+            {alternateBody ?? body}
             {showLatest && (
               <Button
                 variant="neutral"

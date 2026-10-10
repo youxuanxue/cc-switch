@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { createElement } from "react";
 import type { AppId } from "@/lib/api";
 import type { SessionMeta } from "@/types";
+import { isSessionDeletable } from "./sessionCapabilities";
 
 const CODEX_IDE_CONTEXT_PREFIX = "# Context from my IDE setup:";
 const CODEX_REQUEST_MARKER = "my request for codex";
@@ -41,7 +42,7 @@ export const SESSION_SOURCE_PATHS: Record<SessionAppId, string[]> = {
 
 /** MiniMax Code 的会话只能在 MiniMax Code 里删（后端也会拒绝）。 */
 export const canDeleteSession = (session: SessionMeta) =>
-  Boolean(session.sourcePath) && session.providerId !== "mcode";
+  session.providerId !== "mcode" && isSessionDeletable(session);
 
 export interface SessionDirectoryGroup {
   key: string;
