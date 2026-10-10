@@ -4915,6 +4915,62 @@ wire_api = "responses"
 
     #[test]
     #[serial]
+    fn delete_universal_scrubs_orphan_child_even_when_app_flag_disabled() {
+        with_test_home(|state, _home| {
+            let mut universal = UniversalProvider::new(
+                "shared".to_string(),
+                "Shared Relay".to_string(),
+                "custom".to_string(),
+                "https://api.new.example".to_string(),
+                "new-key".to_string(),
+            );
+            universal.apps.claude = true;
+            universal.apps.codex = false;
+            universal.apps.gemini = false;
+            state
+                .db
+                .save_universal_provider(&universal)
+                .expect("save universal provider");
+            ProviderService::sync_universal_to_apps(state, "shared").expect("initial sync");
+
+            let child_id = "universal-claude-shared";
+            assert!(state
+                .db
+                .get_provider_by_id(child_id, "claude")
+                .expect("lookup")
+                .is_some());
+
+            // Disable without syncing — apps flag no longer matches leftover child.
+            universal.apps.claude = false;
+            state
+                .db
+                .save_universal_provider(&universal)
+                .expect("save disabled flag");
+
+            ProviderService::delete_universal(state, "shared").expect("delete universal");
+
+            assert!(state
+                .db
+                .get_universal_provider("shared")
+                .expect("lookup universal")
+                .is_none());
+            assert!(state
+                .db
+                .get_provider_by_id(child_id, "claude")
+                .expect("lookup child")
+                .is_none());
+            let current = crate::mode::current::provider_for(
+                state.db.as_ref(),
+                &AppType::Claude,
+                crate::mode::current::Purpose::InUse,
+            )
+            .expect("read current");
+            assert_eq!(current, None);
+        });
+    }
+
+    #[test]
+    #[serial]
     fn add_first_managed_codex_with_missing_account_leaves_no_provider_or_live_state() {
         with_test_home(|state, _| {
             crate::settings::reload_settings().expect("reload settings");
@@ -8165,20 +8221,24 @@ impl ProviderService {
         // 删除统一供应商
         state.db.delete_universal_provider(id)?;
 
-        // 删除生成的子供应商
-        if let Some(p) = provider {
-            if p.apps.claude {
-                let claude_id = format!("universal-claude-{id}");
-                Self::remove_disabled_universal_child(state, AppType::Claude, &claude_id);
-            }
-            if p.apps.codex {
-                let codex_id = format!("universal-codex-{id}");
-                Self::remove_disabled_universal_child(state, AppType::Codex, &codex_id);
-            }
-            if p.apps.gemini {
-                let gemini_id = format!("universal-gemini-{id}");
-                Self::remove_disabled_universal_child(state, AppType::Gemini, &gemini_id);
-            }
+        // Always scrub child rows for all three apps. apps.* may be stale relative
+        // to leftover children if the user disabled an app without syncing first.
+        if provider.is_some() {
+            Self::remove_disabled_universal_child(
+                state,
+                AppType::Claude,
+                &format!("universal-claude-{id}"),
+            );
+            Self::remove_disabled_universal_child(
+                state,
+                AppType::Codex,
+                &format!("universal-codex-{id}"),
+            );
+            Self::remove_disabled_universal_child(
+                state,
+                AppType::Gemini,
+                &format!("universal-gemini-{id}"),
+            );
         }
 
         Ok(true)

@@ -14,8 +14,8 @@ import {
   ArrowLeft,
   Download,
   ExternalLink,
+  Combine,
   KeyRound,
-  Layers,
   MoreHorizontal,
   Plus,
   RefreshCw,
@@ -1499,7 +1499,7 @@ function App() {
         return (
           <>
             <AppPageHeader
-              icon={<Layers className="h-5 w-5" strokeWidth={1.5} />}
+              icon={<Combine className="h-5 w-5" strokeWidth={1.5} />}
               title={t("nav.universal")}
               actions={
                 <Button

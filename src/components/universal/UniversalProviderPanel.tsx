@@ -6,7 +6,7 @@ import {
   useState,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { Layers, Plus } from "lucide-react";
+import { Combine, Plus } from "lucide-react";
 import { toast } from "@/lib/toast";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Button } from "@/components/ui/button";
@@ -241,7 +241,7 @@ export const UniversalProviderPanel = forwardRef<
     <div className="space-y-4">
       {variant === "embedded" ? (
         <div className="flex items-center gap-2">
-          <Layers className="h-5 w-5 text-primary" />
+          <Combine className="h-5 w-5 text-primary" />
           <h2 className="text-lg font-semibold">
             {t("universalProvider.title", { defaultValue: "统一供应商" })}
           </h2>
@@ -270,7 +270,7 @@ export const UniversalProviderPanel = forwardRef<
         </div>
       ) : providerList.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-12 text-center">
-          <Layers className="mb-3 h-10 w-10 text-fg-3" />
+          <Combine className="mb-3 h-10 w-10 text-fg-3" />
           <p className="text-sm text-fg-2">
             {t("universalProvider.empty", {
               defaultValue: "还没有统一供应商",

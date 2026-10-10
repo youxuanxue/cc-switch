@@ -49,6 +49,6 @@ Plan A 壳把导航改成侧栏按 App 分仓，并把直连 / 路由 / 聚合�
 
 ## Validation
 
-- 自动化：`sync_universal_to_apps_*`、挑选步默认统一分类、侧栏/导航含 `universal` 全局页。
+- 自动化：`sync_universal_to_apps_*`（含启用后设为当前、取消勾选清理、删除时清 orphan 子卡）、挑选步默认统一分类、侧栏/导航含 `universal` 全局页。
 - 手动：侧栏进入统一供应商页完成添加；App「+」默认「统一」；无需再逐 App 点启用。
-- 未验证：非三家 App 的 Universal 投影、Cursor Provider 化。
+- 未验证：某 App 写入/启用失败时的部分成功报告；非三家 App 的 Universal 投影、Cursor Provider 化。

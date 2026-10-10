@@ -13,6 +13,7 @@ import {
   Globe,
   History,
   Info,
+  Combine,
   KeyRound,
   Layers,
   LayoutGrid,
@@ -227,7 +228,7 @@ function MainDirectory({
     {
       page: "universal",
       label: t("nav.universal"),
-      icon: Layers,
+      icon: Combine,
     },
     { page: "mcp", label: "MCP", icon: Server },
     { page: "skills", label: "Skills", icon: SkillsIcon },
