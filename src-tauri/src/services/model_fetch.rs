@@ -42,7 +42,11 @@ fn catalog_and_gemini_model_ids(models: Option<serde_json::Value>) -> Vec<String
     entries
         .iter()
         .filter_map(|m| {
-            if let Some(name) = m.get("name").and_then(|v| v.as_str()).filter(|s| !s.is_empty()) {
+            if let Some(name) = m
+                .get("name")
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty())
+            {
                 return Some(name.strip_prefix("models/").unwrap_or(name).to_string());
             }
             ["slug", "id"]
@@ -169,10 +173,7 @@ fn normalize_models_response(response: ModelsResponse) -> Vec<FetchedModel> {
         .chain(
             catalog_and_gemini_model_ids(response.models)
                 .into_iter()
-                .map(|id| FetchedModel {
-                    id,
-                    owned_by: None,
-                }),
+                .map(|id| FetchedModel { id, owned_by: None }),
         )
         .filter(|model| !model.id.is_empty())
         .collect();
