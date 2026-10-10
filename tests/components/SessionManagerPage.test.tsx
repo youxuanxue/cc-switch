@@ -8,12 +8,20 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { UNKNOWN_PROJECT_DIR_KEY } from "@/components/sessions/utils";
+import {
+  getSessionProjectGroupKey,
+  UNKNOWN_PROJECT_DIR_KEY,
+} from "@/components/sessions/utils";
 import { SessionManagerPage } from "@/components/sessions/SessionManagerPage";
 import { piApi } from "@/lib/api/pi";
 import { sessionsApi } from "@/lib/api/sessions";
 import type { SessionMessage, SessionMeta } from "@/types";
-import { setSessionFixtures, setSettings } from "../msw/state";
+import {
+  getCursorIpcCalls,
+  setCursorSessionIndexStatus,
+  setSessionFixtures,
+  setSettings,
+} from "../msw/state";
 
 const toastSuccessMock = vi.fn();
 const toastErrorMock = vi.fn();
@@ -32,6 +40,10 @@ vi.mock("@/lib/platform", async (importOriginal) => {
 });
 
 // jsdom 没有布局，虚拟列表一条都不渲染；这里让它把全部条目都画出来
+vi.mock("@/components/sessions/LiveTerminalPane", () => ({
+  LiveTerminalPane: () => null,
+}));
+
 vi.mock("@tanstack/react-virtual", () => ({
   useVirtualizer: ({ count }: { count: number }) => ({
     getTotalSize: () => count * 100,
@@ -77,6 +89,11 @@ const openRow = (title: string) =>
 const openAppMenu = async () =>
   userEvent.click(screen.getByRole("button", { name: /^应用：/ }));
 
+const CURSOR_WORKSPACE = "/mock/cursor/cursor-workspace";
+const CURSOR_ALPHA_ID = "11111111-1111-4111-8111-111111111111";
+const CURSOR_ALPHA_STORE =
+  `/mock/cursor/chats/workspace/${CURSOR_ALPHA_ID}/store.db`;
+
 const EXPANDED_KEY = "cc-switch.sessionManager.expandedProjects";
 
 describe("SessionManagerPage", () => {
@@ -90,8 +107,9 @@ describe("SessionManagerPage", () => {
       EXPANDED_KEY,
       JSON.stringify(["/mock/codex", "/mock/claude", UNKNOWN_PROJECT_DIR_KEY]),
     );
-    Object.assign(navigator, {
-      clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: vi.fn().mockResolvedValue(undefined) },
     });
 
     const now = Date.now();
@@ -564,5 +582,314 @@ describe("SessionManagerPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "退出选择" }));
     expect(screen.queryByText(/已选/)).not.toBeInTheDocument();
+  });
+
+  it("keeps Cursor in the app menu when every provider app is hidden", async () => {
+    setSettings({
+      visibleApps: {
+        claude: false,
+        "claude-desktop": false,
+        codex: false,
+        gemini: false,
+        grokbuild: false,
+        opencode: false,
+        openclaw: false,
+        hermes: false,
+        pi: false,
+        mcode: false,
+      },
+    });
+    setSessionFixtures(
+      [
+        {
+          providerId: "cursor",
+          sessionId: CURSOR_ALPHA_ID,
+          title: "Cursor Only",
+          projectDir: CURSOR_WORKSPACE,
+          lastActiveAt: 1,
+          sourcePath: CURSOR_ALPHA_STORE,
+        },
+      ],
+      {},
+    );
+    window.localStorage.setItem(
+      EXPANDED_KEY,
+      JSON.stringify([getSessionProjectGroupKey(CURSOR_WORKSPACE)]),
+    );
+    renderPage("codex");
+    await openAppMenu();
+    await userEvent.click(
+      screen.getByRole("menuitemradio", { name: /^全部应用/ }),
+    );
+    await openAppMenu();
+    const menu = await screen.findByRole("menu");
+    expect(within(menu).getByText("Cursor")).toBeInTheDocument();
+    expect(within(menu).queryByText("Hermes")).not.toBeInTheDocument();
+    expect(within(menu).queryByText("Codex")).not.toBeInTheDocument();
+    expect(within(menu).getAllByRole("menuitemradio")).toHaveLength(2);
+  });
+
+  it("shows Cursor index diagnostics in the Cursor app empty state", async () => {
+    setCursorSessionIndexStatus({
+      state: "indexUnavailable",
+      reason: "metadata layout is not recognized",
+    });
+    setSessionFixtures([], {});
+
+    renderPage("cursor");
+
+    expect(
+      await screen.findByText("Cursor 会话索引不可用"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("metadata layout is not recognized"),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByText("还没有 Cursor 的会话记录"),
+    ).toBeInTheDocument();
+  });
+
+  it("refreshes both Cursor sessions and index diagnostics", async () => {
+    const user = userEvent.setup();
+    const listSessions = vi.spyOn(sessionsApi, "list");
+    setCursorSessionIndexStatus({
+      state: "indexUnavailable",
+      reason: "metadata layout is not recognized",
+    });
+    setSessionFixtures([], {});
+
+    try {
+      renderPage("cursor");
+      await screen.findByRole("status");
+      await waitFor(() => expect(listSessions).toHaveBeenCalledTimes(1));
+      expect(
+        getCursorIpcCalls().filter(
+          (call) => call.command === "get_cursor_session_index_status",
+        ),
+      ).toHaveLength(1);
+
+      await user.click(screen.getByRole("button", { name: "刷新" }));
+
+      await waitFor(() => expect(listSessions).toHaveBeenCalledTimes(2));
+      await waitFor(() =>
+        expect(
+          getCursorIpcCalls().filter(
+            (call) => call.command === "get_cursor_session_index_status",
+          ),
+        ).toHaveLength(2),
+      );
+    } finally {
+      listSessions.mockRestore();
+    }
+  });
+
+  it("reads Cursor transcript via store.db and resumes through dedicated IPC", async () => {
+    const user = userEvent.setup();
+    platform.mac = true;
+    setSettings({ preferredTerminal: "terminal" });
+    const getMessages = vi.spyOn(sessionsApi, "getMessages");
+    const launchTerminal = vi.spyOn(sessionsApi, "launchTerminal");
+    setSessionFixtures(
+      [
+        {
+          providerId: "cursor",
+          sessionId: CURSOR_ALPHA_ID,
+          title: "Cursor Alpha",
+          projectDir: CURSOR_WORKSPACE,
+          createdAt: 0,
+          lastActiveAt: 4,
+          sourcePath: CURSOR_ALPHA_STORE,
+          resumeCommand: "must-not-launch-through-generic-terminal",
+        },
+      ],
+      {
+        [`cursor:${CURSOR_ALPHA_STORE}`]: [
+          {
+            role: "user",
+            content: "<user_info>\nOS Version: darwin\n</user_info>",
+            ts: 1,
+          },
+          {
+            role: "user",
+            content:
+              "<timestamp>Saturday Aug 29, 2026, 7:54 PM</timestamp>\n<user_query>continue the cursor task</user_query>",
+            ts: 4,
+          },
+          { role: "assistant", content: "working on it", ts: 5 },
+        ],
+      },
+    );
+    window.localStorage.setItem(
+      EXPANDED_KEY,
+      JSON.stringify([getSessionProjectGroupKey(CURSOR_WORKSPACE)]),
+    );
+
+    renderPage("cursor");
+    await screen.findByRole("button", { name: "Cursor Alpha" });
+    openRow("Cursor Alpha");
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Cursor Alpha" }),
+    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(getMessages).toHaveBeenCalledWith("cursor", CURSOR_ALPHA_STORE),
+    );
+    const resume = await screen.findByRole("button", { name: "恢复会话" });
+    expect(resume).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "对话记录" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("must-not-launch-through-generic-terminal"),
+    ).not.toBeInTheDocument();
+
+    await user.click(resume);
+
+    await waitFor(() =>
+      expect(
+        getCursorIpcCalls().some(
+          (call) =>
+            call.command === "launch_cursor_session" &&
+            call.payload.sessionId === CURSOR_ALPHA_ID,
+        ),
+      ).toBe(true),
+    );
+    expect(launchTerminal).not.toHaveBeenCalled();
+    getMessages.mockRestore();
+    launchTerminal.mockRestore();
+  });
+
+  it("polls the shared resume state for Cursor in the reader", async () => {
+    platform.mac = true;
+    setSettings({ preferredTerminal: "terminal" });
+    const getResumeState = vi.spyOn(sessionsApi, "getResumeState");
+    setSessionFixtures(
+      [
+        {
+          providerId: "cursor",
+          sessionId: CURSOR_ALPHA_ID,
+          title: "Cursor Alpha",
+          projectDir: CURSOR_WORKSPACE,
+          createdAt: 0,
+          lastActiveAt: 4,
+          sourcePath: CURSOR_ALPHA_STORE,
+        },
+      ],
+      {},
+    );
+    window.localStorage.setItem(
+      EXPANDED_KEY,
+      JSON.stringify([CURSOR_WORKSPACE]),
+    );
+
+    try {
+      renderPage("cursor");
+      await screen.findByRole("button", { name: "Cursor Alpha" });
+      openRow("Cursor Alpha");
+      await screen.findByRole("heading", { level: 1, name: "Cursor Alpha" });
+      await waitFor(() =>
+        expect(getResumeState).toHaveBeenCalledWith(
+          "cursor",
+          CURSOR_ALPHA_ID,
+          CURSOR_ALPHA_STORE,
+        ),
+      );
+    } finally {
+      getResumeState.mockRestore();
+    }
+  });
+
+  it("renames the Cursor resume button when the Agent CLI tab is already live", async () => {
+    platform.mac = true;
+    setSettings({ preferredTerminal: "terminal" });
+    vi.spyOn(sessionsApi, "getResumeState").mockResolvedValue({
+      appearance: "return",
+    });
+    setSessionFixtures(
+      [
+        {
+          providerId: "cursor",
+          sessionId: CURSOR_ALPHA_ID,
+          title: "Cursor Alpha",
+          projectDir: CURSOR_WORKSPACE,
+          lastActiveAt: 4,
+          sourcePath: CURSOR_ALPHA_STORE,
+        },
+      ],
+      {},
+    );
+    window.localStorage.setItem(
+      EXPANDED_KEY,
+      JSON.stringify([getSessionProjectGroupKey(CURSOR_WORKSPACE)]),
+    );
+
+    renderPage("cursor");
+    await screen.findByRole("button", { name: "Cursor Alpha" });
+    openRow("Cursor Alpha");
+
+    expect(
+      await screen.findByRole("button", { name: "回到会话" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "恢复会话" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows delete for a deletable Cursor session and hides it for a non-eligible one", async () => {
+    setSessionFixtures(
+      [
+        {
+          providerId: "cursor",
+          sessionId: CURSOR_ALPHA_ID,
+          title: "Cursor Deletable",
+          projectDir: CURSOR_WORKSPACE,
+          lastActiveAt: 4,
+          sourcePath: CURSOR_ALPHA_STORE,
+        },
+        {
+          providerId: "cursor",
+          sessionId: "22222222-2222-4222-8222-222222222222",
+          title: "Cursor Locked",
+          projectDir: CURSOR_WORKSPACE,
+          lastActiveAt: 3,
+        },
+      ],
+      {},
+    );
+    window.localStorage.setItem(
+      EXPANDED_KEY,
+      JSON.stringify([getSessionProjectGroupKey(CURSOR_WORKSPACE)]),
+    );
+    renderPage("cursor");
+    await screen.findByRole("button", { name: "Cursor Deletable" });
+
+    openRow("Cursor Deletable");
+    await screen.findByRole("heading", { level: 1, name: "Cursor Deletable" });
+    await userEvent.click(
+      screen.getByRole("button", { name: "Cursor Deletable 的更多操作" }),
+    );
+    expect(screen.getByRole("menuitem", { name: "删除…" })).toBeEnabled();
+    await userEvent.keyboard("{Escape}");
+
+    fireEvent.click(screen.getByRole("button", { name: "返回会话列表" }));
+    openRow("Cursor Locked");
+    await screen.findByRole("heading", { level: 1, name: "Cursor Locked" });
+    await userEvent.click(
+      screen.getByRole("button", { name: "Cursor Locked 的更多操作" }),
+    );
+    expect(screen.getByRole("menuitem", { name: "删除…" })).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
+    await userEvent.keyboard("{Escape}");
+
+    fireEvent.click(screen.getByRole("button", { name: "返回会话列表" }));
+    fireEvent.click(
+      screen.getAllByRole("checkbox", { name: "选择 Cursor Deletable" })[0],
+    );
+    expect(screen.getByText("已选 1 个会话")).toBeInTheDocument();
+    expect(
+      screen.getByRole("checkbox", { name: "选择 Cursor Locked" }),
+    ).toHaveAttribute("aria-disabled", "true");
   });
 });

@@ -3858,7 +3858,6 @@
     "backup": {
       "location": "備份位置：{{path}}"
     },
-    "checkUpdates": "檢查更新",
     "checkingUpdates": "檢查中...",
     "core": {
       "loading": "正在讀取技能控制面…",
@@ -4040,36 +4039,6 @@
       "poweredBy": "由 skills.sh 提供",
       "searchPlaceholder": "搜尋 skills.sh（至少 2 個字元）..."
     },
-    "storageSheet": {
-      "title": "儲存與同步",
-      "open": "儲存與同步",
-      "resync": "立即重新同步",
-      "resyncing": "正在重新同步…",
-      "resyncHint": "修改只對之後啟用或更新的 Skill 生效。要讓已啟用的 Skill 也換成目前方式，點「立即重新同步」。",
-      "resyncDone": "已按目前方式把 Skill 重新同步到各應用",
-      "resyncPartial": "{{count}} 個應用沒有同步完整：{{apps}}",
-      "resyncSkillItem": "{{directory}}：{{error}}",
-      "locationTitle": "主副本放在",
-      "locationCcSwitch": "CC Switch 目錄",
-      "locationUnified": "通用目錄",
-      "openFolder": "打開",
-      "openFolderAria": "打開 {{path}}",
-      "unifiedWarning": "Codex、Gemini CLI、OpenCode 等會直接讀這個目錄，各應用的開關對它們不再完全生效。",
-      "move": "移動並切換",
-      "moving": "正在移動…",
-      "moveConfirmTitle": "把 {{count}} 個 Skill 移到 {{path}}？",
-      "moveConfirmBody": "會逐個移動主副本，再讓各應用裡的連結指向新位置。移動完成前請不要退出 CC Switch。",
-      "moveConfirmButton": "移動並切換",
-      "moveDone": "已把 {{count}} 個 Skill 移到 {{path}}",
-      "movePartial": "移動了 {{migrated}} 個 Skill，{{errors}} 個失敗，請查看日誌",
-      "syncTitle": "同步到各應用的方式",
-      "syncAuto": "自動：優先用軟連結，失敗時複製（推薦）",
-      "syncSymlink": "只用軟連結",
-      "syncSymlinkDesc": "Windows 需要開啟開發人員模式",
-      "syncCopy": "只用複製",
-      "syncCopyDesc": "佔用更多空間，更新後會重新複製",
-      "moveHint": "切換位置會把 {{count}} 個 Skill 移動過去。"
-    },
     "title": "Skills 管理",
     "uninstall": "解除安裝",
     "uninstallConfirm": "確定要解除安裝技能 \"{{name}}\" 嗎？這將從所有應用程式中移除該技能，並在刪除前自動建立本地備份。",
@@ -4081,14 +4050,11 @@
     "uninstalling": "解除安裝中...",
     "unmanagedAvailable": "發現可匯入的技能",
     "update": "更新",
-    "updateAll": "全部更新 ({{count}})",
-    "updateAllSuccess": "已成功更新 {{count}} 個技能",
     "updateAvailable": "可更新",
     "updateFailed": "更新失敗",
     "updateSuccess": "技能 {{name}} 已更新至最新版本",
     "updatesIncomplete": "沒有發現更新，但有 {{count}} 個倉庫沒有讀到",
     "updating": "更新中...",
-    "updatingAll": "更新中...",
     "view": "檢視"
   },
   "skillsPage": {
@@ -4117,11 +4083,7 @@
       "uninstallBody": "會從所有應用中移除，並刪除 CC Switch 裡的主副本。解除安裝前會自動備份到 {{path}}。",
       "uninstallMany": "解除安裝 {{count}} 個 Skill？",
       "uninstallManyButton": "解除安裝 {{count}} 個",
-      "uninstallOne": "解除安裝 {{name}}？",
-      "updateAll": "更新 {{count}} 個 Skill？",
-      "updateAllButton": "更新 {{count}} 個",
-      "updateBody": "更新會用倉庫裡的內容取代本機目錄。本機改過的地方只保留在備份裡（{{path}}）。",
-      "updateListAria": "將要更新的 Skill"
+      "uninstallOne": "解除安裝 {{name}}？"
     },
     "copyDir": "複製目錄名稱",
     "discover": {
@@ -4167,22 +4129,6 @@
     "headerUpdatesShow": "只看可更新的 Skill",
     "help": "主副本放在 CC Switch 的目錄裡，再同步到你勾選的應用。Claude Desktop、OpenClaw 不支援 Skills，所以表格裡沒有這兩欄。",
     "helpTitle": "Skills 怎麼同步",
-    "import": {
-      "appsHelp": "預設勾選「發現於」裡的應用，只在發現它的應用裡啟用；另外勾選的應用，所有匯入的 Skill 都會啟用。Pi 按目錄判斷，不在這裡選。",
-      "appsHelpTitle": "預設勾選哪些應用",
-      "appsTitle": "匯入後在這些應用裡啟用",
-      "foundCcSwitch": "CC Switch 目錄",
-      "foundIn": "發現於：{{places}}",
-      "help": "有 SKILL.md、但還不歸 CC Switch 管理的目錄。",
-      "helpTitle": "哪些算本機已有",
-      "lead": "匯入會複製一份到 CC Switch 的目錄，原來的檔案不動。",
-      "searchAria": "搜尋要匯入的 Skill",
-      "searchPlaceholder": "搜尋名稱或位置",
-      "selectAll": "全選",
-      "selectNone": "全不選",
-      "submit": "匯入 {{count}} 個",
-      "title": "匯入本機已有的 Skill"
-    },
     "importCount": "匯入本機已有（{{count}}）",
     "installTo": {
       "button": "安裝到：{{apps}}",
@@ -4228,9 +4174,6 @@
       "readFailed": "讀取失敗",
       "removeAria": "刪除倉庫 {{repo}}"
     },
-    "restore": {
-      "lead": "選一個備份，把檔案還原到本機並重新加入列表，並在 {{apps}} 啟用（「探索」裡的「安裝到」決定）。"
-    },
     "rowFail": "在 {{app}} 啟用失敗：{{error}}",
     "rowMoreAria": "{{name}} 的更多操作",
     "searchInDiscover": "在探索裡搜尋「{{query}}」",
@@ -4253,8 +4196,6 @@
       "uninstalledMany": "已解除安裝 {{count}} 個 Skill"
     },
     "uninstallEllipsis": "解除安裝",
-    "updateAllCount": "全部更新（{{count}} 個）",
-    "updatingProgress": "正在更新 {{done}}/{{total}}…",
     "viewAria": "Skills 檢視",
     "viewDiscover": "探索",
     "viewInstalled": "已安裝",

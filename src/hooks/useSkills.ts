@@ -375,18 +375,6 @@ export function useInstallSkillsFromZip() {
 // ========== 更新检测 ==========
 
 /**
- * 检查 Skills 更新（手动触发）；结果里带着没读到的仓库
- */
-export function useCheckSkillUpdates() {
-  return useQuery({
-    queryKey: ["skills", "updates"],
-    queryFn: () => skillsApi.checkUpdates(),
-    enabled: false,
-    staleTime: 5 * 60 * 1000,
-  });
-}
-
-/**
  * 更新单个 Skill
  */
 export function useUpdateSkill() {

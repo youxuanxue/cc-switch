@@ -39,10 +39,12 @@ function createConformingFixture() {
     root,
     "src/components/sessions/reader/SessionReader.tsx",
     [
+      'import { toDisplayMessages } from "../sessionChrome";',
       'import { SessionOutline } from "./SessionOutline";',
-      "export function SessionReader() {",
+      "export function SessionReader({ messages = [] }) {",
+      "  const displayMessages = toDisplayMessages(messages, 'cursor');",
       "  return (",
-      "    <section>",
+      "    <section data-count={displayMessages.length}>",
       "      <SessionOutline />",
       "    </section>",
       "  );",
@@ -146,5 +148,25 @@ describe("session chrome SSOT checker", () => {
 
     expect(result.status).toBe(1);
     expect(result.output).toContain("SESSION_READER_CHROME_FORK");
+  });
+
+  it("rejects SessionReader that skips toDisplayMessages", () => {
+    const root = createConformingFixture();
+    writeFixtureFile(
+      root,
+      "src/components/sessions/reader/SessionReader.tsx",
+      [
+        'import { SessionOutline } from "./SessionOutline";',
+        "export function SessionReader() {",
+        "  return <SessionOutline />;",
+        "}",
+      ].join("\n"),
+    );
+
+    const result = runChecker(root);
+
+    expect(result.status).toBe(1);
+    expect(result.output).toContain("SESSION_READER_CHROME_FORK");
+    expect(result.output).toContain("toDisplayMessages");
   });
 });

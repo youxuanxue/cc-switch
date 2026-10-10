@@ -88,6 +88,7 @@ export interface SessionReaderHeaderProps {
     disabled: boolean;
     onClick: () => void;
   } | null;
+  resumeCommandOverride?: string | null;
   allowDelete?: boolean;
 }
 
@@ -112,13 +113,14 @@ export const SessionReaderHeader = memo(function SessionReaderHeader({
   onReload,
   onDelete,
   resumePrimary,
+  resumeCommandOverride,
   allowDelete,
 }: SessionReaderHeaderProps) {
   const { t } = useTranslation();
   const rt = useReaderT();
   const appId = isSessionAppId(session.providerId) ? session.providerId : null;
   const isCodex = session.providerId === "codex";
-  const command = session.resumeCommand;
+  const command = resumeCommandOverride ?? session.resumeCommand;
   const deletable = allowDelete ?? canDeleteSession(session);
 
   const launchLabel = launchTerminal
@@ -142,9 +144,94 @@ export const SessionReaderHeader = memo(function SessionReaderHeader({
           }),
     );
 
+  const copyResumeMenuItem = command ? (
+    <DropdownMenuItem
+      className={sessionMenuItemClass}
+      title={command}
+      onSelect={copyResume}
+    >
+      <Copy className="h-3.5 w-3.5 text-fg-2" strokeWidth={1.5} />
+      <span className="shrink-0">
+        {t("sessionManager.copyResumeCommand", {
+          defaultValue: "复制恢复命令",
+        })}
+      </span>
+      <span
+        aria-hidden="true"
+        className="min-w-0 flex-1 truncate text-right font-mono text-caption text-fg-3"
+      >
+        {command}
+      </span>
+    </DropdownMenuItem>
+  ) : null;
+
   let resume: ReactNode;
   if (resumePrimary && launchLabel) {
-    resume = (
+    resume = command ? (
+      <div className="flex shrink-0">
+        <Button
+          variant="solid"
+          size="regular"
+          onClick={resumePrimary.onClick}
+          disabled={resumePrimary.disabled}
+          className="rounded-e-none pe-3.5 ps-3"
+        >
+          <Play className="h-3.5 w-3.5" strokeWidth={2} />
+          {resumePrimary.label}
+        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="solid"
+              size="regular"
+              aria-label={t("sessionManager.moreResumeOptions", {
+                defaultValue: "更多恢复方式",
+              })}
+              className="w-8 rounded-s-none border-s border-s-[color-mix(in_srgb,var(--action-fg)_20%,transparent)] px-0"
+            >
+              <ChevronDown className="h-3.5 w-3.5" strokeWidth={2} />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="start"
+            className="w-[300px] max-w-[calc(100vw-32px)] rounded-panel p-1 shadow-v7-md"
+          >
+            {copyResumeMenuItem}
+            {session.projectDir && command && (
+              <DropdownMenuItem
+                className={sessionMenuItemClass}
+                onSelect={() =>
+                  onCopy(
+                    buildCdResumeCommand(session.projectDir!, command),
+                    t("sessionManager.cdResumeCopied", {
+                      defaultValue: "已复制「进入目录并恢复」命令",
+                    }),
+                  )
+                }
+              >
+                <Folder className="h-3.5 w-3.5 text-fg-2" strokeWidth={1.5} />
+                {t("sessionManager.copyCdResume", {
+                  defaultValue: "复制「进入目录并恢复」命令",
+                })}
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className={sessionMenuItemClass}
+              onSelect={onOpenTerminalSettings}
+            >
+              <SquareTerminal
+                className="h-3.5 w-3.5 text-fg-2"
+                strokeWidth={1.5}
+              />
+              {t("sessionManager.changeTerminal", {
+                defaultValue: "更换首选终端…",
+              })}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    ) : (
       <Button
         variant="solid"
         size="regular"
@@ -192,24 +279,7 @@ export const SessionReaderHeader = memo(function SessionReaderHeader({
               <Play className="h-3.5 w-3.5 text-fg-2" strokeWidth={1.5} />
               {launchLabel}
             </DropdownMenuItem>
-            <DropdownMenuItem
-              className={sessionMenuItemClass}
-              title={command}
-              onSelect={copyResume}
-            >
-              <Copy className="h-3.5 w-3.5 text-fg-2" strokeWidth={1.5} />
-              <span className="shrink-0">
-                {t("sessionManager.copyResumeCommand", {
-                  defaultValue: "复制恢复命令",
-                })}
-              </span>
-              <span
-                aria-hidden="true"
-                className="min-w-0 flex-1 truncate text-right font-mono text-caption text-fg-3"
-              >
-                {command}
-              </span>
-            </DropdownMenuItem>
+            {copyResumeMenuItem}
             {session.projectDir && (
               <DropdownMenuItem
                 className={sessionMenuItemClass}

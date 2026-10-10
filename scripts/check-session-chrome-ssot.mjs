@@ -175,7 +175,7 @@ requireFile(
 
 requireImports(
   readerPath,
-  ["SessionOutline"],
+  ["SessionOutline", "toDisplayMessages"],
   FINDING_CODES.reader,
   "SessionReader must render the shared outline chrome",
 );
@@ -194,6 +194,13 @@ if (readerSource !== undefined) {
       FINDING_CODES.reader,
       readerPath,
       "SessionReader must render <SessionOutline> for directory chrome",
+    );
+  }
+  if (!/\btoDisplayMessages\s*\(/.test(readerSource)) {
+    addFinding(
+      FINDING_CODES.reader,
+      readerPath,
+      "SessionReader must call toDisplayMessages for provider presentation",
     );
   }
 }

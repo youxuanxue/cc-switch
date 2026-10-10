@@ -3869,7 +3869,6 @@
     "backup": {
       "location": "Backup location: {{path}}"
     },
-    "checkUpdates": "Check Updates",
     "checkingUpdates": "Checking...",
     "core": {
       "addAgent": "Add {{name}}",
@@ -4051,36 +4050,6 @@
       "poweredBy": "Powered by skills.sh",
       "searchPlaceholder": "Search skills.sh (min 2 chars)..."
     },
-    "storageSheet": {
-      "locationCcSwitch": "CC Switch folder",
-      "locationTitle": "Keep the master copies in",
-      "locationUnified": "Shared folder",
-      "move": "Move and switch",
-      "moveConfirmBody": "Each master copy is moved, then the links in every app are pointed at the new location. Don't quit CC Switch until the move finishes.",
-      "moveConfirmButton": "Move and switch",
-      "moveConfirmTitle": "Move {{count}} Skills to {{path}}?",
-      "moveDone": "Moved {{count}} Skills to {{path}}",
-      "moveHint": "Switching moves {{count}} Skills to the new location.",
-      "movePartial": "Moved {{migrated}} Skills, {{errors}} failed. Check the logs for details.",
-      "moving": "Moving…",
-      "open": "Storage and sync",
-      "openFolder": "Open",
-      "openFolderAria": "Open {{path}}",
-      "resync": "Resync now",
-      "resyncDone": "Resynced Skills to every app using the current method",
-      "resyncHint": "Changes only apply to Skills you enable or update afterwards. To switch Skills that are already enabled, resync now.",
-      "resyncPartial": "{{count}} apps didn't fully sync: {{apps}}",
-      "resyncSkillItem": "{{directory}}: {{error}}",
-      "resyncing": "Resyncing…",
-      "syncAuto": "Automatic: symlink first, copy if that fails (recommended)",
-      "syncCopy": "Copy only",
-      "syncCopyDesc": "Uses more disk space; copied again after each update",
-      "syncSymlink": "Symlink only",
-      "syncSymlinkDesc": "Requires Developer Mode on Windows",
-      "syncTitle": "How Skills reach each app",
-      "title": "Storage and sync",
-      "unifiedWarning": "Codex, Gemini CLI, OpenCode and others read this folder directly, so the per-app switches no longer fully apply to them."
-    },
     "title": "Skills Management",
     "uninstall": "Uninstall",
     "uninstallConfirm": "Are you sure you want to uninstall \"{{name}}\"? This will remove the skill from all apps and create a local backup first.",
@@ -4092,14 +4061,11 @@
     "uninstalling": "Uninstalling...",
     "unmanagedAvailable": "Skills available to import",
     "update": "Update",
-    "updateAll": "Update All ({{count}})",
-    "updateAllSuccess": "Successfully updated {{count}} skill(s)",
     "updateAvailable": "Update",
     "updateFailed": "Failed to update",
     "updateSuccess": "Skill {{name}} updated to latest version",
     "updatesIncomplete": "No updates found, but {{count}} repositories couldn't be read",
     "updating": "Updating...",
-    "updatingAll": "Updating...",
     "view": "View"
   },
   "skillsPage": {
@@ -4128,11 +4094,7 @@
       "uninstallBody": "It's removed from every app and the main copy in CC Switch is deleted. A backup is saved to {{path}} first.",
       "uninstallMany": "Uninstall {{count}} Skills?",
       "uninstallManyButton": "Uninstall {{count}}",
-      "uninstallOne": "Uninstall {{name}}?",
-      "updateAll": "Update {{count}} Skills?",
-      "updateAllButton": "Update {{count}}",
-      "updateBody": "Updating replaces the local folder with the repository's content. Local edits are kept only in the backup ({{path}}).",
-      "updateListAria": "Skills to update"
+      "uninstallOne": "Uninstall {{name}}?"
     },
     "copyDir": "Copy folder name",
     "discover": {
@@ -4178,22 +4140,6 @@
     "headerUpdatesShow": "Show only Skills with updates",
     "help": "The main copy lives in CC Switch's folder and is synced to the apps you tick. Claude Desktop and OpenClaw don't support Skills, so they have no column.",
     "helpTitle": "How Skills sync",
-    "import": {
-      "appsHelp": "Apps listed under “Found in” are ticked and only enable the Skills found there; any other app you tick enables every imported Skill. Pi is decided by its folder, so it isn't listed.",
-      "appsHelpTitle": "Which apps are ticked by default",
-      "appsTitle": "Enable in these apps after importing",
-      "foundCcSwitch": "CC Switch folder",
-      "foundIn": "Found in: {{places}}",
-      "help": "Folders that contain a SKILL.md but aren't managed by CC Switch yet.",
-      "helpTitle": "What counts as already on this computer",
-      "lead": "Importing copies them into CC Switch's folder; the original files stay as they are.",
-      "searchAria": "Search Skills to import",
-      "searchPlaceholder": "Search name or location",
-      "selectAll": "Select all",
-      "selectNone": "Select none",
-      "submit": "Import {{count}}",
-      "title": "Import Skills from this computer"
-    },
     "importCount": "Import from this computer ({{count}})",
     "installTo": {
       "button": "Install to: {{apps}}",
@@ -4239,9 +4185,6 @@
       "readFailed": "Read failed",
       "removeAria": "Remove repository {{repo}}"
     },
-    "restore": {
-      "lead": "Pick a backup to restore its files and add it back to the list, enabled in {{apps}} (set by “Install to” in Discover)."
-    },
     "rowFail": "Enabling in {{app}} failed: {{error}}",
     "rowMoreAria": "More actions for {{name}}",
     "searchInDiscover": "Search Discover for “{{query}}”",
@@ -4264,8 +4207,6 @@
       "uninstalledMany": "Uninstalled {{count}} Skills"
     },
     "uninstallEllipsis": "Uninstall",
-    "updateAllCount": "Update all ({{count}})",
-    "updatingProgress": "Updating {{done}}/{{total}}…",
     "viewAria": "Skills view",
     "viewDiscover": "Discover",
     "viewInstalled": "Installed",

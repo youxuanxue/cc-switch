@@ -99,9 +99,14 @@ test("US-001/US-004 groups Cursor sessions by cwd without exposing unsupported c
     page.getByText(/supported|conditional|unsupported/i),
   ).toHaveCount(0);
   await expect(page.getByText("技术详情")).toHaveCount(0);
+
+  const expectedResumeCommand = `agent --workspace /work/acme/project-one --resume ${READY_SESSION_ID}`;
+  await page
+    .getByRole("button", { name: "更多恢复方式", exact: true })
+    .click();
   await expect(
-    page.getByText(/^agent --workspace /),
-  ).toHaveCount(0);
+    page.getByRole("menuitem", { name: /复制恢复命令/ }),
+  ).toHaveAttribute("title", expectedResumeCommand);
 
   const calls = await getRecordedInvokes(page);
   expect(calls.some((call) => call.command.startsWith("project"))).toBe(false);
@@ -390,4 +395,113 @@ test("US-003 manages Cursor Official User API Key without echoing or recording i
     },
   });
   expect(JSON.stringify(await getRecordedInvokes(page))).not.toContain(secret);
+});
+
+test("US-004 deletes a deletable Cursor session through delete_session IPC", async ({
+  page,
+}) => {
+  const storePath = `/mock/cursor/chats/acme/${READY_SESSION_ID}/store.db`;
+  await installTauriIpcHarness(page, {
+    view: "sessions",
+    lastApp: "cursor",
+    expandedProjects: ["/work/acme/project-one"],
+    sessions: [
+      {
+        providerId: "cursor",
+        sessionId: READY_SESSION_ID,
+        title: "Cursor Deletable",
+        projectDir: "/work/acme/project-one",
+        lastActiveAt: 400,
+        sourcePath: storePath,
+      },
+    ],
+  });
+
+  await page.goto("/");
+  await selectCursor(page);
+  const list = page.getByRole("region", { name: "会话列表" });
+  await expect(sessionOpenButton(list, "Cursor Deletable")).toBeVisible();
+  await sessionOpenButton(list, "Cursor Deletable").click();
+  await page
+    .getByRole("button", { name: "Cursor Deletable 的更多操作" })
+    .click();
+  await page.getByRole("menuitem", { name: "删除", exact: true }).click();
+  await page.getByRole("button", { name: "删除会话" }).click();
+
+  await expect
+    .poll(async () =>
+      (await getRecordedInvokes(page)).filter(
+        (call) => call.command === "delete_session",
+      ),
+    )
+    .toEqual([
+      {
+        command: "delete_session",
+        payloadKeys: ["providerId", "sessionId", "sourcePath"],
+        payload: {
+          providerId: "cursor",
+          sessionId: READY_SESSION_ID,
+          sourcePath: storePath,
+        },
+      },
+    ]);
+
+  const calls = await getRecordedInvokes(page);
+  expect(
+    calls.some((call) => call.command === "prune_session_storage"),
+  ).toBe(false);
+  expect(
+    calls.some((call) => call.command.startsWith("delete_cursor")),
+  ).toBe(false);
+});
+
+async function installLockedCursorSession(page: Page) {
+  await installTauriIpcHarness(page, {
+    view: "sessions",
+    lastApp: "cursor",
+    expandedProjects: ["/work/acme/project-one"],
+    sessions: [
+      {
+        providerId: "cursor",
+        sessionId: SECOND_SESSION_ID,
+        title: "Cursor Locked",
+        projectDir: "/work/acme/project-one",
+        lastActiveAt: 300,
+      },
+    ],
+  });
+}
+
+test("US-004 disables delete in the reader for a non-eligible Cursor session", async ({
+  page,
+}) => {
+  await installLockedCursorSession(page);
+  await page.goto("/");
+  await selectCursor(page);
+  const list = page.getByRole("region", { name: "会话列表" });
+  await sessionOpenButton(list, "Cursor Locked").click();
+  await page.locator("#session-reader-more").click();
+  await expect(
+    page.getByRole("menuitem", { name: "删除", exact: true }),
+  ).toHaveAttribute("aria-disabled", "true");
+});
+
+test("US-004 disables batch checkbox for a non-eligible Cursor session", async ({
+  page,
+}) => {
+  await installLockedCursorSession(page);
+  await page.goto("/");
+  await selectCursor(page);
+  const list = page.getByRole("region", { name: "会话列表" });
+  await list
+    .getByRole("checkbox", { name: "选择 Cursor Locked" })
+    .click({ force: true });
+  await expect(
+    list.getByRole("checkbox", { name: "选择 Cursor Locked" }),
+  ).toHaveAttribute("aria-disabled", "true");
+  expect(
+    (await getRecordedInvokes(page)).some(
+      (call) => call.command === "delete_session",
+    ),
+  ).toBe(false);
 });

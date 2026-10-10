@@ -54,6 +54,8 @@ jobs:
               - "scripts/check-cursor-session-ssot.mjs"
               - "scripts/check-session-chrome-ssot.mjs"
               - "scripts/check-session-live-ssot.mjs"
+              - "scripts/check-skills-core-ssot.mjs"
+              - "scripts/check-gemini-model-fetch-ssot.mjs"
               - "scripts/preflight.sh"
               - ".preflight/local-lint.conf"
               - "tailwind.config.cjs"

@@ -203,7 +203,9 @@ export function SessionManagerPage({
   const [terminalVisited, setTerminalVisited] = useState(false);
   const [cursorPrimaryAction, setCursorPrimaryAction] =
     useState<CursorResumePrimaryAction | null>(null);
-  const [, setCursorResumeCommand] = useState<string | null>(null);
+  const [cursorResumeCommand, setCursorResumeCommand] = useState<string | null>(
+    null,
+  );
   const searchRef = useRef<HTMLInputElement | null>(null);
   const providerFilter = appFilter;
   const cursorSessionIndex = useCursorSessionIndex(providerFilter === "cursor");
@@ -1338,6 +1340,7 @@ export function SessionManagerPage({
             onReload={() => void reloadMessages()}
             onDelete={() => openDelete([readerSession], "reader")}
             resumePrimary={readerResumePrimary}
+            resumeCommandOverride={cursorResumeCommand}
             allowDelete={isSessionDeletable(readerSession)}
             afterHeader={
               isCursorReaderSession ? (

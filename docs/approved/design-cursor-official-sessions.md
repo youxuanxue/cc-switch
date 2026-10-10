@@ -64,7 +64,7 @@ CC Switch 现有会话模型只有 `SessionMeta.projectDir`，前端已经通过
 
 ### 3.2 Cursor 不是通用 Provider App
 
-Cursor Official 放在现有「设置 → 认证」页和会话管理器里，不加入顶部 Provider App Switcher。
+Cursor Official 放在现有「设置 → 认证」页和会话管理器里，不加入顶部 Provider App Switcher。Plan A 起，Cursor 作为**会话层工具**固定在会话管理器的应用筛选菜单中（`cursor` 不是 `AppType`，也不受「应用」页 `visibleApps` 开关约束）：即用户隐藏了全部 Provider App，仍可从该菜单进入 Cursor Agent CLI 会话列表与恢复流程。
 
 原因：
 

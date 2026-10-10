@@ -21,6 +21,7 @@ import { sessionsApi } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import type { SessionMessage, SessionMeta, TurnIndex } from "@/types";
 import { extractErrorMessage } from "@/utils/errorUtils";
+import { toDisplayMessages } from "../sessionChrome";
 import { getBaseName } from "../utils";
 import { getAgentReaderStyle } from "./agentStyles";
 import { ReaderContext, type ReaderContextValue } from "./context";
@@ -147,6 +148,7 @@ export interface SessionReaderProps {
   onReload: () => void;
   onDelete: () => void;
   resumePrimary?: SessionReaderHeaderProps["resumePrimary"];
+  resumeCommandOverride?: string | null;
   allowDelete?: boolean;
   afterHeader?: ReactNode;
   alternateBody?: ReactNode;
@@ -174,6 +176,7 @@ export function SessionReader({
   onReload,
   onDelete,
   resumePrimary,
+  resumeCommandOverride,
   allowDelete,
   afterHeader,
   alternateBody,
@@ -223,15 +226,19 @@ export function SessionReader({
 
   // 流式数据每到一批就重建 turn；交给低优先级渲染，滚动和点击不被打断
   const messages = useDeferredValue(transcript.messages);
+  const displayMessages = useMemo(
+    () => toDisplayMessages(messages, session.providerId),
+    [messages, session.providerId],
+  );
   const turns = useMemo(
-    () => buildTurns(messages, { style }),
-    [messages, style],
+    () => buildTurns(displayMessages, { style }),
+    [displayMessages, style],
   );
   const localIndex = useMemo(() => buildTurnIndex(turns), [turns]);
   const headerTurns = transcript.header?.turns;
   const turnIndex =
     headerTurns && headerTurns.length > 0 ? headerTurns : localIndex;
-  const model = useMemo(() => latestModel(messages), [messages]);
+  const model = useMemo(() => latestModel(displayMessages), [displayMessages]);
   const title = readerTitle(session, turnIndex);
 
   const deferredFind = useDeferredValue(findOpen ? findQuery.trim() : "");
@@ -490,7 +497,9 @@ export function SessionReader({
     ],
   );
 
-  const noResumeReason = !session.resumeCommand
+  const effectiveResumeCommand =
+    resumeCommandOverride ?? session.resumeCommand ?? null;
+  const noResumeReason = !effectiveResumeCommand
     ? session.providerId === "openclaw"
       ? t("sessionManager.noResumeOpenclaw", {
           defaultValue: "OpenClaw 会话由网关管理，不能在终端恢复",
@@ -543,7 +552,7 @@ export function SessionReader({
             </span>
             {/* Agent 名 · 时间 · 模型 与头像同一行；最终回复不再重复这一行 */}
             <SessionAgentHeader
-              ts={agentTurnTs(turn, messages)}
+              ts={agentTurnTs(turn, displayMessages)}
               model={turn.final?.model}
             />
           </>
@@ -764,6 +773,7 @@ export function SessionReader({
           onReload={onReload}
           onDelete={onDelete}
           resumePrimary={resumePrimary}
+          resumeCommandOverride={resumeCommandOverride}
           allowDelete={allowDelete}
         />
         {afterHeader}
@@ -771,7 +781,7 @@ export function SessionReader({
           session={session}
           failed={failed}
           turnIndex={turnIndex}
-          messageCount={messages.length}
+          messageCount={displayMessages.length}
           model={model}
           progress={progress}
           noResumeReason={noResumeReason}

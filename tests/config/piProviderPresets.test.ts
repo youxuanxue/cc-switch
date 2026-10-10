@@ -22,6 +22,10 @@ describe("Pi provider presets", () => {
 
     expect(new Set(keys).size).toBe(keys.length);
     expect(keys.every((key) => key.startsWith("cc-switch-"))).toBe(true);
+    // Fork-only union entries — upstream merge must keep these keys.
+    expect(keys).toEqual(
+      expect.arrayContaining(["cc-switch-etok-ai", "cc-switch-bailian"]),
+    );
   });
 
   it("only supplies configuration defaults, never a second gateway decision", () => {

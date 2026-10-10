@@ -3852,7 +3852,6 @@
     "backup": {
       "location": "バックアップ場所: {{path}}"
     },
-    "checkUpdates": "更新を確認",
     "checkingUpdates": "確認中...",
     "core": {
       "loading": "スキル制御面を読み込み中…",
@@ -4034,36 +4033,6 @@
       "poweredBy": "Powered by skills.sh",
       "searchPlaceholder": "skills.sh を検索（2文字以上）..."
     },
-    "storageSheet": {
-      "title": "保存と同期",
-      "open": "保存と同期",
-      "resync": "今すぐ再同期",
-      "resyncing": "再同期中…",
-      "resyncHint": "変更はこの後に有効化または更新した Skill にのみ適用されます。有効な Skill も現在の方式に切り替えるには「今すぐ再同期」を押してください。",
-      "resyncDone": "現在の方式で Skill を各アプリに再同期しました",
-      "resyncPartial": "{{count}} 個のアプリで同期が完了しませんでした：{{apps}}",
-      "resyncSkillItem": "{{directory}}：{{error}}",
-      "locationTitle": "マスターコピーの保存先",
-      "locationCcSwitch": "CC Switch フォルダ",
-      "locationUnified": "共通フォルダ",
-      "openFolder": "開く",
-      "openFolderAria": "{{path}} を開く",
-      "unifiedWarning": "Codex、Gemini CLI、OpenCode などはこのフォルダを直接読むため、アプリごとのスイッチが完全には効かなくなります。",
-      "move": "移動して切り替え",
-      "moving": "移動中…",
-      "moveConfirmTitle": "{{count}} 個の Skill を {{path}} に移動しますか？",
-      "moveConfirmBody": "マスターコピーを 1 つずつ移動し、各アプリのリンクを新しい場所に向け直します。移動が終わるまで CC Switch を終了しないでください。",
-      "moveConfirmButton": "移動して切り替え",
-      "moveDone": "{{count}} 個の Skill を {{path}} に移動しました",
-      "movePartial": "{{migrated}} 個の Skill を移動、{{errors}} 個が失敗しました。詳細はログを確認してください。",
-      "syncTitle": "各アプリへの同期方式",
-      "syncAuto": "自動：シンボリックリンクを優先し、失敗したらコピー（推奨）",
-      "syncSymlink": "シンボリックリンクのみ",
-      "syncSymlinkDesc": "Windows では開発者モードが必要です",
-      "syncCopy": "コピーのみ",
-      "syncCopyDesc": "ディスク容量を多く使い、更新のたびにコピーし直します",
-      "moveHint": "場所を切り替えると {{count}} 個の Skill を移動します。"
-    },
     "title": "Skills 管理",
     "uninstall": "アンインストール",
     "uninstallConfirm": "「{{name}}」をアンインストールしますか？すべてのアプリからこのスキルが削除され、削除前にローカルバックアップが自動作成されます。",
@@ -4075,14 +4044,11 @@
     "uninstalling": "アンインストール中...",
     "unmanagedAvailable": "インポート可能なスキルがあります",
     "update": "更新",
-    "updateAll": "すべて更新 ({{count}})",
-    "updateAllSuccess": "{{count}} 個のスキルを更新しました",
     "updateAvailable": "更新あり",
     "updateFailed": "更新に失敗しました",
     "updateSuccess": "スキル {{name}} を最新バージョンに更新しました",
     "updatesIncomplete": "更新は見つかりませんでしたが、{{count}} 個のリポジトリを読み込めませんでした",
     "updating": "更新中...",
-    "updatingAll": "更新中...",
     "view": "表示"
   },
   "skillsPage": {
@@ -4111,11 +4077,7 @@
       "uninstallBody": "すべてのアプリから外し、CC Switch の本体も削除します。削除前に {{path}} へ自動でバックアップします。",
       "uninstallMany": "{{count}} 件の Skill をアンインストールしますか？",
       "uninstallManyButton": "{{count}} 件をアンインストール",
-      "uninstallOne": "{{name}} をアンインストールしますか？",
-      "updateAll": "{{count}} 件の Skill を更新しますか？",
-      "updateAllButton": "{{count}} 件を更新",
-      "updateBody": "更新するとローカルのフォルダーをリポジトリの内容で置き換えます。ローカルの変更はバックアップ（{{path}}）にだけ残ります。",
-      "updateListAria": "更新する Skill"
+      "uninstallOne": "{{name}} をアンインストールしますか？"
     },
     "copyDir": "フォルダー名をコピー",
     "discover": {
@@ -4161,22 +4123,6 @@
     "headerUpdatesShow": "更新がある Skill だけを表示",
     "help": "本体は CC Switch のフォルダーに置き、チェックしたアプリへ同期します。Claude Desktop と OpenClaw は Skills 非対応のため列がありません。",
     "helpTitle": "Skills の同期のしくみ",
-    "import": {
-      "appsHelp": "「見つかった場所」のアプリは既定でチェックされ、そこで見つかった Skill だけを有効にします。追加でチェックしたアプリでは取り込むすべての Skill を有効にします。Pi はフォルダーで判定するためここにはありません。",
-      "appsHelpTitle": "既定でチェックされるアプリ",
-      "appsTitle": "取り込み後に有効にするアプリ",
-      "foundCcSwitch": "CC Switch のフォルダー",
-      "foundIn": "見つかった場所：{{places}}",
-      "help": "SKILL.md があり、まだ CC Switch が管理していないフォルダーです。",
-      "helpTitle": "対象になるもの",
-      "lead": "取り込むと CC Switch のフォルダーにコピーします。元のファイルはそのままです。",
-      "searchAria": "取り込む Skill を検索",
-      "searchPlaceholder": "名前か場所を検索",
-      "selectAll": "すべて選択",
-      "selectNone": "選択を解除",
-      "submit": "{{count}} 件を取り込む",
-      "title": "このコンピューターの Skill を取り込む"
-    },
     "importCount": "このコンピューターから取り込む（{{count}}）",
     "installTo": {
       "button": "インストール先：{{apps}}",
@@ -4222,9 +4168,6 @@
       "readFailed": "読み込み失敗",
       "removeAria": "リポジトリ {{repo}} を削除"
     },
-    "restore": {
-      "lead": "バックアップを選ぶとファイルを復元してリストに戻し、{{apps}} で有効にします（「見つける」の「インストール先」で決まります）。"
-    },
     "rowFail": "{{app}} での有効化に失敗：{{error}}",
     "rowMoreAria": "{{name}} のその他の操作",
     "searchInDiscover": "「見つける」で「{{query}}」を検索",
@@ -4247,8 +4190,6 @@
       "uninstalledMany": "{{count}} 件の Skill をアンインストールしました"
     },
     "uninstallEllipsis": "アンインストール",
-    "updateAllCount": "すべて更新（{{count}} 件）",
-    "updatingProgress": "更新中 {{done}}/{{total}}…",
     "viewAria": "Skills の表示",
     "viewDiscover": "見つける",
     "viewInstalled": "インストール済み",

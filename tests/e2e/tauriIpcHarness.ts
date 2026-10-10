@@ -343,6 +343,45 @@ export async function installTauriIpcHarness(
         case "launch_cursor_login":
         case "launch_cursor_login_and_session":
           return { state: "launched" };
+        case "delete_session": {
+          const providerId = rawPayload.providerId as string;
+          const sessionId = rawPayload.sessionId as string;
+          const sourcePath = rawPayload.sourcePath as string | undefined;
+          state.sessions = state.sessions.filter(
+            (session) =>
+              !(
+                session.providerId === providerId &&
+                session.sessionId === sessionId &&
+                (sourcePath === undefined ||
+                  session.sourcePath === sourcePath)
+              ),
+          );
+          return true;
+        }
+        case "delete_sessions": {
+          const items = (rawPayload.items ?? []) as Array<{
+            providerId: string;
+            sessionId: string;
+            sourcePath?: string;
+          }>;
+          for (const item of items) {
+            state.sessions = state.sessions.filter(
+              (session) =>
+                !(
+                  session.providerId === item.providerId &&
+                  session.sessionId === item.sessionId &&
+                  (item.sourcePath === undefined ||
+                    session.sourcePath === item.sourcePath)
+                ),
+            );
+          }
+          return items.map((item) => ({
+            providerId: item.providerId,
+            sessionId: item.sessionId,
+            sourcePath: item.sourcePath ?? "",
+            success: true,
+          }));
+        }
         case "pick_directory":
           return state.pickedDirectories.shift() ?? null;
         case "plugin:window|is_maximized":

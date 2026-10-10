@@ -3869,7 +3869,6 @@
     "backup": {
       "location": "备份位置: {{path}}"
     },
-    "checkUpdates": "检查更新",
     "checkingUpdates": "检查中...",
     "core": {
       "loading": "正在读取技能控制面…",
@@ -4051,36 +4050,6 @@
       "poweredBy": "由 skills.sh 提供",
       "searchPlaceholder": "搜索 skills.sh（至少 2 个字符）..."
     },
-    "storageSheet": {
-      "title": "存储与同步",
-      "open": "存储与同步",
-      "resync": "立即重新同步",
-      "resyncing": "正在重新同步…",
-      "resyncHint": "修改只对之后启用或更新的 Skill 生效。要让已启用的 Skill 也换成当前方式，点「立即重新同步」。",
-      "resyncDone": "已按当前方式把 Skill 重新同步到各应用",
-      "resyncPartial": "{{count}} 个应用没有同步完整：{{apps}}",
-      "resyncSkillItem": "{{directory}}：{{error}}",
-      "locationTitle": "主副本放在",
-      "locationCcSwitch": "CC Switch 目录",
-      "locationUnified": "通用目录",
-      "openFolder": "打开",
-      "openFolderAria": "打开 {{path}}",
-      "unifiedWarning": "Codex、Gemini CLI、OpenCode 等会直接读这个目录，各应用的开关对它们不再完全生效。",
-      "move": "移动并切换",
-      "moving": "正在移动…",
-      "moveConfirmTitle": "把 {{count}} 个 Skill 移到 {{path}}？",
-      "moveConfirmBody": "会逐个移动主副本，再让各应用里的链接指向新位置。移动完成前请不要退出 CC Switch。",
-      "moveConfirmButton": "移动并切换",
-      "moveDone": "已把 {{count}} 个 Skill 移到 {{path}}",
-      "movePartial": "移动了 {{migrated}} 个 Skill，{{errors}} 个失败，请查看日志",
-      "syncTitle": "同步到各应用的方式",
-      "syncAuto": "自动：优先用软链接，失败时复制（推荐）",
-      "syncSymlink": "只用软链接",
-      "syncSymlinkDesc": "Windows 需要开启开发者模式",
-      "syncCopy": "只用复制",
-      "syncCopyDesc": "占用更多空间，更新后会重新复制",
-      "moveHint": "切换位置会把 {{count}} 个 Skill 移动过去。"
-    },
     "title": "Skills 管理",
     "uninstall": "卸载",
     "uninstallConfirm": "确定要卸载技能 \"{{name}}\" 吗？这将从所有应用中移除该技能，并在删除前自动创建本地备份。",
@@ -4092,14 +4061,11 @@
     "uninstalling": "卸载中...",
     "unmanagedAvailable": "发现可导入的技能",
     "update": "更新",
-    "updateAll": "全部更新 ({{count}})",
-    "updateAllSuccess": "已成功更新 {{count}} 个技能",
     "updateAvailable": "可更新",
     "updateFailed": "更新失败",
     "updateSuccess": "技能 {{name}} 已更新到最新版本",
     "updatesIncomplete": "没有发现更新，但有 {{count}} 个仓库没有读到",
     "updating": "更新中...",
-    "updatingAll": "更新中...",
     "view": "查看"
   },
   "skillsPage": {
@@ -4128,11 +4094,7 @@
       "uninstallBody": "会从所有应用中移除，并删除 CC Switch 里的主副本。卸载前会自动备份到 {{path}}。",
       "uninstallMany": "卸载 {{count}} 个 Skill？",
       "uninstallManyButton": "卸载 {{count}} 个",
-      "uninstallOne": "卸载 {{name}}？",
-      "updateAll": "更新 {{count}} 个 Skill？",
-      "updateAllButton": "更新 {{count}} 个",
-      "updateBody": "更新会用仓库里的内容替换本地目录。本地改过的地方只保留在备份里（{{path}}）。",
-      "updateListAria": "将要更新的 Skill"
+      "uninstallOne": "卸载 {{name}}？"
     },
     "copyDir": "复制目录名",
     "discover": {
@@ -4178,22 +4140,6 @@
     "headerUpdatesShow": "只看可更新的 Skill",
     "help": "主副本放在 CC Switch 的目录里，再同步到你勾选的应用。Claude Desktop、OpenClaw 不支持 Skills，所以表格里没有这两列。",
     "helpTitle": "Skills 怎么同步",
-    "import": {
-      "appsHelp": "默认勾选「发现于」里的应用，只在发现它的应用里启用；另外勾选的应用，所有导入的 Skill 都会启用。Pi 按目录判断，不在这里选。",
-      "appsHelpTitle": "默认勾选哪些应用",
-      "appsTitle": "导入后在这些应用里启用",
-      "foundCcSwitch": "CC Switch 目录",
-      "foundIn": "发现于：{{places}}",
-      "help": "有 SKILL.md、但还不归 CC Switch 管理的目录。",
-      "helpTitle": "哪些算本机已有",
-      "lead": "导入会复制一份到 CC Switch 的目录，原来的文件不动。",
-      "searchAria": "搜索要导入的 Skill",
-      "searchPlaceholder": "搜索名称或位置",
-      "selectAll": "全选",
-      "selectNone": "全不选",
-      "submit": "导入 {{count}} 个",
-      "title": "导入本机已有的 Skill"
-    },
     "importCount": "导入本机已有（{{count}}）",
     "installTo": {
       "button": "安装到：{{apps}}",
@@ -4239,9 +4185,6 @@
       "readFailed": "读取失败",
       "removeAria": "删除仓库 {{repo}}"
     },
-    "restore": {
-      "lead": "选一个备份，把文件恢复到本地并重新加入列表，并在 {{apps}} 启用（「发现」里的「安装到」决定）。"
-    },
     "rowFail": "在 {{app}} 启用失败：{{error}}",
     "rowMoreAria": "{{name}} 的更多操作",
     "searchInDiscover": "在发现里搜索“{{query}}”",
@@ -4264,8 +4207,6 @@
       "uninstalledMany": "已卸载 {{count}} 个 Skill"
     },
     "uninstallEllipsis": "卸载",
-    "updateAllCount": "全部更新（{{count}} 个）",
-    "updatingProgress": "正在更新 {{done}}/{{total}}…",
     "viewAria": "Skills 视图",
     "viewDiscover": "发现",
     "viewInstalled": "已安装",
