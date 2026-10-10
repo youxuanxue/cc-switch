@@ -13,10 +13,6 @@ async function openAppChooser(page: Page) {
   await expect(item).toBeVisible();
 }
 
-async function selectAllApps(page: Page) {
-  await openAppChooser(page);
-  await page.getByRole("menuitemradio", { name: /^全部应用/ }).click();
-}
 
 async function selectCursor(page: Page) {
   const appTrigger = page.getByRole("button", { name: /^应用：/ });
@@ -27,16 +23,6 @@ async function selectCursor(page: Page) {
   await page.getByRole("menuitemradio", { name: /^Cursor/ }).click();
 }
 
-async function expandProjectGroup(page: Page, label: string) {
-  const region = page.getByRole("region", { name: "会话列表" });
-  const toggle = region
-    .getByRole("button", { name: new RegExp(`^${label}\\b`) })
-    .first();
-  const expanded = await toggle.getAttribute("aria-expanded");
-  if (expanded !== "true") {
-    await toggle.click();
-  }
-}
 
 function sessionOpenButton(list: Locator, title: string) {
   return list.getByRole("button", { name: title, exact: true });

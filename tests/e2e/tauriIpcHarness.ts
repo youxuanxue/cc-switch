@@ -71,10 +71,6 @@ export interface TauriIpcHarnessOptions {
   sessionMessages?: Record<string, SessionMessageFixture[]>;
 }
 
-const GROUP_MODE_STORAGE_KEY = "cc-switch.sessionManager.groupMode";
-const EXPANDED_PROJECTS_STORAGE_KEY =
-  "cc-switch.sessionManager.expandedProjects";
-
 const defaultCursorStatus: CursorOfficialStatus = {
   installed: true,
   version: "agent fixture",
