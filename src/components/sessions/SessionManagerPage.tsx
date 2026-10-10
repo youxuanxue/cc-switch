@@ -283,6 +283,11 @@ export function SessionManagerPage({
     return map;
   }, [scopedSessions]);
 
+  const cursorSessionCount = useMemo(
+    () => sessions.filter((session) => session.providerId === "cursor").length,
+    [sessions],
+  );
+
   const menuApps = useMemo(
     () =>
       [...availableApps].sort((a, b) => {
@@ -1495,6 +1500,28 @@ export function SessionManagerPage({
                     />
                   );
                 })}
+                <AppMenuItem
+                  pressed={appFilter === "cursor"}
+                  dimmed={cursorSessionCount === 0}
+                  icon={
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        "flex h-4 w-4 items-center justify-center rounded-[4px] bg-subtle text-[9px] font-bold text-fg-2",
+                        cursorSessionCount === 0 && "opacity-60",
+                      )}
+                    >
+                      Cu
+                    </span>
+                  }
+                  label={appName("cursor")}
+                  count={
+                    cursorSessionCount
+                      ? String(cursorSessionCount)
+                      : noSessionsLabel
+                  }
+                  onSelect={() => setAppFilter("cursor")}
+                />
               </DropdownMenuContent>
             </DropdownMenu>
 
