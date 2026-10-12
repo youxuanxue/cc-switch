@@ -407,6 +407,28 @@ export function useProviderActions(
     [queryClient, t],
   );
 
+  const setPiDefaultProvider = useCallback(
+    async (provider: Provider, modelId?: string) => {
+      try {
+        await piApi.setDefaultProvider(provider.id, modelId);
+        await queryClient.invalidateQueries({
+          queryKey: ["pi", "currentState"],
+        });
+        toast.success(
+          t("pi.provider.defaultSet", { defaultValue: "已设为 Pi 默认供应商" }),
+        );
+      } catch (error) {
+        toast.error(
+          extractErrorMessage(error) ||
+            t("pi.provider.defaultSetFailed", {
+              defaultValue: "设置 Pi 默认供应商失败",
+            }),
+        );
+      }
+    },
+    [queryClient, t],
+  );
+
   return {
     addProvider,
     updateProvider,
@@ -414,6 +436,7 @@ export function useProviderActions(
     deleteProvider,
     saveUsageScript,
     setAsDefaultModel,
+    setPiDefaultProvider,
     isLoading:
       addProviderMutation.isPending ||
       updateProviderMutation.isPending ||

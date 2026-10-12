@@ -99,6 +99,35 @@ pub(crate) fn read_pi_native_defaults() -> Result<PiNativeDefaults, AppError> {
     })
 }
 
+pub(crate) fn set_pi_native_defaults(provider: &str, model: Option<&str>) -> Result<(), AppError> {
+    let path = get_pi_settings_path()?;
+    let mut value = if path.exists() {
+        read_json5_value(&path, "Pi settings")?
+    } else {
+        Value::Object(Map::new())
+    };
+    let object = value.as_object_mut().ok_or_else(|| {
+        AppError::Config(format!(
+            "Pi settings root must be an object: {}",
+            path.display()
+        ))
+    })?;
+    object.insert(
+        "defaultProvider".to_string(),
+        Value::String(provider.to_string()),
+    );
+    if let Some(model) = model {
+        object.insert("defaultModel".to_string(), Value::String(model.to_string()));
+    }
+    let mut bytes =
+        serde_json::to_vec_pretty(&value).map_err(|source| AppError::JsonSerialize { source })?;
+    bytes.push(b'\n');
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| AppError::io(parent, e))?;
+    }
+    atomic_write_private(&path, &bytes)
+}
+
 pub(crate) fn read_pi_native_providers() -> Result<IndexMap<String, Value>, AppError> {
     let _guard = lock_models_file()?;
     read_pi_native_providers_locked(&get_pi_models_path()?)

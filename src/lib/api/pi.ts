@@ -23,6 +23,9 @@ export const piApi = {
   async getCurrentState(): Promise<PiCurrentState> {
     return await invoke("get_pi_current_state");
   },
+  async setDefaultProvider(id: string, model?: string): Promise<boolean> {
+    return await invoke("set_pi_default_provider", { id, model });
+  },
 
   async updateProviderUsageScript(
     id: string,

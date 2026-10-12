@@ -1559,6 +1559,7 @@ pub fn run() {
             commands::delete_pi_prompt_template,
             // Pi native provider and session views
             commands::get_pi_current_state,
+            commands::set_pi_default_provider,
             commands::update_pi_provider_usage_script,
             commands::get_pi_session_discovery,
             // Profile management (项目配置方案)

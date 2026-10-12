@@ -336,6 +336,7 @@ export function ProviderList({
       isHermesManaged: (provider) =>
         isHermesReadOnlyProvider(provider.settingsConfig),
       piStateUnavailable: appId === "pi" && !isPiStateReady,
+      piDefaultProviderId: piCurrentState?.defaultProviderId,
       actions: {
         add: onSwitch,
         remove: (provider) =>

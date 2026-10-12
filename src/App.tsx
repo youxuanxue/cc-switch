@@ -353,6 +353,7 @@ function App() {
     deleteProvider,
     saveUsageScript,
     setAsDefaultModel,
+    setPiDefaultProvider,
   } = useProviderActions(
     activeApp,
     isProxyRunning && isCurrentAppTakeoverActive,
@@ -1381,7 +1382,10 @@ function App() {
                     void setAsDefaultModel(provider, modelId)
                 : activeApp === "hermes"
                   ? (provider) => void switchProvider(provider)
-                  : undefined
+                  : activeApp === "pi"
+                    ? (provider, modelId) =>
+                        void setPiDefaultProvider(provider, modelId)
+                    : undefined
             }
           />
         </div>

@@ -1,7 +1,7 @@
-//! Read-only Pi provider membership and global default reference.
+//! Pi provider membership and global default state.
 
 use crate::error::AppError;
-use crate::pi_config::{read_pi_native_defaults, read_pi_native_providers};
+use crate::pi_config::{read_pi_native_defaults, read_pi_native_providers, set_pi_native_defaults};
 use crate::store::AppState;
 use serde::Serialize;
 
@@ -32,6 +32,39 @@ impl PiStateService {
             enabled_provider_ids,
             default_provider_id,
         })
+    }
+
+    pub(crate) fn set_default(
+        state: &AppState,
+        provider_id: &str,
+        model_id: Option<&str>,
+    ) -> Result<(), AppError> {
+        let _guard = futures::executor::block_on(state.proxy_service.lock_switch_for_app(PI_APP));
+        let providers = read_pi_native_providers()?;
+        let provider = providers.get(provider_id).ok_or_else(|| {
+            AppError::InvalidInput(format!("Pi provider '{provider_id}' is not enabled"))
+        })?;
+        let configured_models = provider
+            .get("models")
+            .and_then(serde_json::Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        let effective_model = model_id.or_else(|| {
+            configured_models
+                .first()
+                .and_then(|model| model.get("id").and_then(serde_json::Value::as_str))
+        });
+        if let Some(model_id) = effective_model {
+            let has_model = configured_models
+                .iter()
+                .any(|model| model.get("id").and_then(serde_json::Value::as_str) == Some(model_id));
+            if !has_model {
+                return Err(AppError::InvalidInput(format!(
+                    "Pi model '{model_id}' is not configured for provider '{provider_id}'"
+                )));
+            }
+        }
+        set_pi_native_defaults(provider_id, effective_model)
     }
 }
 

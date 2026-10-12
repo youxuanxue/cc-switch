@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 use crate::app_config::AppType;
 use crate::database::Profile;
 use crate::error::AppError;
-use crate::services::{McpService, PromptService, ProviderService, SkillService};
+use crate::services::{McpService, PiStateService, PromptService, ProviderService, SkillService};
 use crate::store::AppState;
 
 /// Profile 操作的应用分组：项目实体全应用共享，但快照/应用/当前指针按组进行。
@@ -381,7 +381,18 @@ impl ProfileService {
                     )?;
                     if current.as_deref() != Some(target_pid.as_str()) {
                         match ProviderService::switch(state, app.clone(), target_pid) {
-                            Ok(result) => warnings.extend(result.warnings),
+                            Ok(result) => {
+                                warnings.extend(result.warnings);
+                                if matches!(app, AppType::Pi) {
+                                    if let Err(e) =
+                                        PiStateService::set_default(state, target_pid, None)
+                                    {
+                                        warnings.push(format!(
+                                            "[{app_str}] set Pi default provider failed: {e}"
+                                        ));
+                                    }
+                                }
+                            }
                             Err(e) => warnings.push(format!(
                                 "[{app_str}] switch provider '{target_pid}' failed: {e}"
                             )),
