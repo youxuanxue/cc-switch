@@ -67,6 +67,8 @@ export interface TauriIpcHarnessOptions {
   /** Project group keys pre-expanded in `cc-switch.sessionManager.expandedProjects`. */
   expandedProjects?: string[];
   sessions?: SessionFixture[];
+  liveSessionIds?: string[];
+  liveProbeError?: string;
   cursorStatus?: CursorOfficialStatus;
   cursorIndexStatus?: CursorIndexStatus;
   resumeContext?: CursorResumeContext;
@@ -111,6 +113,8 @@ export async function installTauriIpcHarness(
     lastApp: options.lastApp ?? "claude",
     expandedProjects: options.expandedProjects ?? [],
     sessions: options.sessions ?? [],
+    liveSessionIds: options.liveSessionIds ?? [],
+    liveProbeError: options.liveProbeError,
     cursorStatus: options.cursorStatus ?? defaultCursorStatus,
     cursorIndexStatus: options.cursorIndexStatus ?? {
       state: "indexReady" as const,
@@ -317,6 +321,18 @@ export async function installTauriIpcHarness(
           };
         case "list_sessions":
           return state.sessions.map((session) => ({ ...session }));
+        case "list_wts_workspaces":
+          return { isGitRepo: false, workspaces: [] };
+        case "launch_session_terminal":
+          return { action: "launched" };
+        case "classify_session_live_states":
+          if (fixture.liveProbeError) throw new Error(fixture.liveProbeError);
+          return (
+            (rawPayload.items ?? []) as Array<Record<string, unknown>>
+          ).map((item) => ({
+            ...item,
+            isLive: fixture.liveSessionIds.includes(String(item.sessionId)),
+          }));
         case "get_session_messages": {
           const providerId = rawPayload.providerId as string;
           const sourcePath = rawPayload.sourcePath as string;

@@ -31,7 +31,7 @@ if [[ "$area" == all || "$area" == frontend ]]; then
   check session-live-ssot node scripts/check-session-live-ssot.mjs
   check skills-core-ssot node scripts/check-skills-core-ssot.mjs
   check gemini-model-fetch-ssot node scripts/check-gemini-model-fetch-ssot.mjs
-  check browser-acceptance pnpm test:e2e
+  CC_SWITCH_REQUIRE_FORK_CONTRACTS=1 check browser-acceptance pnpm test:e2e
 fi
 if [[ "$area" == all || "$area" == backend ]]; then
   check rust-format cargo fmt --check --manifest-path src-tauri/Cargo.toml

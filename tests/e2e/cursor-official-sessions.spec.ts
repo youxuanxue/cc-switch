@@ -13,7 +13,6 @@ async function openAppChooser(page: Page) {
   await expect(item).toBeVisible();
 }
 
-
 async function selectCursor(page: Page) {
   const appTrigger = page.getByRole("button", { name: /^应用：/ });
   if (await appTrigger.getByText("Cursor", { exact: true }).isVisible()) {
@@ -22,7 +21,6 @@ async function selectCursor(page: Page) {
   await openAppChooser(page);
   await page.getByRole("menuitemradio", { name: /^Cursor/ }).click();
 }
-
 
 function sessionOpenButton(list: Locator, title: string) {
   return list.getByRole("button", { name: title, exact: true });
@@ -92,7 +90,9 @@ test("US-001/US-004 groups Cursor sessions by cwd without exposing unsupported c
   await expect(sessionOpenButton(list, "Cursor Beta")).toBeVisible();
   await sessionOpenButton(list, "Cursor Alpha").click();
 
-  await expect(page.getByRole("button", { name: "恢复会话", exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "恢复会话", exact: true }),
+  ).toBeVisible();
   await expect(page.getByRole("button", { name: "对话记录" })).toBeVisible();
   await expect(page.getByText(/消息数/)).toHaveCount(0);
   await expect(
@@ -101,9 +101,7 @@ test("US-001/US-004 groups Cursor sessions by cwd without exposing unsupported c
   await expect(page.getByText("技术详情")).toHaveCount(0);
 
   const expectedResumeCommand = `agent --workspace /work/acme/project-one --resume ${READY_SESSION_ID}`;
-  await page
-    .getByRole("button", { name: "更多恢复方式", exact: true })
-    .click();
+  await page.getByRole("button", { name: "更多恢复方式", exact: true }).click();
   await expect(
     page.getByRole("menuitem", { name: /复制恢复命令/ }),
   ).toHaveAttribute("title", expectedResumeCommand);
@@ -135,53 +133,55 @@ test("US-001 shows an unavailable Cursor index in the real empty-state journey",
   await expect(page.getByText("未发现会话", { exact: true })).toHaveCount(0);
 });
 
-test("US-002 resumes a ready Cursor session only through the dedicated IPC", async ({
-  page,
-}) => {
-  await installTauriIpcHarness(page, {
-    view: "sessions",
-    expandedProjects: ["/work/acme/ready"],
-    sessions: [
-      {
-        providerId: "cursor",
-        sessionId: READY_SESSION_ID,
-        title: "Cursor Ready",
-        projectDir: "/work/acme/ready",
-        lastActiveAt: 400,
-      },
-    ],
-  });
-
-  await page.goto("/");
-  await selectCursor(page);
-  const list = page.getByRole("region", { name: "会话列表" });
-  await sessionOpenButton(list, "Cursor Ready").click();
-  await expect(
-    page.getByRole("heading", { name: "Cursor Ready" }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "恢复会话", exact: true }).click();
-
-  await expect
-    .poll(async () =>
-      (await getRecordedInvokes(page)).filter(
-        (call) => call.command === "launch_cursor_session",
-      ),
-    )
-    .toEqual([
-      {
-        command: "launch_cursor_session",
-        payloadKeys: ["sessionId", "workspaceOverride"],
-        payload: {
+test(
+  "US-002 resumes a ready Cursor session only through the dedicated IPC",
+  { tag: "@fork-session-cursor-resume" },
+  async ({ page }) => {
+    await installTauriIpcHarness(page, {
+      view: "sessions",
+      expandedProjects: ["/work/acme/ready"],
+      sessions: [
+        {
+          providerId: "cursor",
           sessionId: READY_SESSION_ID,
+          title: "Cursor Ready",
+          projectDir: "/work/acme/ready",
+          lastActiveAt: 400,
         },
-      },
-    ]);
+      ],
+    });
 
-  const calls = await getRecordedInvokes(page);
-  expect(calls.some((call) => call.command === "launch_session_terminal")).toBe(
-    false,
-  );
-});
+    await page.goto("/");
+    await selectCursor(page);
+    const list = page.getByRole("region", { name: "会话列表" });
+    await sessionOpenButton(list, "Cursor Ready").click();
+    await expect(
+      page.getByRole("heading", { name: "Cursor Ready" }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "恢复会话", exact: true }).click();
+
+    await expect
+      .poll(async () =>
+        (await getRecordedInvokes(page)).filter(
+          (call) => call.command === "launch_cursor_session",
+        ),
+      )
+      .toEqual([
+        {
+          command: "launch_cursor_session",
+          payloadKeys: ["sessionId", "workspaceOverride"],
+          payload: {
+            sessionId: READY_SESSION_ID,
+          },
+        },
+      ]);
+
+    const calls = await getRecordedInvokes(page);
+    expect(
+      calls.some((call) => call.command === "launch_session_terminal"),
+    ).toBe(false);
+  },
+);
 
 test("US-002 keeps a canonical workspace through Login and continue", async ({
   page,
@@ -447,12 +447,12 @@ test("US-004 deletes a deletable Cursor session through delete_session IPC", asy
     ]);
 
   const calls = await getRecordedInvokes(page);
-  expect(
-    calls.some((call) => call.command === "prune_session_storage"),
-  ).toBe(false);
-  expect(
-    calls.some((call) => call.command.startsWith("delete_cursor")),
-  ).toBe(false);
+  expect(calls.some((call) => call.command === "prune_session_storage")).toBe(
+    false,
+  );
+  expect(calls.some((call) => call.command.startsWith("delete_cursor"))).toBe(
+    false,
+  );
 });
 
 async function installLockedCursorSession(page: Page) {

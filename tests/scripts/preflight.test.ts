@@ -28,6 +28,7 @@ function runPreflight(area?: string, failCommand?: string) {
     writeFileSync(
       resolve(root, "bin", name),
       '#!/bin/bash\nprintf "%s %s\\n" "${0##*/}" "$*" >> "$PREFLIGHT_TEST_LOG"\n' +
+        'if [[ "$*" == "test:e2e" ]]; then printf "fork-contracts=%s\\n" "${CC_SWITCH_REQUIRE_FORK_CONTRACTS:-}" >> "$PREFLIGHT_TEST_LOG"; fi\n' +
         'if [[ "${0##*/} $*" == "${PREFLIGHT_TEST_FAIL:-}" ]]; then exit 7; fi\n',
       { mode: 0o755 },
     );
@@ -58,6 +59,7 @@ describe("preflight exit gate", () => {
     const result = runPreflight();
     expect(result.status).toBe(0);
     expect(result.commands).toContain("pnpm test:e2e");
+    expect(result.commands).toContain("fork-contracts=1");
     expect(result.commands).toContain(
       "cargo test --manifest-path src-tauri/Cargo.toml",
     );
@@ -75,6 +77,7 @@ describe("preflight exit gate", () => {
     const frontend = runPreflight("frontend");
     expect(frontend.status).toBe(0);
     expect(frontend.commands).toContain("pnpm test:unit");
+    expect(frontend.commands).toContain("fork-contracts=1");
     expect(frontend.commands).not.toContain("cargo ");
     const backend = runPreflight("backend");
     expect(backend.status).toBe(0);

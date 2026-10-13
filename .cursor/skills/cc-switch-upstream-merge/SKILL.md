@@ -19,15 +19,10 @@ description: >-
 `session-workdir` 并通过 `session-check` 后再读写。已有用户改动按归属保留。
 沿用仓库配置的 remote，不改写地址。
 
-```bash
-git fetch origin main
-git fetch upstream main
-node .cursor/skills/cc-switch-upstream-merge/scripts/audit.mjs
-```
-
-`audit.mjs` 生成固定 SHA、merge base、双方独有提交数、当前 PR 提交清单、fork
-删除文件和 merge-tree 冲突结果。`dryRun.conflicts=true` 是冲突裁决输入；Git
-查询错误会非零退出。该 helper 不更新分支或工作树。
+先加载通用 `upstream-merge` skill，按其 §1 解析 `UPSTREAM_AUDIT`、fetch 并固定
+`FORK_BASE` / `UPSTREAM_TARGET`，运行通用审计。项目目录旧版
+`scripts/audit.mjs` 不再作为合并审计入口，避免遗漏 fork 与测试变更证据。
+`dryRun.conflicts=true` 是冲突裁决输入；无文本冲突也必须核对行为保留基线。
 
 ## 冲突裁决
 
@@ -36,8 +31,10 @@ node .cursor/skills/cc-switch-upstream-merge/scripts/audit.mjs
 - **Skills Core**：以 `docs/approved/design-skills-core.md` 为基线。保持新控制面
   接线和 Claude / Cursor 独立 Agent。旧 `UnifiedSkillsPanel.tsx` 保持删除；
   评估上游修复是否需要移植到新组件。
-- **Sessions**：保持一会话一活体、清理复用 live SSOT、物理项目路径聚合与 WTS
-  工作区归并。已有三项 `scripts/check-*-ssot.mjs` 和 UI 验收由 preflight 执行。
+- **Sessions**：先读 [会话特性保留契约](../../../docs/fork-session-contracts.md)，
+  按其中的行为、owner 与必测 ID 裁决。preflight 同时检查 SSOT 和 UI 旅程实际通过；
+  文件仍在或编译通过不能替代入口可达。迁移测试必须保留行为断言，不能以适配上游
+  布局为由删除特性及其验收；退役按契约中的产品范围变更处理。
 - **TokenKey / Gemini**：保留原生模型发现端点与解析契约；新增厂商预设不能覆盖
   fork 的 provider 行为。
 - **词条和入口**：保留 fork 的 skills / sessions / tokenkey 接线与翻译，同时吸纳
@@ -52,7 +49,7 @@ node .cursor/skills/cc-switch-upstream-merge/scripts/audit.mjs
 
 ```bash
 bash scripts/preflight.sh
-node .cursor/skills/cc-switch-upstream-merge/scripts/audit.mjs
+node "$UPSTREAM_AUDIT" --base "$FORK_BASE" --upstream "$UPSTREAM_TARGET" --head HEAD
 ```
 
 preflight 与 CI 共用入口，默认执行前后端全部检查；任一检查失败则非零退出。
