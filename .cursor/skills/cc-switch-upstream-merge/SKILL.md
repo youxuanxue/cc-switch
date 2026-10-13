@@ -20,8 +20,7 @@ description: >-
 沿用仓库配置的 remote，不改写地址。
 
 先加载通用 `upstream-merge` skill，按其 §1 解析 `UPSTREAM_AUDIT`、fetch 并固定
-`FORK_BASE` / `UPSTREAM_TARGET`，运行通用审计。项目目录旧版
-`scripts/audit.mjs` 不再作为合并审计入口，避免遗漏 fork 与测试变更证据。
+`FORK_BASE` / `UPSTREAM_TARGET`，运行通用审计，读取 fork 与测试变更证据。
 `dryRun.conflicts=true` 是冲突裁决输入；无文本冲突也必须核对行为保留基线。
 
 ## 冲突裁决

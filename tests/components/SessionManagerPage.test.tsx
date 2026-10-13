@@ -14,6 +14,7 @@ import {
 } from "@/components/sessions/utils";
 import { SessionManagerPage } from "@/components/sessions/SessionManagerPage";
 import { piApi } from "@/lib/api/pi";
+import { cursorApi } from "@/lib/api/cursor";
 import { sessionsApi } from "@/lib/api/sessions";
 import type { SessionMessage, SessionMeta } from "@/types";
 import {
@@ -491,6 +492,34 @@ describe("SessionManagerPage", () => {
       expect(screen.queryByText("Alpha Session")).not.toBeInTheDocument(),
     );
     expect(screen.getByText("Beta Session")).toBeInTheDocument();
+  });
+
+  it("reports Cursor index refresh failures and allows retry without false success", async () => {
+    const { client } = renderPage("cursor");
+    await waitFor(() =>
+      expect(client.getQueryData(["cursor-session-index"])).toBeDefined(),
+    );
+    const refresh = screen.getByRole("button", { name: "刷新列表" });
+    await waitFor(() => expect(refresh).toBeEnabled());
+    const probe = vi
+      .spyOn(cursorApi, "getSessionIndexStatus")
+      .mockRejectedValueOnce(new Error("Cursor index unavailable"));
+    try {
+      await userEvent.click(refresh);
+      await waitFor(() =>
+        expect(toastErrorMock).toHaveBeenCalledWith("Cursor index unavailable"),
+      );
+      expect(toastSuccessMock).not.toHaveBeenCalled();
+      expect(refresh).toBeEnabled();
+    } finally {
+      probe.mockRestore();
+    }
+
+    await userEvent.click(refresh);
+    await waitFor(() =>
+      expect(toastSuccessMock).toHaveBeenCalledWith("已刷新会话列表"),
+    );
+    expect(refresh).toBeEnabled();
   });
 
   it("keeps a command available when launching a new session fails", async () => {
