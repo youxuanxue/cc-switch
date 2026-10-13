@@ -687,6 +687,7 @@ export interface AdditiveInput {
   /** Pi：读不到当前配置时一律不能改 */
   piStateUnavailable?: boolean;
   piDefaultProviderId?: string | null;
+  piDefaultModelId?: string | null;
   actions: {
     add: (provider: Provider) => void;
     remove: (provider: Provider) => void;
@@ -801,19 +802,38 @@ export function buildAdditiveSections(input: AdditiveInput): ProviderSection[] {
             (model) => typeof model.id === "string" && model.id.trim(),
           )
         : [];
-      const isDefault = input.piDefaultProviderId === p.id;
+      isDefault = input.piDefaultProviderId === p.id;
       if (isDefault) {
         status = {
-          label: t("providerCard.status.inUse", { defaultValue: "使用中" }),
+          label: t("providerCard.status.default"),
           dot: "muted",
         };
-      } else {
+        if (input.piDefaultModelId) {
+          chips.push({
+            key: "defaultModel",
+            label: t("providerCard.chip.defaultModel", {
+              model: input.piDefaultModelId,
+            }),
+            tone: "outline",
+          });
+        }
+      }
+      if (
+        !isDefault ||
+        models.length > 1 ||
+        models[0]?.id !== input.piDefaultModelId
+      ) {
         buttons.push({
           key: "setDefault",
           label: t("providerCard.action.setDefault", {
             defaultValue: "设为默认",
           }),
           onClick: () => actions.setDefault(p, models[0]?.id),
+          disabledReason:
+            piBlocked ??
+            (models.length === 0
+              ? t("notifications.openclawNoModels")
+              : undefined),
           menu:
             models.length > 1
               ? {

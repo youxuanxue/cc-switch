@@ -1099,7 +1099,9 @@
       "enabled": "已在 Pi 中启用",
       "enableFailed": "无法在 Pi 中启用此供应商",
       "removed": "已从 Pi 移除",
-      "writeConflict": "Pi 配置正在被其他进程修改，请稍后再试。"
+      "writeConflict": "Pi 配置正在被其他进程修改，请稍后再试。",
+      "defaultSet": "已设为 Pi 默认供应商",
+      "defaultSetFailed": "设置 Pi 默认供应商失败"
     },
     "form": {
       "providerKey": "供应商标识",
@@ -1236,7 +1238,8 @@
       "templateDeletedUndo": "已删除 /{{slug}}，Pi 里不再有这个命令",
       "templateDeletedSub": "撤销会把 prompts/{{slug}}.md 原样写回。",
       "templateRestored": "已写回 ~/.pi/agent/prompts/{{slug}}.md"
-    }
+    },
+    "selectDefaultModel": "选择默认模型"
   },
   "appSwitcher": {
     "more": "更多应用"

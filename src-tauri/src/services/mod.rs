@@ -42,7 +42,6 @@ pub mod webdav_sync;
 pub use config::ConfigService;
 pub use mcp::McpService;
 pub use omo::OmoService;
-pub(crate) use pi_state::PiStateService;
 pub use prompt::PromptService;
 pub use provider::{ProviderService, ProviderSortUpdate, SwitchResult};
 pub use proxy::ProxyService;

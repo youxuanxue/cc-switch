@@ -30,6 +30,7 @@ import { openclawKeys } from "@/hooks/useOpenClaw";
 import { supportsOfficialProxyTakeover } from "@/utils/providerCapabilities";
 import { getRoutingReason } from "@/utils/routingReason";
 import { logFrontendInfo } from "@/lib/frontendLogger";
+import { invalidatePiProviderCaches } from "@/lib/query/pi";
 
 /**
  * Hook for managing provider actions (add, update, delete, switch)
@@ -411,9 +412,7 @@ export function useProviderActions(
     async (provider: Provider, modelId?: string) => {
       try {
         await piApi.setDefaultProvider(provider.id, modelId);
-        await queryClient.invalidateQueries({
-          queryKey: ["pi", "currentState"],
-        });
+        await invalidatePiProviderCaches(queryClient);
         toast.success(
           t("pi.provider.defaultSet", { defaultValue: "已设为 Pi 默认供应商" }),
         );

@@ -1100,7 +1100,9 @@
       "enabled": "已在 Pi 中啟用",
       "enableFailed": "無法在 Pi 中啟用此供應商",
       "removed": "已從 Pi 移除",
-      "writeConflict": "Pi 設定正由其他程序修改，請稍後再試。"
+      "writeConflict": "Pi 設定正由其他程序修改，請稍後再試。",
+      "defaultSet": "已設為 Pi 預設供應商",
+      "defaultSetFailed": "設定 Pi 預設供應商失敗"
     },
     "form": {
       "providerKey": "供應商識別碼",
@@ -1237,7 +1239,8 @@
       "templateDeletedUndo": "已刪除 /{{slug}}，Pi 裡不再有這個命令",
       "templateDeletedSub": "復原會把 prompts/{{slug}}.md 原樣寫回。",
       "templateRestored": "已寫回 ~/.pi/agent/prompts/{{slug}}.md"
-    }
+    },
+    "selectDefaultModel": "選擇預設模型"
   },
   "appSwitcher": {
     "more": "更多應用程式"
