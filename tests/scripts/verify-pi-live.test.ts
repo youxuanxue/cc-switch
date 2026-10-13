@@ -3,6 +3,8 @@ import { spawnSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
+  linkSync,
+  symlinkSync,
   mkdtempSync,
   readFileSync,
   realpathSync,
@@ -15,7 +17,12 @@ import { tmpdir } from "node:os";
 const roots: string[] = [];
 const credential = "fixture-credential-never-export";
 
-function runLiveVerifier(mode = "success", only = "test-provider") {
+function runLiveVerifier(
+  mode = "success",
+  only = "test-provider",
+  reportInput?: string,
+  alias?: "symlink" | "hardlink",
+) {
   const root = mkdtempSync(resolve(tmpdir(), "pi-live-verifier-"));
   roots.push(root);
   const agent = resolve(root, "agent");
@@ -64,7 +71,11 @@ print(json.dumps({"type":"message_end","message":message}))
 `,
     { mode: 0o755 },
   );
-  const report = resolve(root, "report.json");
+  const report = reportInput
+    ? resolve(agent, reportInput)
+    : resolve(root, "report.json");
+  if (alias === "symlink") symlinkSync(resolve(agent, "models.json"), report);
+  if (alias === "hardlink") linkSync(resolve(agent, "models.json"), report);
   const result = spawnSync(
     "python3",
     [
@@ -150,4 +161,25 @@ describe("opt-in Pi live verifier", () => {
     );
     expect(existsSync(run.audit)).toBe(false);
   });
+
+  it.each([
+    ["models.json", undefined],
+    ["settings.json", undefined],
+    ["auth.json", undefined],
+    ["report-symlink.json", "symlink"],
+    ["report-hardlink.json", "hardlink"],
+  ] as const)(
+    "rejects report collision %s (%s) before launch",
+    (report, alias) => {
+      const run = runLiveVerifier("success", "test-provider", report, alias);
+      expect(run.result.status).toBe(2);
+      expect(run.result.stderr).toContain(
+        "Report path must not overwrite native configuration",
+      );
+      expect(readFileSync(resolve(run.agent, "models.json"), "utf8")).toBe(
+        run.original["models.json"],
+      );
+      expect(existsSync(run.audit)).toBe(false);
+    },
+  );
 });

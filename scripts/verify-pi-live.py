@@ -28,6 +28,10 @@ def main():
     parser.add_argument('--thinking', choices=['off', 'low'], default='off')
     parser.add_argument('--report', type=Path, required=True)
     args = parser.parse_args()
+    native_paths = [args.agent_dir / name for name in ('models.json', 'settings.json', 'auth.json')]
+    for native in native_paths:
+        if args.report.resolve() == native.resolve() or (args.report.exists() and native.exists() and args.report.samefile(native)):
+            parser.error('Report path must not overwrite native configuration')
     original = {name: (args.agent_dir / name).read_bytes() for name in ('models.json', 'settings.json', 'auth.json') if (args.agent_dir / name).exists()}
     config = json.loads(original['models.json'])
     choices = dict(case.split('=', 1) for case in args.case)
