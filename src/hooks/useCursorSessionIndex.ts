@@ -15,6 +15,6 @@ export function useCursorSessionIndex(enabled = true) {
     error: query.error,
     isLoading: query.isPending,
     isError: query.isError,
-    refresh: async () => (await query.refetch()).data,
+    refresh: async () => (await query.refetch({ throwOnError: true })).data,
   };
 }

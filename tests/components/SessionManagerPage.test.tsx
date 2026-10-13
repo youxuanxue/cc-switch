@@ -14,6 +14,7 @@ import {
 } from "@/components/sessions/utils";
 import { SessionManagerPage } from "@/components/sessions/SessionManagerPage";
 import { piApi } from "@/lib/api/pi";
+import { cursorApi } from "@/lib/api/cursor";
 import { sessionsApi } from "@/lib/api/sessions";
 import type { SessionMessage, SessionMeta } from "@/types";
 import {
@@ -91,8 +92,7 @@ const openAppMenu = async () =>
 
 const CURSOR_WORKSPACE = "/mock/cursor/cursor-workspace";
 const CURSOR_ALPHA_ID = "11111111-1111-4111-8111-111111111111";
-const CURSOR_ALPHA_STORE =
-  `/mock/cursor/chats/workspace/${CURSOR_ALPHA_ID}/store.db`;
+const CURSOR_ALPHA_STORE = `/mock/cursor/chats/workspace/${CURSOR_ALPHA_ID}/store.db`;
 
 const EXPANDED_KEY = "cc-switch.sessionManager.expandedProjects";
 
@@ -494,17 +494,63 @@ describe("SessionManagerPage", () => {
     expect(screen.getByText("Beta Session")).toBeInTheDocument();
   });
 
+  it("reports Cursor index refresh failures and allows retry without false success", async () => {
+    const { client } = renderPage("cursor");
+    await waitFor(() =>
+      expect(client.getQueryData(["cursor-session-index"])).toBeDefined(),
+    );
+    const refresh = screen.getByRole("button", { name: "刷新列表" });
+    await waitFor(() => expect(refresh).toBeEnabled());
+    const probe = vi
+      .spyOn(cursorApi, "getSessionIndexStatus")
+      .mockRejectedValueOnce(new Error("Cursor index unavailable"));
+    try {
+      await userEvent.click(refresh);
+      await waitFor(() =>
+        expect(toastErrorMock).toHaveBeenCalledWith("Cursor index unavailable"),
+      );
+      expect(toastSuccessMock).not.toHaveBeenCalled();
+      expect(refresh).toBeEnabled();
+    } finally {
+      probe.mockRestore();
+    }
+
+    await userEvent.click(refresh);
+    await waitFor(() =>
+      expect(toastSuccessMock).toHaveBeenCalledWith("已刷新会话列表"),
+    );
+    expect(refresh).toBeEnabled();
+  });
+
+  it("keeps a command available when launching a new session fails", async () => {
+    platform.mac = true;
+    const launch = vi
+      .spyOn(sessionsApi, "launchTerminal")
+      .mockRejectedValueOnce(new Error("Terminal unavailable"));
+    renderPage("codex");
+    await screen.findByText("Alpha Session");
+    await userEvent.click(screen.getByRole("button", { name: "新建会话" }));
+    const dialog = await screen.findByRole("dialog", { name: "新建会话" });
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "打开会话" }),
+    );
+    await waitFor(() =>
+      expect(toastErrorMock).toHaveBeenCalledWith("Terminal unavailable"),
+    );
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith("codex");
+    expect(launch).toHaveBeenCalledWith({
+      command: "codex",
+      cwd: "/mock/codex",
+    });
+    launch.mockRestore();
+  });
+
   it("selects several sessions and deletes them in one batch", async () => {
     const deleteMany = vi.spyOn(sessionsApi, "deleteMany");
     renderPage("codex");
     await screen.findByText("Alpha Session");
 
-    await userEvent.click(
-      screen.getByRole("button", { name: "会话的更多操作" }),
-    );
-    await userEvent.click(
-      await screen.findByRole("menuitem", { name: "选择多个…" }),
-    );
+    await userEvent.click(screen.getByRole("button", { name: "选择多个" }));
 
     fireEvent.click(
       screen.getByRole("checkbox", { name: "选择 Alpha Session" }),
@@ -540,12 +586,7 @@ describe("SessionManagerPage", () => {
     renderPage("codex");
     await screen.findByText("Alpha Session");
 
-    await userEvent.click(
-      screen.getByRole("button", { name: "会话的更多操作" }),
-    );
-    await userEvent.click(
-      await screen.findByRole("menuitem", { name: "选择多个…" }),
-    );
+    await userEvent.click(screen.getByRole("button", { name: "选择多个" }));
     fireEvent.click(screen.getByRole("button", { name: "全选匹配结果" }));
     expect(screen.getByText("已选 3 个会话")).toBeInTheDocument();
 

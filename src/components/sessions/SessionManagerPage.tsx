@@ -15,6 +15,8 @@ import {
   History,
   LayoutGrid,
   MoreHorizontal,
+  Plus,
+  RefreshCw,
 } from "lucide-react";
 import { useSessionSearch } from "@/hooks/useSessionSearch";
 import {
@@ -28,6 +30,7 @@ import { piApi, sessionsApi, type AppId } from "@/lib/api";
 import type { SessionMeta } from "@/types";
 import { DEFAULT_VISIBLE_APPS } from "@/config/appConfig";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { HelpTip } from "@/components/ui/help-tip";
 import { Notice } from "@/components/ui/notice";
 import { SegmentedControl } from "@/components/ui/segmented-control";
@@ -54,6 +57,7 @@ import {
   sessionMessageSourcePath,
 } from "./sessionCapabilities";
 import { SessionManagerPruneDialogs } from "./SessionManagerPruneDialogs";
+import { NewSessionDialog } from "./NewSessionDialog";
 import { SessionReaderForkChrome } from "./SessionReaderForkChrome";
 import { useSessionCursor } from "./useSessionCursor";
 import { useSessionLiveTerminal } from "./useSessionLiveTerminal";
@@ -172,6 +176,8 @@ export function SessionManagerPage({
   const deleteSourceRef = useRef<DeleteSource>("row");
   const [isBatchDeleting, setIsBatchDeleting] = useState(false);
   const [whereOpen, setWhereOpen] = useState(false);
+  const [newSessionOpen, setNewSessionOpen] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const searchRef = useRef<HTMLInputElement | null>(null);
   const providerFilter = appFilter;
   const {
@@ -641,11 +647,20 @@ export function SessionManagerPage({
   };
 
   const refreshList = async () => {
-    await refetch();
-    await refreshCursorIndex();
-    toast.success(
-      t("sessionManager.listRefreshed", { defaultValue: "已刷新会话列表" }),
-    );
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      const result = await refetch();
+      if (result.error) throw result.error;
+      await refreshCursorIndex();
+      toast.success(
+        t("sessionManager.listRefreshed", { defaultValue: "已刷新会话列表" }),
+      );
+    } catch (error) {
+      toast.error(extractErrorMessage(error));
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   const handleReaderLaunch = useCallback(() => {
@@ -875,6 +890,10 @@ export function SessionManagerPage({
       ? fullPath.slice(0, fullPath.length - group.label.length)
       : fullPath;
     const pathTail = fullPath.endsWith(group.label) ? group.label : "";
+    const selectable = group.sessions.filter(isSessionDeletable);
+    const selectedCount = selectable.filter((session) =>
+      selectedKeys.has(getSessionKey(session)),
+    ).length;
     let meta: string;
     if (appFilter === "all") {
       const perApp = new Map<string, number>();
@@ -902,6 +921,33 @@ export function SessionManagerPage({
           !first && "border-t border-border",
         )}
       >
+        {selectionMode && (
+          <Checkbox
+            aria-label={t("sessionManager.selectProjectGroupForBatch", {
+              defaultValue: "选择 {{project}} 项目分组内会话",
+              project: group.label,
+            })}
+            disabled={selectable.length === 0}
+            checked={
+              selectedCount === 0
+                ? false
+                : selectedCount === selectable.length
+                  ? true
+                  : "indeterminate"
+            }
+            onCheckedChange={(checked) =>
+              setSelectedKeys((current) => {
+                const next = new Set(current);
+                selectable.forEach((session) => {
+                  const key = getSessionKey(session);
+                  if (checked) next.add(key);
+                  else next.delete(key);
+                });
+                return next;
+              })
+            }
+          />
+        )}
         <h3 className="m-0 flex min-w-0 flex-1 text-body font-semibold text-fg-1">
           <button
             type="button"
@@ -1055,76 +1101,116 @@ export function SessionManagerPage({
             </HelpTip>
           }
           actions={
-            <DropdownMenu>
-              <HoverTip content={t("common.more", { defaultValue: "更多" })}>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="quiet"
-                    size="icon-compact"
-                    className="h-8 w-8"
-                    aria-label={t("sessionManager.moreActions", {
-                      defaultValue: "会话的更多操作",
-                    })}
-                  >
-                    <MoreHorizontal className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-              </HoverTip>
-              <DropdownMenuContent
-                align="end"
-                className="w-[196px] rounded-panel p-1 shadow-v7-md"
+            <>
+              <HoverTip
+                content={t("sessionManager.refreshList", {
+                  defaultValue: "刷新列表",
+                })}
               >
-                <DropdownMenuItem
-                  className={sessionMenuItemClass}
-                  onSelect={() => void refreshList()}
-                >
-                  {t("sessionManager.refreshList", {
+                <Button
+                  variant="quiet"
+                  size="icon-compact"
+                  className="h-8 w-8"
+                  aria-label={t("sessionManager.refreshList", {
                     defaultValue: "刷新列表",
                   })}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  className={sessionMenuItemClass}
-                  onSelect={() => {
-                    enterSelection();
-                    focusSoon(["session-search"]);
-                  }}
+                  onClick={() => void refreshList()}
+                  disabled={isLoading || isRefreshing}
+                  aria-busy={isRefreshing}
                 >
-                  {t("sessionManager.selectMany", {
-                    defaultValue: "选择多个…",
-                  })}
-                </DropdownMenuItem>
-                {matches.length > 0 && (
+                  <RefreshCw
+                    className={cn("h-4 w-4", isRefreshing && "animate-spin")}
+                    strokeWidth={1.75}
+                  />
+                </Button>
+              </HoverTip>
+              <Button
+                variant="neutral"
+                size="regular"
+                className="gap-1.5"
+                aria-pressed={selectionMode}
+                disabled={
+                  isDeleting || (!selectionMode && matches.length === 0)
+                }
+                onClick={() => {
+                  if (selectionMode) exitSelection();
+                  else enterSelection();
+                }}
+              >
+                {selectionMode
+                  ? t("sessionManager.exitSelection", {
+                      defaultValue: "退出选择",
+                    })
+                  : t("sessionManager.selectMany", {
+                      defaultValue: "选择多个",
+                    })}
+              </Button>
+              <Button
+                variant="neutral"
+                size="regular"
+                className="gap-1.5"
+                disabled={isDeleting}
+                onClick={() => prune.openStaleCleanup()}
+              >
+                <CalendarClock
+                  aria-hidden="true"
+                  className="h-4 w-4 text-fg-2"
+                  strokeWidth={1.75}
+                />
+                {t("sessionManager.staleCleanupTooltip", {
+                  defaultValue: "清理会话",
+                })}
+              </Button>
+              <Button
+                variant="solid"
+                size="regular"
+                onClick={() => setNewSessionOpen(true)}
+              >
+                <Plus aria-hidden="true" className="h-4 w-4" />
+                {t("sessionManager.newSessionTitle", {
+                  defaultValue: "新建会话",
+                })}
+              </Button>
+              <DropdownMenu>
+                <HoverTip content={t("common.more", { defaultValue: "更多" })}>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="quiet"
+                      size="icon-compact"
+                      className="h-8 w-8"
+                      aria-label={t("sessionManager.moreActions", {
+                        defaultValue: "会话的更多操作",
+                      })}
+                    >
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                </HoverTip>
+                <DropdownMenuContent
+                  align="end"
+                  className="w-[196px] rounded-panel p-1 shadow-v7-md"
+                >
+                  {onOpenTerminalSettings && (
+                    <DropdownMenuItem
+                      className={sessionMenuItemClass}
+                      onSelect={onOpenTerminalSettings}
+                    >
+                      {t("sessionManager.preferredTerminal", {
+                        defaultValue: "首选终端…",
+                      })}
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem
                     className={sessionMenuItemClass}
-                    onSelect={() => prune.openStaleCleanup()}
+                    onSelect={() => setWhereOpen(true)}
                   >
-                    <CalendarClock className="me-2 h-4 w-4 text-fg-2" />
-                    {t("sessionManager.staleCleanupTooltip", {
-                      defaultValue: "清理会话",
+                    {t("sessionManager.whereMenu", {
+                      defaultValue: "会话记录在哪里…",
                     })}
                   </DropdownMenuItem>
-                )}
-                {onOpenTerminalSettings && (
-                  <DropdownMenuItem
-                    className={sessionMenuItemClass}
-                    onSelect={onOpenTerminalSettings}
-                  >
-                    {t("sessionManager.preferredTerminal", {
-                      defaultValue: "首选终端…",
-                    })}
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  className={sessionMenuItemClass}
-                  onSelect={() => setWhereOpen(true)}
-                >
-                  {t("sessionManager.whereMenu", {
-                    defaultValue: "会话记录在哪里…",
-                  })}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
           }
         />
       )}
@@ -1450,16 +1536,6 @@ export function SessionManagerPage({
                   defaultValue: "清空",
                 })}
               </button>
-              <span aria-hidden="true">·</span>
-              <button
-                type="button"
-                className={linkButton}
-                onClick={exitSelection}
-              >
-                {t("sessionManager.exitSelection", {
-                  defaultValue: "退出选择",
-                })}
-              </button>
             </div>
           )}
 
@@ -1557,6 +1633,40 @@ export function SessionManagerPage({
       <SessionSourcesDialog
         open={whereOpen}
         onClose={() => setWhereOpen(false)}
+      />
+      <NewSessionDialog
+        open={newSessionOpen}
+        onOpenChange={setNewSessionOpen}
+        sessions={sessions}
+        selectedSession={null}
+        providerFilter={appFilter}
+        onLaunch={(launch) => {
+          setNewSessionOpen(false);
+          void (async () => {
+            if (!terminalName) {
+              await copyText(
+                launch.command,
+                t("sessionManager.resumeFallbackCopied"),
+              );
+              return;
+            }
+            try {
+              await sessionsApi.launchTerminal({
+                command: launch.command,
+                cwd: launch.cwd,
+              });
+              toast.success(t("sessionManager.terminalLaunched"));
+            } catch (error) {
+              toast.error(
+                extractErrorMessage(error) || t("sessionManager.openFailed"),
+              );
+              await copyText(
+                launch.command,
+                t("sessionManager.resumeFallbackCopied"),
+              );
+            }
+          })();
+        }}
       />
       <SessionManagerPruneDialogs
         sessions={matches}
