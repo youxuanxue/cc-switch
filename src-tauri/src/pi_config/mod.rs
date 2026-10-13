@@ -17,6 +17,21 @@ use std::sync::{LazyLock, Mutex, MutexGuard};
 const MAX_PI_FILE_BYTES: u64 = 1024 * 1024;
 const MISSING_MODELS_REVISION: &str = "missing";
 static MODELS_FILE_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+// Pi 1.2.0: pi-ai/providers/compat-schema (OpenAICompletionsCompatSchema).
+// These are format names, not request field names such as reasoning_effort.
+const THINKING_FORMATS: &[&str] = &[
+    "openai",
+    "openrouter",
+    "deepseek",
+    "together",
+    "baseten",
+    "zai",
+    "qwen",
+    "chat-template",
+    "qwen-chat-template",
+    "string-thinking",
+    "ant-ling",
+];
 #[cfg(test)]
 static TEST_AGENT_DIR: LazyLock<Mutex<Option<PathBuf>>> = LazyLock::new(|| Mutex::new(None));
 
@@ -291,6 +306,39 @@ pub(crate) fn validate_provider_node(provider_key: &str, config: &Value) -> Resu
     config.as_object().ok_or_else(|| {
         AppError::InvalidInput("Pi provider configuration must be an object".to_string())
     })?;
+    let path = format!("providers.{provider_key}");
+    validate_thinking_format(config, &path)?;
+    if let Some(models) = config.get("models").and_then(Value::as_array) {
+        for (index, model) in models.iter().enumerate() {
+            validate_thinking_format(model, &format!("{path}.models[{index}]"))?;
+        }
+    }
+    if let Some(overrides) = config.get("modelOverrides").and_then(Value::as_object) {
+        for (id, model) in overrides {
+            validate_thinking_format(model, &format!("{path}.modelOverrides.{id}"))?;
+        }
+    }
+    Ok(())
+}
+
+fn validate_thinking_format(config: &Value, path: &str) -> Result<(), AppError> {
+    let Some(compat) = config.get("compat") else {
+        return Ok(());
+    };
+    let compat = compat
+        .as_object()
+        .ok_or_else(|| AppError::InvalidInput(format!("{path}.compat must be an object")))?;
+    if let Some(value) = compat.get("thinkingFormat") {
+        if !value
+            .as_str()
+            .is_some_and(|value| THINKING_FORMATS.contains(&value))
+        {
+            return Err(AppError::InvalidInput(format!(
+                "{path}.compat.thinkingFormat must be a Pi format name ({}); use 'openai' for OpenAI reasoning_effort",
+                THINKING_FORMATS.join(", ")
+            )));
+        }
+    }
     Ok(())
 }
 
@@ -571,6 +619,50 @@ mod tests {
         value["sdkOption"] = json!({"timeout": 30});
         value["models"][0]["compat"] = json!({"supportsDeveloperRole": true});
         validate_provider_node("cc-switch-example", &value).expect("valid provider");
+    }
+
+    #[test]
+    fn thinking_format_validates_each_native_scope_without_exposing_values() {
+        for field in ["provider", "model", "override"] {
+            let mut value = provider();
+            let target = match field {
+                "provider" => &mut value,
+                "model" => &mut value["models"][0],
+                _ => {
+                    value["modelOverrides"] = json!({"native-model": {}});
+                    &mut value["modelOverrides"]["native-model"]
+                }
+            };
+            target["compat"] = json!({"thinkingFormat": "reasoning_effort"});
+            let error = validate_provider_node("example", &value)
+                .unwrap_err()
+                .to_string();
+            assert!(error.contains("compat.thinkingFormat"));
+            assert!(error.contains("use 'openai'"));
+            assert!(!error.contains("secret"));
+        }
+        let mut value = provider();
+        value["compat"] = json!({"thinkingFormat": "openai", "futureOption": true});
+        value["models"][0]["compat"] = json!({"thinkingFormat": "deepseek"});
+        validate_provider_node("example", &value).expect("native formats are valid");
+        value["compat"]["thinkingFormat"] = Value::Null;
+        assert!(validate_provider_node("example", &value).is_err());
+    }
+
+    #[test]
+    #[serial]
+    fn invalid_thinking_format_cannot_replace_or_insert_native_config() {
+        let _agent = test_support::TestAgentDir::new();
+        let valid = provider();
+        insert_pi_provider("example", &valid).unwrap();
+        let path = get_pi_models_path().unwrap();
+        let before = fs::read(&path).unwrap();
+        let mut invalid = valid.clone();
+        invalid["compat"] = json!({"thinkingFormat": "reasoning_effort"});
+        assert!(insert_pi_provider("new", &invalid).is_err());
+        assert!(replace_pi_provider("example", &valid, &invalid).is_err());
+        assert!(replace_pi_provider_if_present("example", &invalid).is_err());
+        assert_eq!(fs::read(&path).unwrap(), before);
     }
 
     #[test]

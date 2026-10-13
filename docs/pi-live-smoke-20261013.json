@@ -1,0 +1,662 @@
+{
+  "testedPiVersion": "1.2.0",
+  "runs": [
+    {
+      "run": "results",
+      "command": "wts open <existing worktree> pi with isolated startup defaults; real Pi, no tools",
+      "scope": "One configured chat model per provider; not all catalog models",
+      "originalFilesUnchanged": true,
+      "results": [
+        {
+          "provider": "tokenkey-ark",
+          "name": "tokenkey-ark",
+          "model": "ark-code-latest",
+          "status": "PASS",
+          "seconds": 9.7,
+          "selectedProvider": "tokenkey-ark",
+          "selectedModel": "ark-code-latest",
+          "stopReason": "stop",
+          "detail": "PI_SMOKE_OK",
+          "usage": {
+            "input": 78,
+            "output": 117,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 111,
+            "totalTokens": 195,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          }
+        },
+        {
+          "provider": "tokenkey-cn",
+          "name": "tokenkey-cn",
+          "model": "deepseek-v4-flash",
+          "status": "PASS",
+          "seconds": 4.1,
+          "selectedProvider": "tokenkey-cn",
+          "selectedModel": "deepseek-v4-flash",
+          "stopReason": "stop",
+          "detail": "PI_SMOKE_OK",
+          "usage": {
+            "input": 126,
+            "output": 33,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 26,
+            "totalTokens": 159,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          }
+        },
+        {
+          "provider": "tokenkey-gemini",
+          "name": "tokenkey-gemini",
+          "model": "gemini-3.6-flash",
+          "status": "FAIL",
+          "seconds": 2.6,
+          "selectedProvider": "tokenkey-gemini",
+          "selectedModel": "gemini-3.6-flash",
+          "stopReason": "error",
+          "detail": "404: {\"message\":\"Resource not found\",\"type\":\"not_found_error\"}",
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 0,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          }
+        },
+        {
+          "provider": "tokenkey-minimax",
+          "name": "tokenkey-minimax",
+          "model": "minimax-m3",
+          "status": "PASS",
+          "seconds": 5.7,
+          "selectedProvider": "tokenkey-minimax",
+          "selectedModel": "minimax-m3",
+          "stopReason": "stop",
+          "detail": "PI_SMOKE_OK",
+          "usage": {
+            "input": 207,
+            "output": 27,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 0,
+            "totalTokens": 234,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          }
+        },
+        {
+          "provider": "tokenkey-openai",
+          "name": "tokenkey-openai",
+          "model": "gpt-6-astra",
+          "status": "PASS",
+          "seconds": 26.2,
+          "selectedProvider": "tokenkey-openai",
+          "selectedModel": "gpt-6-astra",
+          "stopReason": "stop",
+          "detail": "PI_SMOKE_OK",
+          "usage": {
+            "input": 48,
+            "output": 8,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 0,
+            "totalTokens": 56,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          }
+        },
+        {
+          "provider": "tokenkey-xai",
+          "name": "tokenkey-xai",
+          "model": "grok-4.3",
+          "status": "FAIL",
+          "seconds": 17.0,
+          "selectedProvider": "tokenkey-xai",
+          "selectedModel": "grok-4.3",
+          "stopReason": "error",
+          "detail": "429: {\"code\":\"no_available_accounts\",\"message\":\"No available accounts for this request. Please retry.\",\"type\":\"rate_limit_error\"}",
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 0,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          }
+        },
+        {
+          "provider": "universal-pi-a257a4e4-e2cb-4bca-8a25-3e88e5d175c4",
+          "name": "tokenkey.dev",
+          "model": "claude-sonnet-5",
+          "status": "PASS",
+          "seconds": 3.7,
+          "selectedProvider": "universal-pi-a257a4e4-e2cb-4bca-8a25-3e88e5d175c4",
+          "selectedModel": "claude-sonnet-5",
+          "stopReason": "stop",
+          "detail": "PI_SMOKE_OK",
+          "usage": {
+            "input": 37,
+            "output": 5,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 42,
+            "cost": {
+              "input": 7.4e-05,
+              "output": 5e-05,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0.000124
+            },
+            "cacheWrite1h": 0
+          }
+        },
+        {
+          "provider": "universal-pi-ali-token-plan-personal",
+          "name": "Ali Token Plan 个人版",
+          "model": "deepseek-v4.1-flash",
+          "status": "PASS",
+          "seconds": 2.1,
+          "selectedProvider": "universal-pi-ali-token-plan-personal",
+          "selectedModel": "deepseek-v4.1-flash",
+          "stopReason": "stop",
+          "detail": "PI_SMOKE_OK",
+          "usage": {
+            "input": 73,
+            "output": 19,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 12,
+            "totalTokens": 92,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          }
+        },
+        {
+          "provider": "universal-pi-ff5906a5-e853-4722-861d-23b25511ec04",
+          "name": "tokensea",
+          "model": "gpt-6-luna",
+          "status": "PASS",
+          "seconds": 2.9,
+          "selectedProvider": "universal-pi-ff5906a5-e853-4722-861d-23b25511ec04",
+          "selectedModel": "gpt-6-luna",
+          "stopReason": "stop",
+          "detail": "PI_SMOKE_OK",
+          "usage": {
+            "input": 48,
+            "output": 7,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 0,
+            "totalTokens": 55,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          }
+        },
+        {
+          "provider": "universal-pi-volcengine-agent-plan-6",
+          "name": "Volcengine Agent Plan 个人版 (6)",
+          "model": "ark-code-latest",
+          "status": "PASS",
+          "seconds": 3.6,
+          "selectedProvider": "universal-pi-volcengine-agent-plan-6",
+          "selectedModel": "ark-code-latest",
+          "stopReason": "stop",
+          "detail": "PI_SMOKE_OK",
+          "usage": {
+            "input": 78,
+            "output": 19,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 13,
+            "totalTokens": 97,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "run": "followup",
+      "command": "wts open <existing worktree> pi with isolated startup defaults; real Pi, no tools",
+      "scope": "One configured chat model per provider; not all catalog models",
+      "originalFilesUnchanged": true,
+      "results": [
+        {
+          "provider": "tokenkey-gemini",
+          "name": "tokenkey-gemini",
+          "model": "gemini-2.5-flash",
+          "status": "PASS",
+          "seconds": 4.5,
+          "selectedProvider": "tokenkey-gemini",
+          "selectedModel": "gemini-2.5-flash",
+          "stopReason": "stop",
+          "detail": "PI_SMOKE_OK",
+          "usage": {
+            "input": 45,
+            "output": 32,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 0,
+            "totalTokens": 77,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          }
+        },
+        {
+          "provider": "tokenkey-xai",
+          "name": "tokenkey-xai",
+          "model": "grok-4.5",
+          "status": "FAIL",
+          "seconds": 19.4,
+          "selectedProvider": "tokenkey-xai",
+          "selectedModel": "grok-4.5",
+          "stopReason": "error",
+          "detail": "429: {\"code\":\"no_available_accounts\",\"message\":\"No available accounts for this request. Please retry.\",\"type\":\"rate_limit_error\"}",
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 0,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "run": "thinking",
+      "command": "wts open <existing worktree> pi with isolated startup defaults; real Pi, no tools",
+      "scope": "One configured chat model per provider; not all catalog models",
+      "thinking": "low",
+      "originalFilesUnchanged": true,
+      "results": [
+        {
+          "provider": "tokenkey-ark",
+          "name": "tokenkey-ark",
+          "model": "ark-code-latest",
+          "status": "PASS",
+          "seconds": 8.9,
+          "selectedProvider": "tokenkey-ark",
+          "selectedModel": "ark-code-latest",
+          "stopReason": "stop",
+          "detail": "PI_SMOKE_OK",
+          "usage": {
+            "input": 80,
+            "output": 26,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 20,
+            "totalTokens": 106,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          }
+        },
+        {
+          "provider": "tokenkey-cn",
+          "name": "tokenkey-cn",
+          "model": "deepseek-v4-flash",
+          "status": "PASS",
+          "seconds": 6.4,
+          "selectedProvider": "tokenkey-cn",
+          "selectedModel": "deepseek-v4-flash",
+          "stopReason": "stop",
+          "detail": "PI_SMOKE_OK",
+          "usage": {
+            "input": 47,
+            "output": 40,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 33,
+            "totalTokens": 87,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          }
+        },
+        {
+          "provider": "tokenkey-gemini",
+          "name": "tokenkey-gemini",
+          "model": "gemini-2.5-flash",
+          "status": "FAIL",
+          "seconds": 1.1,
+          "selectedProvider": "tokenkey-gemini",
+          "selectedModel": "gemini-2.5-flash",
+          "stopReason": "error",
+          "detail": "400: {\"code\":\"unsupported_model\",\"message\":\"Unsupported model: gemini-2.5-flash\",\"type\":\"invalid_request_error\"}",
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 0,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          }
+        },
+        {
+          "provider": "tokenkey-minimax",
+          "name": "tokenkey-minimax",
+          "model": "minimax-m3",
+          "status": "PASS",
+          "seconds": 17.6,
+          "selectedProvider": "tokenkey-minimax",
+          "selectedModel": "minimax-m3",
+          "stopReason": "stop",
+          "detail": "PI_SMOKE_OK",
+          "usage": {
+            "input": 207,
+            "output": 22,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 0,
+            "totalTokens": 229,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          }
+        },
+        {
+          "provider": "tokenkey-openai",
+          "name": "tokenkey-openai",
+          "model": "gpt-6-astra",
+          "status": "PASS",
+          "seconds": 27.6,
+          "selectedProvider": "tokenkey-openai",
+          "selectedModel": "gpt-6-astra",
+          "stopReason": "stop",
+          "detail": "PI_SMOKE_OK",
+          "usage": {
+            "input": 48,
+            "output": 8,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 0,
+            "totalTokens": 56,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          }
+        },
+        {
+          "provider": "universal-pi-a257a4e4-e2cb-4bca-8a25-3e88e5d175c4",
+          "name": "tokenkey.dev",
+          "model": "claude-sonnet-5",
+          "status": "PASS",
+          "seconds": 3.2,
+          "selectedProvider": "universal-pi-a257a4e4-e2cb-4bca-8a25-3e88e5d175c4",
+          "selectedModel": "claude-sonnet-5",
+          "stopReason": "stop",
+          "detail": "PI_SMOKE_OK",
+          "usage": {
+            "input": 37,
+            "output": 5,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 42,
+            "cost": {
+              "input": 7.4e-05,
+              "output": 5e-05,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0.000124
+            },
+            "cacheWrite1h": 0
+          }
+        },
+        {
+          "provider": "universal-pi-ali-token-plan-personal",
+          "name": "Ali Token Plan 个人版",
+          "model": "deepseek-v4.1-flash",
+          "status": "PASS",
+          "seconds": 4.7,
+          "selectedProvider": "universal-pi-ali-token-plan-personal",
+          "selectedModel": "deepseek-v4.1-flash",
+          "stopReason": "stop",
+          "detail": "PI_SMOKE_OK",
+          "usage": {
+            "input": 73,
+            "output": 32,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 25,
+            "totalTokens": 105,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          }
+        },
+        {
+          "provider": "universal-pi-ff5906a5-e853-4722-861d-23b25511ec04",
+          "name": "tokensea",
+          "model": "gpt-6-luna",
+          "status": "TIMEOUT",
+          "seconds": 60.0,
+          "detail": "No completed reply within 60 seconds"
+        },
+        {
+          "provider": "universal-pi-volcengine-agent-plan-6",
+          "name": "Volcengine Agent Plan 个人版 (6)",
+          "model": "ark-code-latest",
+          "status": "PASS",
+          "seconds": 2.1,
+          "selectedProvider": "universal-pi-volcengine-agent-plan-6",
+          "selectedModel": "ark-code-latest",
+          "stopReason": "stop",
+          "detail": "PI_SMOKE_OK",
+          "usage": {
+            "input": 78,
+            "output": 12,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 6,
+            "totalTokens": 90,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "run": "gemini-candidate",
+      "command": "wts open <existing worktree> pi with isolated startup defaults; real Pi, no tools",
+      "scope": "One configured chat model per provider; not all catalog models",
+      "thinking": "low",
+      "originalFilesUnchanged": true,
+      "results": [
+        {
+          "provider": "tokenkey-gemini",
+          "name": "tokenkey-gemini",
+          "model": "gemini-2.5-flash",
+          "requestedThinking": "low",
+          "status": "PASS",
+          "seconds": 3.0,
+          "selectedProvider": "tokenkey-gemini",
+          "selectedModel": "gemini-2.5-flash",
+          "stopReason": "stop",
+          "detail": "PI_SMOKE_OK",
+          "usage": {
+            "input": 45,
+            "output": 30,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 0,
+            "totalTokens": 75,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "run": "tokensea-retry",
+      "command": "wts open <existing worktree> pi with isolated startup defaults; real Pi, no tools",
+      "scope": "One configured chat model per provider; not all catalog models",
+      "thinking": "low",
+      "originalFilesUnchanged": true,
+      "results": [
+        {
+          "provider": "universal-pi-ff5906a5-e853-4722-861d-23b25511ec04",
+          "name": "tokensea",
+          "model": "gpt-6-luna",
+          "requestedThinking": "low",
+          "status": "PASS",
+          "seconds": 16.7,
+          "selectedProvider": "universal-pi-ff5906a5-e853-4722-861d-23b25511ec04",
+          "selectedModel": "gpt-6-luna",
+          "stopReason": "stop",
+          "detail": "PI_SMOKE_OK",
+          "usage": {
+            "input": 38,
+            "output": 8,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 0,
+            "totalTokens": 46,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "run": "gemini-repaired",
+      "command": "wts open <existing worktree> pi with isolated startup defaults; real Pi, no tools",
+      "scope": "One configured chat model per provider; not all catalog models",
+      "thinking": "low",
+      "originalFilesUnchanged": true,
+      "results": [
+        {
+          "provider": "tokenkey-gemini",
+          "name": "tokenkey-gemini",
+          "model": "gemini-2.5-flash",
+          "requestedThinking": "low",
+          "status": "PASS",
+          "seconds": 4.9,
+          "selectedProvider": "tokenkey-gemini",
+          "selectedModel": "gemini-2.5-flash",
+          "stopReason": "stop",
+          "detail": "PI_SMOKE_OK",
+          "usage": {
+            "input": 45,
+            "output": 22,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 0,
+            "totalTokens": 67,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

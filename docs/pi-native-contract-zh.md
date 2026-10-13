@@ -38,6 +38,8 @@
 
 用量查询脚本属于 CC Switch 元数据，只更新数据库，不重写 `models.json`。
 
+`compat.thinkingFormat` 的校验唯一 owner 为 `pi_config::validate_provider_node`；供应商保存与原生新增/替换使用同一路径，并覆盖 provider、model 和 modelOverrides 三个作用域。设为默认前也使用此 owner 检查整个原生目录，因为 Pi 会因任意非法节点拒绝加载全部模型。`reasoning_effort` 是请求字段名，OpenAI 风格对应的格式名是 `openai`；不自动猜测或改写其他非法格式。未知字段继续保留，此校验不冒充完整 Pi schema 校验。
+
 ### 并发与外部修改
 
 供应商标识是成员身份：`models.json.providers` 中存在该标识即为已启用。CC Switch 每次进入列表及应用启动时同步全部显式节点，不按内置 ID、认证字段或模型完整度过滤。原生配置发生修改后，以原生内容更新同 ID 的已保存档案；原生删除只改变启用状态。移除前保存目标节点的最新内容，数据库中的卡片和完整配置继续保留。
