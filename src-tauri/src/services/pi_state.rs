@@ -43,6 +43,11 @@ impl PiStateService {
     ) -> Result<(), AppError> {
         let _guard = futures::executor::block_on(state.proxy_service.lock_switch_for_app(PI_APP));
         let providers = read_pi_native_providers()?;
+        // Pi rejects the entire catalog if any entry has an invalid format.
+        // Reuse the write-boundary owner even for imported native entries.
+        for (id, config) in &providers {
+            crate::pi_config::validate_provider_node(id, config)?;
+        }
         let provider = providers.get(provider_id).ok_or_else(|| {
             AppError::InvalidInput(format!("Pi provider '{provider_id}' is not enabled"))
         })?;
@@ -127,6 +132,32 @@ mod tests {
         fs::write(&settings_path, "{broken").unwrap();
         assert!(PiStateService::set_default(&state, "custom", Some("one")).is_err());
         assert_eq!(fs::read_to_string(&settings_path).unwrap(), "{broken");
+    }
+
+    #[test]
+    #[serial]
+    fn default_selection_rejects_an_invalid_catalog_without_changing_settings() {
+        let _agent = TestAgentDir::new();
+        let state = AppState::new(Arc::new(Database::memory().unwrap()));
+        let models_path = crate::pi_config::get_pi_models_path().unwrap();
+        fs::create_dir_all(models_path.parent().unwrap()).unwrap();
+        fs::write(
+            &models_path,
+            r#"{"providers":{"valid":{"models":[{"id":"one"}]},"broken":{"compat":{"thinkingFormat":"reasoning_effort"}}}}"#,
+        )
+        .unwrap();
+        let settings_path = crate::pi_config::get_pi_settings_path().unwrap();
+        fs::write(
+            &settings_path,
+            r#"{"defaultProvider":"old","theme":"dark"}"#,
+        )
+        .unwrap();
+        let before = fs::read(&settings_path).unwrap();
+        let error = PiStateService::set_default(&state, "valid", Some("one"))
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("providers.broken.compat.thinkingFormat"));
+        assert_eq!(fs::read(&settings_path).unwrap(), before);
     }
 
     #[test]

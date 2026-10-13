@@ -355,6 +355,43 @@ mod tests {
 
     #[test]
     #[serial]
+    fn invalid_thinking_format_is_rejected_before_catalog_or_native_changes() {
+        let _agent = TestAgentDir::new();
+        let state = state();
+        let mut invalid = input("model-a");
+        invalid.settings_config["compat"] = json!({"thinkingFormat": "reasoning_effort"});
+        for add_to_live in [false, true] {
+            assert!(
+                ProviderService::add(&state, AppType::Pi, invalid.clone(), add_to_live).is_err()
+            );
+            assert!(state.db.get_all_providers("pi").unwrap().is_empty());
+            assert!(!crate::pi_config::pi_provider_exists("cc-switch-test").unwrap());
+        }
+        let valid = input("model-a");
+        ProviderService::add(&state, AppType::Pi, valid.clone(), true).unwrap();
+        let path = crate::pi_config::get_pi_models_path().unwrap();
+        let before = fs::read(&path).unwrap();
+        assert!(update(&state, Some("cc-switch-test"), invalid.clone()).is_err());
+        assert_eq!(fs::read(&path).unwrap(), before);
+        assert_eq!(
+            state
+                .db
+                .get_provider_by_id("cc-switch-test", "pi")
+                .unwrap()
+                .unwrap()
+                .settings_config,
+            valid.settings_config
+        );
+
+        // Saved legacy entries also pass the same guard when enabled.
+        ProviderService::remove_from_live_config(&state, AppType::Pi, "cc-switch-test").unwrap();
+        state.db.save_provider("pi", &invalid).unwrap();
+        assert!(ProviderService::switch(&state, AppType::Pi, "cc-switch-test").is_err());
+        assert!(!crate::pi_config::pi_provider_exists("cc-switch-test").unwrap());
+    }
+
+    #[test]
+    #[serial]
     fn membership_is_derived_only_from_models_json() {
         let _agent = TestAgentDir::new();
         let state = state();
