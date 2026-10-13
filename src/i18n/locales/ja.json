@@ -1099,7 +1099,9 @@
       "enabled": "Pi で有効にしました",
       "enableFailed": "Pi でこのプロバイダーを有効にできませんでした",
       "removed": "Pi から削除しました",
-      "writeConflict": "別のプロセスが Pi の設定を更新しています。しばらくしてから再試行してください。"
+      "writeConflict": "別のプロセスが Pi の設定を更新しています。しばらくしてから再試行してください。",
+      "defaultSet": "Pi のデフォルトプロバイダーを設定しました",
+      "defaultSetFailed": "Pi のデフォルトプロバイダーを設定できませんでした"
     },
     "form": {
       "providerKey": "プロバイダーキー",
@@ -1236,7 +1238,8 @@
       "templateDeletedUndo": "/{{slug}} を削除しました。Pi からこのコマンドはなくなります",
       "templateDeletedSub": "元に戻すと prompts/{{slug}}.md をそのまま書き戻します。",
       "templateRestored": "~/.pi/agent/prompts/{{slug}}.md を書き戻しました"
-    }
+    },
+    "selectDefaultModel": "デフォルトモデルを選択"
   },
   "appSwitcher": {
     "more": "その他のアプリ"

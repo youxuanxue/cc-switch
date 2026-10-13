@@ -517,7 +517,7 @@ describe("ProviderList Component", () => {
         .filter((props) => props.provider.id === "inactive-pi");
       expect(currentCards).not.toHaveLength(0);
       expect(inactiveCards).not.toHaveLength(0);
-      // Pi 只有启用 / 停用，没有路由、队列、健康状态
+      // Pi 支持设置默认供应商，但没有路由、队列、健康状态
       for (const props of [currentCards.at(-1), inactiveCards.at(-1)]) {
         expect(props.isCurrent).toBe(false);
         expect(props.isInConfig).toBe(true);
@@ -525,7 +525,7 @@ describe("ProviderList Component", () => {
         expect(props.presentation.move).toBeUndefined();
         expect(
           props.presentation.buttons.map((button: any) => button.key),
-        ).toEqual(["remove"]);
+        ).toEqual(["setDefault", "remove"]);
       }
     });
   });

@@ -22,6 +22,77 @@ const provider = (id: string, overrides: Partial<Provider> = {}): Provider => ({
   ...overrides,
 });
 
+describe("Pi startup defaults", () => {
+  it("shows the persisted default model and allows changing it without another provider", () => {
+    const p = provider("pi-custom", {
+      settingsConfig: { models: [{ id: "one" }, { id: "two" }] },
+    });
+    const setDefault = vi.fn();
+    const sections = buildAdditiveSections({
+      app: "pi",
+      t,
+      providers: [p],
+      isInConfig: () => true,
+      piDefaultProviderId: p.id,
+      piDefaultModelId: "one",
+      actions: {
+        add: vi.fn(),
+        remove: vi.fn(),
+        disableOmo: vi.fn(),
+        setDefault,
+      },
+    });
+    const card = sections[0].items[0].presentation;
+    expect(card.status?.label).toBe("providerCard.status.default");
+    expect(card.chips.some((chip) => chip.key === "defaultModel")).toBe(true);
+    card.buttons
+      .find((b) => b.key === "setDefault")!
+      .menu!.options[1].onSelect();
+    expect(setDefault).toHaveBeenCalledWith(p, "two");
+  });
+
+  it("repairs a stale default when the provider has one replacement model", () => {
+    const p = provider("pi-custom", {
+      settingsConfig: { models: [{ id: "replacement" }] },
+    });
+    const setDefault = vi.fn();
+    const sections = buildAdditiveSections({
+      app: "pi",
+      t,
+      providers: [p],
+      isInConfig: () => true,
+      piDefaultProviderId: p.id,
+      piDefaultModelId: "removed-model",
+      actions: {
+        add: vi.fn(),
+        remove: vi.fn(),
+        disableOmo: vi.fn(),
+        setDefault,
+      },
+    });
+    button(sections, p.id, "setDefault").onClick();
+    expect(setDefault).toHaveBeenCalledWith(p, "replacement");
+  });
+
+  it("blocks setting a default when no model is available", () => {
+    const sections = buildAdditiveSections({
+      app: "pi",
+      t,
+      providers: [provider("empty")],
+      isInConfig: () => true,
+      actions: {
+        add: vi.fn(),
+        remove: vi.fn(),
+        disableOmo: vi.fn(),
+        setDefault: vi.fn(),
+      },
+    });
+    expect(
+      sections[0].items[0].presentation.buttons[0].disabledReason,
+    ).toBeTruthy();
+  });
+});
+
 const official = provider("official", { category: "official" });
 const relay = provider("relay");
 const backup = provider("backup");

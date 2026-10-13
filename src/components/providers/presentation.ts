@@ -686,6 +686,8 @@ export interface AdditiveInput {
   isHermesManaged?: (provider: Provider) => boolean;
   /** Pi：读不到当前配置时一律不能改 */
   piStateUnavailable?: boolean;
+  piDefaultProviderId?: string | null;
+  piDefaultModelId?: string | null;
   actions: {
     add: (provider: Provider) => void;
     remove: (provider: Provider) => void;
@@ -790,6 +792,64 @@ export function buildAdditiveSections(input: AdditiveInput): ProviderSection[] {
     let status: CardPresentation["status"];
     let isDefault = false;
     let removeReason: string | undefined = piBlocked;
+
+    if (app === "pi") {
+      const config = p.settingsConfig as {
+        models?: { id?: string; name?: string }[];
+      };
+      const models = Array.isArray(config.models)
+        ? config.models.filter(
+            (model) => typeof model.id === "string" && model.id.trim(),
+          )
+        : [];
+      isDefault = input.piDefaultProviderId === p.id;
+      if (isDefault) {
+        status = {
+          label: t("providerCard.status.default"),
+          dot: "muted",
+        };
+        if (input.piDefaultModelId) {
+          chips.push({
+            key: "defaultModel",
+            label: t("providerCard.chip.defaultModel", {
+              model: input.piDefaultModelId,
+            }),
+            tone: "outline",
+          });
+        }
+      }
+      if (
+        !isDefault ||
+        models.length > 1 ||
+        models[0]?.id !== input.piDefaultModelId
+      ) {
+        buttons.push({
+          key: "setDefault",
+          label: t("providerCard.action.setDefault", {
+            defaultValue: "设为默认",
+          }),
+          onClick: () => actions.setDefault(p, models[0]?.id),
+          disabledReason:
+            piBlocked ??
+            (models.length === 0
+              ? t("notifications.openclawNoModels")
+              : undefined),
+          menu:
+            models.length > 1
+              ? {
+                  title: t("pi.selectDefaultModel", {
+                    defaultValue: "选择默认模型",
+                  }),
+                  options: models.map((model) => ({
+                    key: model.id!,
+                    label: model.name?.trim() || model.id!,
+                    onSelect: () => actions.setDefault(p, model.id),
+                  })),
+                }
+              : undefined,
+        });
+      }
+    }
 
     if (app === "openclaw") {
       isDefault = input.openclawDefault?.providerId === p.id;

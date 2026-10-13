@@ -336,6 +336,8 @@ export function ProviderList({
       isHermesManaged: (provider) =>
         isHermesReadOnlyProvider(provider.settingsConfig),
       piStateUnavailable: appId === "pi" && !isPiStateReady,
+      piDefaultProviderId: piCurrentState?.defaultProviderId,
+      piDefaultModelId: piCurrentState?.defaultModelId,
       actions: {
         add: onSwitch,
         remove: (provider) =>
@@ -363,6 +365,8 @@ export function ProviderList({
     currentOmoSlimId,
     hermesModelConfig?.provider,
     isPiStateReady,
+    piCurrentState?.defaultProviderId,
+    piCurrentState?.defaultModelId,
     onRemoveFromConfig,
     onDelete,
     onDisableOmo,

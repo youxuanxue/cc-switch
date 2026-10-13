@@ -11,6 +11,17 @@ pub(crate) fn get_pi_current_state(state: State<'_, AppState>) -> Result<PiCurre
 }
 
 #[tauri::command]
+pub(crate) fn set_pi_default_provider(
+    state: State<'_, AppState>,
+    id: String,
+    model: Option<String>,
+) -> Result<bool, String> {
+    PiStateService::set_default(state.inner(), &id, model.as_deref())
+        .map(|_| true)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 pub(crate) fn update_pi_provider_usage_script(
     state: State<'_, AppState>,
     id: String,

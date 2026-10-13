@@ -1,7 +1,7 @@
-//! Read-only Pi provider membership and global default reference.
+//! Pi provider membership and global default state.
 
 use crate::error::AppError;
-use crate::pi_config::{read_pi_native_defaults, read_pi_native_providers};
+use crate::pi_config::{read_pi_native_defaults, read_pi_native_providers, set_pi_native_defaults};
 use crate::store::AppState;
 use serde::Serialize;
 
@@ -12,6 +12,7 @@ const PI_APP: &str = "pi";
 pub(crate) struct PiCurrentState {
     pub enabled_provider_ids: Vec<String>,
     pub default_provider_id: Option<String>,
+    pub default_model_id: Option<String>,
 }
 
 pub(crate) struct PiStateService;
@@ -21,17 +22,58 @@ impl PiStateService {
         let _guard = futures::executor::block_on(state.proxy_service.lock_switch_for_app(PI_APP));
         let native = read_pi_native_providers()?;
         let enabled_provider_ids = native.keys().cloned().collect::<Vec<_>>();
-        let default_provider_id = match read_pi_native_defaults() {
-            Ok(defaults) => defaults.default_provider,
+        let defaults = match read_pi_native_defaults() {
+            Ok(defaults) => defaults,
             Err(error) => {
                 log::warn!("Failed to read Pi global default provider for advisory UI: {error}");
-                None
+                Default::default()
             }
         };
         Ok(PiCurrentState {
             enabled_provider_ids,
-            default_provider_id,
+            default_provider_id: defaults.default_provider,
+            default_model_id: defaults.default_model,
         })
+    }
+
+    pub(crate) fn set_default(
+        state: &AppState,
+        provider_id: &str,
+        model_id: Option<&str>,
+    ) -> Result<(), AppError> {
+        let _guard = futures::executor::block_on(state.proxy_service.lock_switch_for_app(PI_APP));
+        let providers = read_pi_native_providers()?;
+        let provider = providers.get(provider_id).ok_or_else(|| {
+            AppError::InvalidInput(format!("Pi provider '{provider_id}' is not enabled"))
+        })?;
+        let configured_models = provider
+            .get("models")
+            .and_then(serde_json::Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        let effective_model = model_id.or_else(|| {
+            configured_models
+                .first()
+                .and_then(|model| model.get("id").and_then(serde_json::Value::as_str))
+        });
+        if let Some(model_id) = effective_model {
+            let has_model = configured_models
+                .iter()
+                .any(|model| model.get("id").and_then(serde_json::Value::as_str) == Some(model_id));
+            if !has_model {
+                return Err(AppError::InvalidInput(format!(
+                    "Pi model '{model_id}' is not configured for provider '{provider_id}'"
+                )));
+            }
+        }
+        let effective_model = effective_model
+            .filter(|id| !id.trim().is_empty())
+            .ok_or_else(|| {
+                AppError::InvalidInput(format!(
+                    "Pi provider '{provider_id}' has no selectable model"
+                ))
+            })?;
+        set_pi_native_defaults(provider_id, effective_model)
     }
 }
 
@@ -43,6 +85,49 @@ mod tests {
     use serial_test::serial;
     use std::fs;
     use std::sync::Arc;
+
+    #[test]
+    #[serial]
+    fn default_selection_preserves_settings_and_rejects_invalid_targets() {
+        let _agent = TestAgentDir::new();
+        let state = AppState::new(Arc::new(Database::memory().unwrap()));
+        let models_path = crate::pi_config::get_pi_models_path().unwrap();
+        fs::create_dir_all(models_path.parent().unwrap()).unwrap();
+        fs::write(
+            &models_path,
+            r#"{"providers":{"custom":{"models":[{"id":"one"},{"id":"two"}]},"empty":{}}}"#,
+        )
+        .unwrap();
+        let settings_path = crate::pi_config::get_pi_settings_path().unwrap();
+        fs::write(&settings_path, r#"{"theme":"dark","nested":{"keep":true},"defaultProvider":"old","defaultModel":"old-model"}"#).unwrap();
+        PiStateService::set_default(&state, "custom", None).unwrap();
+        assert_eq!(
+            PiStateService::current(&state)
+                .unwrap()
+                .default_model_id
+                .as_deref(),
+            Some("one")
+        );
+        PiStateService::set_default(&state, "custom", Some("two")).unwrap();
+        let value: serde_json::Value =
+            serde_json::from_slice(&fs::read(&settings_path).unwrap()).unwrap();
+        assert_eq!(value["defaultProvider"], "custom");
+        assert_eq!(value["defaultModel"], "two");
+        assert_eq!(value["theme"], "dark");
+        assert_eq!(value["nested"]["keep"], true);
+        let before = fs::read(&settings_path).unwrap();
+        for (provider, model) in [
+            ("missing", None),
+            ("custom", Some("missing")),
+            ("empty", None),
+        ] {
+            assert!(PiStateService::set_default(&state, provider, model).is_err());
+            assert_eq!(fs::read(&settings_path).unwrap(), before);
+        }
+        fs::write(&settings_path, "{broken").unwrap();
+        assert!(PiStateService::set_default(&state, "custom", Some("one")).is_err());
+        assert_eq!(fs::read_to_string(&settings_path).unwrap(), "{broken");
+    }
 
     #[test]
     #[serial]

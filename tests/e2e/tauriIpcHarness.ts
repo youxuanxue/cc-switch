@@ -1,4 +1,6 @@
 import type { Page } from "@playwright/test";
+import type { Provider } from "../../src/types";
+import type { PiCurrentState } from "../../src/lib/api/pi";
 
 type CursorAuthMode = "login" | "userApiKey";
 type CursorRuntimeState =
@@ -53,7 +55,9 @@ export interface RecordedInvoke {
 }
 
 export interface TauriIpcHarnessOptions {
-  view?: "sessions" | "settings" | "auth";
+  view?: "sessions" | "settings" | "auth" | "providers";
+  piProviders?: Record<string, Provider>;
+  piCurrentState?: PiCurrentState;
   /** Preferred: persisted as `cc-switch.sessionManager.groupMode`. */
   groupMode?: GroupMode;
   /** @deprecated Use `groupMode`. Mapped: byProject/grouped → project, flat → time. */
@@ -118,6 +122,12 @@ export async function installTauriIpcHarness(
     pickedDirectories: options.pickedDirectories ?? [],
     canonicalWorkspaces: options.canonicalWorkspaces ?? {},
     sessionMessages: options.sessionMessages ?? {},
+    piProviders: options.piProviders ?? {},
+    piCurrentState: options.piCurrentState ?? {
+      enabledProviderIds: [],
+      defaultProviderId: null,
+      defaultModelId: null,
+    },
   };
 
   await page.addInitScript((fixture) => {
@@ -145,7 +155,10 @@ export async function installTauriIpcHarness(
     localStorage.setItem("cc-switch-last-view", fixture.view);
     localStorage.setItem("cc-switch-last-app", fixture.lastApp);
     localStorage.setItem("language", "zh");
-    localStorage.setItem("cc-switch.sessionManager.groupMode", fixture.groupMode);
+    localStorage.setItem(
+      "cc-switch.sessionManager.groupMode",
+      fixture.groupMode,
+    );
     localStorage.setItem(
       "cc-switch.sessionManager.expandedProjects",
       JSON.stringify(fixture.expandedProjects),
@@ -168,6 +181,8 @@ export async function installTauriIpcHarness(
       pickedDirectories: [...fixture.pickedDirectories],
       canonicalWorkspaces: { ...fixture.canonicalWorkspaces },
       sessionMessages: { ...fixture.sessionMessages },
+      piProviders: fixture.piProviders,
+      piCurrentState: { ...fixture.piCurrentState },
       calls: [] as BrowserCall[],
     };
 
@@ -265,7 +280,13 @@ export async function installTauriIpcHarness(
         case "get_config_dir":
           return `/home/e2e/.${String(rawPayload.app ?? "config")}`;
         case "get_providers":
-          return {};
+          return rawPayload.app === "pi" ? state.piProviders : {};
+        case "get_pi_current_state":
+          return { ...state.piCurrentState };
+        case "set_pi_default_provider":
+          state.piCurrentState.defaultProviderId = String(rawPayload.id);
+          state.piCurrentState.defaultModelId = String(rawPayload.model);
+          return true;
         case "get_current_provider":
           return "";
         case "get_proxy_status":
@@ -352,8 +373,7 @@ export async function installTauriIpcHarness(
               !(
                 session.providerId === providerId &&
                 session.sessionId === sessionId &&
-                (sourcePath === undefined ||
-                  session.sourcePath === sourcePath)
+                (sourcePath === undefined || session.sourcePath === sourcePath)
               ),
           );
           return true;

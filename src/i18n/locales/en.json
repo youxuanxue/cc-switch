@@ -1099,7 +1099,9 @@
       "enabled": "Enabled in Pi",
       "enableFailed": "Could not enable this provider in Pi",
       "removed": "Removed from Pi",
-      "writeConflict": "Another process is updating Pi's configuration. Try again shortly."
+      "writeConflict": "Another process is updating Pi's configuration. Try again shortly.",
+      "defaultSet": "Set as Pi default provider",
+      "defaultSetFailed": "Could not set Pi default provider"
     },
     "form": {
       "providerKey": "Provider key",
@@ -1236,7 +1238,8 @@
       "templateDeletedUndo": "Deleted /{{slug}}; Pi no longer has this command",
       "templateDeletedSub": "Undo writes prompts/{{slug}}.md back as it was. ",
       "templateRestored": "Wrote ~/.pi/agent/prompts/{{slug}}.md back"
-    }
+    },
+    "selectDefaultModel": "Select default model"
   },
   "appSwitcher": {
     "more": "More apps"

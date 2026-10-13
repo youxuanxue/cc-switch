@@ -1,7 +1,7 @@
 //! Thin adapter for Pi's native files.
 //!
-//! Pi owns account login and the active provider/model in `settings.json`.
-//! CC Switch only manages explicit provider entries in `models.json`.
+//! Pi owns account login and running sessions. CC Switch manages explicit
+//! provider entries in `models.json` and startup defaults in `settings.json`.
 
 use crate::config::{atomic_write_private, get_home_dir};
 use crate::error::AppError;
@@ -97,6 +97,43 @@ pub(crate) fn read_pi_native_defaults() -> Result<PiNativeDefaults, AppError> {
         default_model: optional_string(object, "defaultModel", &path)?,
         session_dir: optional_string(object, "sessionDir", &path)?,
     })
+}
+
+pub(crate) fn set_pi_native_defaults(provider: &str, model: &str) -> Result<(), AppError> {
+    let path = get_pi_settings_path()?;
+    let (mut value, expected_revision) = if path.exists() {
+        let bytes = read_file_limited(&path, "Pi settings")?;
+        let expected_revision = revision(&bytes);
+        (
+            parse_json5_value(&path, "Pi settings", bytes)?,
+            expected_revision,
+        )
+    } else {
+        (
+            Value::Object(Map::new()),
+            MISSING_MODELS_REVISION.to_string(),
+        )
+    };
+    let object = value.as_object_mut().ok_or_else(|| {
+        AppError::Config(format!(
+            "Pi settings root must be an object: {}",
+            path.display()
+        ))
+    })?;
+    object.insert(
+        "defaultProvider".to_string(),
+        Value::String(provider.to_string()),
+    );
+    object.insert("defaultModel".to_string(), Value::String(model.to_string()));
+    let mut bytes =
+        serde_json::to_vec_pretty(&value).map_err(|source| AppError::JsonSerialize { source })?;
+    bytes.push(b'\n');
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| AppError::io(parent, e))?;
+    }
+    // Use the same optimistic revision guard as provider-node writes.
+    ensure_models_revision(&path, &expected_revision)?;
+    atomic_write_private(&path, &bytes)
 }
 
 pub(crate) fn read_pi_native_providers() -> Result<IndexMap<String, Value>, AppError> {
@@ -417,7 +454,7 @@ fn ensure_models_revision(path: &Path, expected_revision: &str) -> Result<(), Ap
         Ok(())
     } else {
         Err(AppError::Conflict(format!(
-            "Pi models.json changed outside CC Switch: {}",
+            "Pi configuration changed outside CC Switch: {}",
             path.display()
         )))
     }
