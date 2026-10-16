@@ -32,6 +32,7 @@ use super::codex_items::{
     web_action_title, CallSpec, CommandInfo, Contents, FileChangeInfo, ItemRecord, RawItem,
     ResultSpec, Str,
 };
+use super::codex_resume::ResumeConfig;
 
 use super::utils::{
     extract_text, parse_timestamp_to_ms, path_basename, read_head_tail_lines, truncate_summary,
@@ -76,25 +77,52 @@ fn scan_sessions_in_roots_with_titles(
     roots: &[PathBuf],
     thread_titles: &HashMap<String, String>,
 ) -> Vec<SessionMeta> {
+    let config = read_codex_config_text()
+        .ok()
+        .and_then(|text| ResumeConfig::parse(&text));
+    scan_sessions_with_config(roots, thread_titles, config.as_ref(), &PARSE_CACHE)
+}
+
+fn scan_sessions_with_config(
+    roots: &[PathBuf],
+    thread_titles: &HashMap<String, String>,
+    config: Option<&ResumeConfig>,
+    cache: &FileParseCache<ParsedCodexSession>,
+) -> Vec<SessionMeta> {
     let mut files = Vec::new();
     for root in roots {
         collect_jsonl_files(root, &mut files);
     }
     let files = codex_rollout_file::dedupe_siblings(files);
 
-    // 缓存里只放文件本身解析出的结果；线程标题来自外部索引 / 数据库，
-    // 每轮重新读取后再覆盖上去，和逐个调用 parse_session_with_titles 等价。
-    let mut sessions = PARSE_CACHE.scan(files, scan_session_file);
-    for meta in &mut sessions {
-        if let Some(title) = thread_titles.get(&meta.session_id) {
-            meta.title = Some(truncate_summary(title, TITLE_MAX_CHARS));
-        }
-    }
-    sessions
+    // Keep only file-derived data in the cache; titles and provider selection
+    // must reflect the current configuration even when the rollout is unchanged.
+    cache
+        .scan(files, scan_session_file)
+        .into_iter()
+        .map(|parsed| {
+            let mut meta = parsed.meta;
+            if let Some(title) = thread_titles.get(&meta.session_id) {
+                meta.title = Some(truncate_summary(title, TITLE_MAX_CHARS));
+            }
+            meta.resume_command = Some(super::codex_resume::resume_command(
+                &meta.session_id,
+                parsed.model_provider.as_deref(),
+                config,
+            ));
+            meta
+        })
+        .collect()
 }
 
-/// 会话页每次打开都会全量扫描；没变过的文件直接复用上次的解析结果。
-static PARSE_CACHE: LazyLock<FileParseCache> = LazyLock::new(FileParseCache::new);
+#[derive(Clone)]
+struct ParsedCodexSession {
+    meta: SessionMeta,
+    model_provider: Option<String>,
+}
+
+static PARSE_CACHE: LazyLock<FileParseCache<ParsedCodexSession>> =
+    LazyLock::new(FileParseCache::new);
 
 fn load_thread_titles() -> HashMap<String, String> {
     let config_dir = get_codex_config_dir();
@@ -1919,7 +1947,7 @@ fn parse_session(path: &Path) -> Option<SessionMeta> {
 
 /// 列表扫描用：读不了返回 `Err`，不进解析缓存、下轮重试；读到了但不是会话返回 `Ok(None)`。
 /// 线程标题由调用方在拿到结果后覆盖，这里不带。
-fn scan_session_file(path: &Path) -> std::io::Result<Option<SessionMeta>> {
+fn scan_session_file(path: &Path) -> std::io::Result<Option<ParsedCodexSession>> {
     let lines = read_session_lines(path)?;
     Ok(parse_session_lines(path, lines, &HashMap::new()))
 }
@@ -1929,7 +1957,7 @@ fn parse_session_with_titles(
     thread_titles: &HashMap<String, String>,
 ) -> Option<SessionMeta> {
     let lines = read_session_lines(path).ok()?;
-    parse_session_lines(path, lines, thread_titles)
+    parse_session_lines(path, lines, thread_titles).map(|parsed| parsed.meta)
 }
 
 /// 列表元数据要读的行：开头取 id / 项目 / 首条消息，结尾取最后活跃时间与预览。
@@ -1975,13 +2003,14 @@ fn parse_session_lines(
     path: &Path,
     lines: SessionLines,
     thread_titles: &HashMap<String, String>,
-) -> Option<SessionMeta> {
+) -> Option<ParsedCodexSession> {
     let SessionLines {
         head,
         tail,
         fallback_last_active,
     } = lines;
     let mut session_id: Option<String> = None;
+    let mut model_provider: Option<String> = None;
     let mut project_dir: Option<String> = None;
     let mut created_at: Option<i64> = None;
     let mut first_user_message: Option<String> = None;
@@ -2005,6 +2034,12 @@ fn parse_session_lines(
                         .get("id")
                         .and_then(Value::as_str)
                         .map(|s| s.to_string());
+                }
+                if model_provider.is_none() {
+                    model_provider = payload
+                        .get("model_provider")
+                        .and_then(Value::as_str)
+                        .map(str::to_string);
                 }
                 if project_dir.is_none() {
                     project_dir = payload
@@ -2085,16 +2120,19 @@ fn parse_session_lines(
 
     let summary = summary.map(|text| truncate_summary(&text, 160));
 
-    Some(SessionMeta {
-        provider_id: PROVIDER_ID.to_string(),
-        session_id: session_id.clone(),
-        title,
-        summary,
-        project_dir,
-        created_at,
-        last_active_at,
-        source_path: Some(path.to_string_lossy().to_string()),
-        resume_command: Some(format!("codex resume {session_id}")),
+    Some(ParsedCodexSession {
+        model_provider,
+        meta: SessionMeta {
+            provider_id: PROVIDER_ID.to_string(),
+            session_id: session_id.clone(),
+            title,
+            summary,
+            project_dir,
+            created_at,
+            last_active_at,
+            source_path: Some(path.to_string_lossy().to_string()),
+            resume_command: Some(format!("codex resume {session_id}")),
+        },
     })
 }
 
@@ -2355,6 +2393,40 @@ mod tests {
 
         assert!(!compressed.exists());
         assert!(!plain.exists());
+    }
+
+    #[test]
+    fn resume_provider_refreshes_on_cache_hit_and_preserves_rollout() {
+        let temp = tempdir().unwrap();
+        let path = temp.path().join("session.jsonl");
+        let original = r#"{"type":"session_meta","payload":{"id":"old-thread","cwd":"/tmp/project","model_provider":"tokenkey"}}
+"#;
+        std::fs::write(&path, original).unwrap();
+        let cache = FileParseCache::new();
+        let roots = [temp.path().to_path_buf()];
+        let titles = HashMap::new();
+        for (text, expected) in [
+            ("model_provider='custom'\n[model_providers.custom]\nname='Relay'", "codex resume old-thread -c 'model_provider=\"custom\"'"),
+            ("model_provider='other'\n[model_providers.other]\nname='Other'", "codex resume old-thread -c 'model_provider=\"other\"'"),
+            ("model_provider='custom'\n[model_providers.custom]\nname='Relay'\n[model_providers.tokenkey]\nname='Restored'", "codex resume old-thread"),
+        ] {
+            let config = ResumeConfig::parse(text).unwrap();
+            let sessions = scan_sessions_with_config(&roots, &titles, Some(&config), &cache);
+            assert_eq!(sessions.len(), 1);
+            assert_eq!(sessions[0].resume_command.as_deref(), Some(expected));
+        }
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), original);
+        let compressed = compress_like_codex(&path);
+        let config =
+            ResumeConfig::parse("model_provider='custom'\n[model_providers.custom]\nname='Relay'")
+                .unwrap();
+        let sessions = scan_sessions_with_config(&roots, &titles, Some(&config), &cache);
+        assert_eq!(sessions.len(), 1);
+        assert_eq!(sessions[0].source_path.as_deref(), compressed.to_str());
+        assert_eq!(
+            sessions[0].resume_command.as_deref(),
+            Some("codex resume old-thread -c 'model_provider=\"custom\"'")
+        );
     }
 
     #[test]

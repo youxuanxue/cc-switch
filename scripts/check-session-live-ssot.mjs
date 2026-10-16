@@ -74,6 +74,14 @@ const root = parseRoot(process.argv.slice(2));
 const findings = [];
 
 const resumeRs = readRequired(root, "src-tauri/src/session_manager/resume.rs");
+const codexProvider = readRequired(
+  root,
+  "src-tauri/src/session_manager/providers/codex.rs",
+);
+const codexResume = readRequired(
+  root,
+  "src-tauri/src/session_manager/providers/codex_resume.rs",
+);
 const sessionCommands = readRequired(
   root,
   "src-tauri/src/commands/session_manager.rs",
@@ -105,6 +113,8 @@ const sessionManagerPage = readRequired(
 
 for (const file of [
   resumeRs,
+  codexProvider,
+  codexResume,
   sessionCommands,
   cursorOfficial,
   cursorProvider,
@@ -120,6 +130,33 @@ for (const file of [
       "required live-session SSOT file is missing",
     );
   }
+}
+
+for (const [file, pattern, message] of [
+  [
+    codexProvider,
+    /super::codex_resume::resume_command\s*\(/,
+    "Codex scanning must use the shared provider-aware resume command owner",
+  ],
+  [
+    codexProvider,
+    /fn resume_provider_refreshes_on_cache_hit_and_preserves_rollout\s*\(/,
+    "Codex resume must retain the cache-refresh and rollout-preservation regression",
+  ],
+  [
+    codexResume,
+    /fn missing_provider_uses_current_config_not_a_hardcoded_id\s*\(/,
+    "Codex resume must retain the missing-provider fallback regression",
+  ],
+]) {
+  requireContains(
+    findings,
+    file.relativePath,
+    file.source,
+    pattern,
+    FINDING_CODES.decisionOwner,
+    message,
+  );
 }
 
 if (!resumeRs.missing) {

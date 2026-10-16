@@ -8,6 +8,7 @@ export const REQUIRED_FORK_CONTRACTS = [
   "@fork-session-cleanup-probe-failure",
   "@fork-session-projects",
   "@fork-session-cursor-resume",
+  "@fork-session-codex-resume-provider",
 ] as const;
 
 export default class ForkContractReporter implements Reporter {

@@ -11,6 +11,89 @@ const cleanupSessions = ["Idle", "Live"].map((title) => ({
 }));
 
 test(
+  "Codex provider override reaches every resume action unchanged",
+  { tag: "@fork-session-codex-resume-provider" },
+  async ({ page, context }) => {
+    const command = "codex resume old-thread -c 'model_provider=\"custom\"'";
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    await installTauriIpcHarness(page, {
+      lastApp: "codex",
+      expandedProjects: ["/work/acme/app"],
+      sessions: [
+        {
+          providerId: "codex",
+          sessionId: "old-thread",
+          title: "Old TokenKey session",
+          projectDir: "/work/acme/app",
+          sourcePath: "/tmp/old-thread.jsonl",
+          lastActiveAt: Date.now(),
+          resumeCommand: command,
+        },
+      ],
+    });
+    await page.goto("/");
+    const row = page.getByRole("button", {
+      name: "Old TokenKey session",
+      exact: true,
+    });
+    await row.hover();
+    await page
+      .getByRole("button", { name: /在 .* 中恢复 Old TokenKey session/ })
+      .click();
+    await expect
+      .poll(async () =>
+        (await getRecordedInvokes(page))
+          .filter((call) => call.command === "launch_session_terminal")
+          .map((call) => ({
+            command: call.payload.command,
+            cwd: call.payload.cwd,
+          })),
+      )
+      .toEqual([{ command, cwd: "/work/acme/app" }]);
+    await row.hover();
+    await page
+      .getByRole("button", {
+        name: "复制「Old TokenKey session」的恢复命令",
+        exact: true,
+      })
+      .click();
+    await expect
+      .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+      .toBe(command);
+
+    await row.click();
+    await page.getByRole("button", { name: "恢复会话", exact: true }).click();
+    await expect
+      .poll(async () =>
+        (await getRecordedInvokes(page))
+          .filter((call) => call.command === "launch_session_terminal")
+          .map((call) => call.payload.command),
+      )
+      .toEqual([command, command]);
+    await page
+      .getByRole("button", { name: "更多恢复方式", exact: true })
+      .click();
+    await page.getByRole("menuitem", { name: /复制恢复命令/ }).click();
+    await expect
+      .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+      .toBe(command);
+    await page.getByRole("button", { name: "站内终端", exact: true }).click();
+    await expect
+      .poll(async () =>
+        (await getRecordedInvokes(page))
+          .filter((call) => call.command === "spawn_session_pty")
+          .map((call) => ({
+            command: call.payload.command,
+            cwd: call.payload.cwd,
+            sessionId: call.payload.sessionId,
+          })),
+      )
+      .toEqual([{ command, cwd: "/work/acme/app", sessionId: "old-thread" }]);
+    await expect(page.getByText("运行中", { exact: true })).toBeVisible();
+  },
+);
+
+test(
   "inactive cleanup excludes live sessions and waits for confirmation",
   { tag: "@fork-session-live-cleanup" },
   async ({ page }) => {

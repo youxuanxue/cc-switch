@@ -18,6 +18,13 @@ function writeFixtureFile(root: string, path: string, source: string) {
 
 function conformingSources(): Record<string, string> {
   return {
+    "src-tauri/src/session_manager/providers/codex.rs": `
+fn scan() { super::codex_resume::resume_command(); }
+fn resume_provider_refreshes_on_cache_hit_and_preserves_rollout() {}
+`,
+    "src-tauri/src/session_manager/providers/codex_resume.rs": `
+fn missing_provider_uses_current_config_not_a_hardcoded_id() {}
+`,
     "src-tauri/src/session_manager/resume.rs": `
 fn is_cc_switch_binary_command(command: &str) -> bool {
     command_basename(first) == "cc-switch"
@@ -137,6 +144,21 @@ afterEach(() => {
 });
 
 describe("check-session-live-ssot", () => {
+  it("rejects bypassing Codex provider-aware resume generation", () => {
+    const result = runChecker(
+      createFixture({
+        "src-tauri/src/session_manager/providers/codex.rs": `
+fn scan() { format!("codex resume {session_id}"); }
+fn resume_provider_refreshes_on_cache_hit_and_preserves_rollout() {}
+`,
+      }),
+    );
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      "shared provider-aware resume command owner",
+    );
+  });
+
   it("passes against the real repository", () => {
     const result = runChecker(process.cwd());
     expect(result.stderr).toBe("");

@@ -22,17 +22,17 @@ pub const TITLE_MAX_CHARS: usize = 80;
 /// 重建整张表，已删除文件的条目随之丢弃，内存占用和会话数量成正比（约每千个
 /// 会话 1 MB）。解析结果必须只取决于文件本身——依赖外部数据的部分（如 Codex 的
 /// 线程标题）要在拿到缓存结果后再叠加。
-pub struct FileParseCache {
-    entries: Mutex<HashMap<PathBuf, CachedParse>>,
+pub struct FileParseCache<T = SessionMeta> {
+    entries: Mutex<HashMap<PathBuf, CachedParse<T>>>,
 }
 
-struct CachedParse {
+struct CachedParse<T> {
     modified: Option<SystemTime>,
     len: u64,
-    meta: Option<SessionMeta>,
+    meta: Option<T>,
 }
 
-impl FileParseCache {
+impl<T: Clone> FileParseCache<T> {
     pub fn new() -> Self {
         Self {
             entries: Mutex::new(HashMap::new()),
@@ -40,9 +40,9 @@ impl FileParseCache {
     }
 
     /// 按顺序解析 `files`，没变过的文件直接用缓存。返回能解析出会话的那些。
-    pub fn scan<F>(&self, files: Vec<PathBuf>, parse: F) -> Vec<SessionMeta>
+    pub fn scan<F>(&self, files: Vec<PathBuf>, parse: F) -> Vec<T>
     where
-        F: Fn(&Path) -> io::Result<Option<SessionMeta>>,
+        F: Fn(&Path) -> io::Result<Option<T>>,
     {
         // 锁中毒（上次扫描 panic）时丢掉旧缓存重来，不影响本次结果
         let mut previous = match self.entries.lock() {
@@ -93,7 +93,7 @@ impl FileParseCache {
     }
 }
 
-impl Default for FileParseCache {
+impl<T: Clone> Default for FileParseCache<T> {
     fn default() -> Self {
         Self::new()
     }

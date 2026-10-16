@@ -325,6 +325,8 @@ export async function installTauriIpcHarness(
           return { isGitRepo: false, workspaces: [] };
         case "launch_session_terminal":
           return { action: "launched" };
+        case "spawn_session_pty":
+          return { action: "launched", ptyId: "e2e-session-pty" };
         case "classify_session_live_states":
           if (fixture.liveProbeError) throw new Error(fixture.liveProbeError);
           return (
