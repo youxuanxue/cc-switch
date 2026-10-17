@@ -349,6 +349,16 @@ export const getSessionLastText = (session: SessionMeta) => {
   return summary;
 };
 
+/** Normalize a directory only for grouping; keep the first observed path for display. */
+const getProjectDirKey = (projectDir: string) => {
+  const isWindowsPath = /^(?:[A-Za-z]:[\\/]|\\\\[^\\])/.test(projectDir);
+  if (!isWindowsPath) return projectDir.replace(/(.)\/+$/, "$1");
+  return projectDir
+    .replace(/\//g, "\\")
+    .replace(/(.)\\+$/, "$1")
+    .toLowerCase();
+};
+
 export const groupSessionsByProviderAndDirectory = (
   sessions: SessionMeta[],
   unknownDirectoryLabel: string,
@@ -411,21 +421,38 @@ export const groupSessionsByProject = (
   const projectGroupMap = new Map<string, SessionProjectGroup>();
 
   sessions.forEach((session) => {
-    const identity = resolveWtsProjectIdentity(session.projectDir, options);
+    const projectDir = session.projectDir?.trim() || null;
+    const identity = resolveWtsProjectIdentity(projectDir, options);
+    const isWorktree = identity.worktreeSlug !== null;
+    const rawKey = projectDir
+      ? isWorktree
+        ? identity.key
+        : getProjectDirKey(projectDir)
+      : UNKNOWN_PROJECT_DIR_KEY;
+    const key = options?.caseInsensitive ? rawKey.toLowerCase() : rawKey;
     const workspaceDir = normalizeProjectDir(session.projectDir);
-    let projectGroup = projectGroupMap.get(identity.key);
+    let projectGroup = projectGroupMap.get(key);
 
     if (!projectGroup) {
       projectGroup = {
-        key: identity.key,
-        projectDir: identity.canonicalDir,
-        label: identity.canonicalDir ? identity.label : unknownDirectoryLabel,
+        key,
+        projectDir: isWorktree
+          ? identity.canonicalDir
+          : normalizeProjectDir(projectDir),
+        label: isWorktree
+          ? identity.canonicalDir
+            ? identity.label
+            : unknownDirectoryLabel
+          : normalizeProjectDir(projectDir)
+            ? getBaseName(normalizeProjectDir(projectDir)) ||
+              normalizeProjectDir(projectDir)!
+            : unknownDirectoryLabel,
         sessions: [],
         providerIds: [],
         workspaceDirs: [],
         latest: 0,
       };
-      projectGroupMap.set(identity.key, projectGroup);
+      projectGroupMap.set(key, projectGroup);
       projectGroups.push(projectGroup);
     }
 
