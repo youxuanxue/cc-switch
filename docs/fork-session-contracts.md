@@ -4,6 +4,7 @@
 
 | 用户承诺 | 实现 owner | 验证 |
 | --- | --- | --- |
+| Codex 旧会话 provider 已缺失时，统一恢复命令显式使用当前有效 provider；刷新列表重算，保留仍有效的历史 provider，不改写会话文件 | `src-tauri/src/session_manager/providers/codex_resume.rs`；`codex.rs` 扫描缓存之后调用 | Rust `codex_resume::tests`、`resume_provider_refreshes_on_cache_hit_and_preserves_rollout`；`session-actions.spec.ts` 的 `@fork-session-codex-resume-provider` |
 | 刷新、选择、清理、新建在列表页直接可达；新建使用所选应用、项目与工作区；无项目不启动 | `SessionManagerPage.tsx`、`NewSessionDialog.tsx`、`newSessionLaunch.ts` | `session-actions.spec.ts` 的 `@fork-session-actions`；`newSessionLaunch.test.ts` |
 | 折叠项目可整组选取；搜索后只选当前匹配结果；取消删除不写数据 | `SessionManagerPage.tsx`、`sessionCapabilities.ts` | `@fork-session-actions` |
 | 跨应用会话按物理项目归并，WTS 工作区回到主项目 | `sessions/utils.ts` | `session-project-view.spec.ts` 的 `@fork-session-projects`；`sessionUtils.test.ts` |

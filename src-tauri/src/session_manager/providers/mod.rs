@@ -2,6 +2,7 @@ mod blocks;
 pub mod claude;
 pub mod codex;
 mod codex_items;
+mod codex_resume;
 pub mod cursor;
 pub mod gemini;
 pub mod grokbuild;
