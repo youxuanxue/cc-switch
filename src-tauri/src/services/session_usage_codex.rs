@@ -3848,13 +3848,13 @@ mod tests {
         let caches = replay_caches().lock().unwrap();
         match first_timeline {
             Some(first_timeline) => {
-                assert_eq!(caches.parent_timelines.len(), 1);
-                assert!(Arc::ptr_eq(
-                    &first_timeline,
-                    &caches.parent_timelines[&parent].timeline
-                ));
+                let cached = caches
+                    .parent_timelines
+                    .get(&parent)
+                    .expect("parent timeline should be cached");
+                assert!(Arc::ptr_eq(&first_timeline, &cached.timeline));
             }
-            None => assert!(caches.parent_timelines.is_empty()),
+            None => assert!(!caches.parent_timelines.contains_key(&parent)),
         }
         Ok(())
     }

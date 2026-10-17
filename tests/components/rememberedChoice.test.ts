@@ -10,7 +10,7 @@ const METRICS = ["tokens", "requests", "cost"] as const;
 describe("remembered usage choices", () => {
   afterEach(() => {
     vi.restoreAllMocks();
-    localStorage.removeItem(KEY);
+    window.localStorage.removeItem(KEY);
   });
 
   it("reads back what was written", () => {
@@ -25,12 +25,14 @@ describe("remembered usage choices", () => {
   });
 
   it("keeps working when storage is unavailable", () => {
-    vi.spyOn(window.localStorage, "getItem").mockImplementation(() => {
-      throw new Error("denied");
-    });
-    vi.spyOn(window.localStorage, "setItem").mockImplementation(() => {
-      throw new Error("denied");
-    });
+    vi.spyOn(window, "localStorage", "get").mockReturnValue({
+      getItem: () => {
+        throw new Error("denied");
+      },
+      setItem: () => {
+        throw new Error("denied");
+      },
+    } as unknown as Storage);
     expect(() => writeRememberedChoice(KEY, "cost")).not.toThrow();
     expect(readRememberedChoice(KEY, METRICS, "tokens")).toBe("tokens");
   });
