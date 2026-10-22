@@ -114,12 +114,17 @@ objc2 = "0.5"
 objc2-app-kit = { version = "0.2", features = ["NSColor"] }
 
 # Keep local debug builds usable while cutting DevCache deps debuginfo
-# (often multi-GiB under host-clean Cargo Bound). Release profile unchanged.
+# (often multi-GiB under host-clean Cargo Bound). `package."*"` overrides the
+# top-level profile for every package including the root, so re-assert
+# line-tables for this crate. Release profile unchanged.
 [profile.dev]
 debug = "line-tables-only"
 
 [profile.dev.package."*"]
 debug = false
+
+[profile.dev.package.cc-switch]
+debug = "line-tables-only"
 
 # Optimize release binary size to help reduce AppImage footprint
 [profile.release]
