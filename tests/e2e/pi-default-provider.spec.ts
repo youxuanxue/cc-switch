@@ -37,12 +37,15 @@ test("sets Pi defaults and changes the model on the default provider through the
     .locator("div.group.relative.rounded-panel")
     .filter({ has: page.getByText("beta Pi", { exact: true }) });
   await expect(alpha.getByText("alpha-one", { exact: false })).toBeVisible();
-  await beta.getByRole("button", { name: "设为默认", exact: true }).click();
-  await page.getByRole("menuitem", { name: "beta-one", exact: true }).click();
+  const chooseDefaultModel = async (model: string) => {
+    await beta.getByRole("button", { name: "beta Pi 的更多操作" }).click();
+    await page.getByRole("menuitem", { name: "设为默认", exact: true }).click();
+    await page.getByRole("menuitem", { name: model, exact: true }).click();
+  };
+  await chooseDefaultModel("beta-one");
   await expect(beta.getByText("beta-one", { exact: false })).toBeVisible();
   await expect(alpha.getByText("alpha-one", { exact: false })).toHaveCount(0);
-  await beta.getByRole("button", { name: "设为默认", exact: true }).click();
-  await page.getByRole("menuitem", { name: "beta-two", exact: true }).click();
+  await chooseDefaultModel("beta-two");
   await expect(beta.getByText("beta-two", { exact: false })).toBeVisible();
   const writes = (await getRecordedInvokes(page)).filter(
     (call) => call.command === "set_pi_default_provider",

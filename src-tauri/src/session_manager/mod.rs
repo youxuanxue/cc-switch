@@ -1,5 +1,7 @@
 pub mod cache;
 pub mod content;
+#[cfg(windows)]
+pub(crate) mod hermes_wsl;
 pub mod model;
 pub mod providers;
 pub mod prune;
@@ -16,7 +18,10 @@ use std::time::Instant;
 use crate::codex_config::get_codex_config_dir;
 // 其余模型类型从 `session_manager::model` 引用
 pub use model::SessionMessage;
-use providers::{claude, codex, cursor, gemini, grokbuild, hermes, mcode, openclaw, opencode, pi};
+use providers::{
+    agy, claude, codex, cursor, dsh, gemini, grokbuild, hermes, kimi, mcode, omp, openclaw,
+    opencode, pi,
+};
 use resume::{is_session_live, LiveProcessView, ProcessView};
 
 #[derive(Debug, Clone, Serialize)]
@@ -173,6 +178,10 @@ pub fn scan_sessions() -> Vec<SessionMeta> {
     sessions.extend(r8);
     sessions.extend(r9);
     sessions.extend(mcode::scan_sessions());
+    sessions.extend(omp::scan_sessions());
+    sessions.extend(kimi::scan_sessions());
+    sessions.extend(dsh::scan_sessions());
+    sessions.extend(agy::scan_sessions());
 
     sessions.sort_by(|a, b| {
         let a_ts = a.last_active_at.or(a.created_at).unwrap_or(0);
@@ -202,10 +211,14 @@ pub fn load_messages(provider_id: &str, source_path: &str) -> Result<Vec<Session
         "opencode" => opencode::load_messages(path),
         "openclaw" => openclaw::load_messages(path),
         "gemini" => gemini::load_messages(path),
+        "agy" => agy::load_messages(path),
         "grokbuild" => grokbuild::load_messages(path),
         "hermes" => hermes::load_messages(path),
         "pi" => pi::load_messages(path),
         "cursor" => cursor::load_messages(path),
+        "kimi" => kimi::load_messages(path),
+        "omp" => omp::load_messages(path),
+        "dsh" => dsh::load_messages(path),
         _ => Err(format!("Unsupported provider: {provider_id}")),
     }
 }
@@ -254,6 +267,17 @@ fn delete_session_source(
     session_id: &str,
     source_path: &str,
 ) -> Result<bool, String> {
+    if provider_id == "dsh" {
+        return Err(
+            "Delete this session in DeepSeek Harness to keep its native history consistent".into(),
+        );
+    }
+    if provider_id == "agy" {
+        return Err(
+            "Delete this session in Antigravity to keep its binary store and summaries consistent"
+                .into(),
+        );
+    }
     if provider_id == "mcode" {
         return Err(
             "Delete this session in MCode so its runtime state and history are removed together"
@@ -308,6 +332,8 @@ fn delete_session_with_roots(
         "hermes" => hermes::delete_session(&validated_root, &validated_source, session_id),
         "pi" => pi::delete_session(&validated_root, &validated_source, session_id),
         "cursor" => cursor::delete_session(&validated_root, &validated_source, session_id),
+        "omp" => omp::delete_session(&validated_root, &validated_source, session_id),
+        "kimi" => kimi::delete_session(&validated_root, &validated_source, session_id),
         _ => Err(format!("Unsupported provider: {provider_id}")),
     }
 }
@@ -323,6 +349,10 @@ fn provider_roots(provider_id: &str) -> Result<Vec<PathBuf>, String> {
         "hermes" => vec![crate::hermes_config::get_hermes_dir().join("sessions")],
         "pi" => pi::session_roots(),
         "cursor" => cursor::session_roots(),
+        "kimi" => kimi::session_roots(),
+        "dsh" => dsh::session_roots(),
+        "agy" => agy::session_roots(),
+        "omp" => omp::session_roots(),
         _ => return Err(format!("Unsupported provider: {provider_id}")),
     };
 

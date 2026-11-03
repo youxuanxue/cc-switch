@@ -15,6 +15,8 @@ export default defineConfig({
     exclude: [...configDefaults.exclude, "tests/e2e/**"],
     setupFiles: ["./tests/setupGlobals.ts", "./tests/setupTests.ts"],
     globals: true,
+    // Pi 表单用例在整套并行时会超过默认 5s，单独跑约 1.5s。
+    testTimeout: 15_000,
     coverage: {
       reporter: ["text", "lcov"],
     },
