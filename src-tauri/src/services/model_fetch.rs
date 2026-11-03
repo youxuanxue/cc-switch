@@ -322,6 +322,11 @@ pub fn build_models_url_candidates(
         if !root.is_empty() && root.contains("://") {
             candidates.push(format!("{root}/v1/models"));
             candidates.push(format!("{root}/models"));
+            // 阿里云百炼 / 千问 Token Plan：`/apps/anthropic` 入口不提供 /v1/models，
+            // 模型列表只在 OpenAI 兼容路径 `/compatible-mode/v1/models` 下。
+            if trimmed.ends_with("/apps/anthropic") {
+                candidates.push(format!("{root}/compatible-mode/v1/models"));
+            }
         }
     }
 
@@ -679,8 +684,30 @@ mod tests {
                 "https://dashscope.aliyuncs.com/apps/anthropic/v1/models",
                 "https://dashscope.aliyuncs.com/v1/models",
                 "https://dashscope.aliyuncs.com/models",
+                "https://dashscope.aliyuncs.com/compatible-mode/v1/models",
             ]
         );
+    }
+
+    #[test]
+    fn test_candidates_qianwen_token_plan_compatible_mode() {
+        let c = build_models_url_candidates(
+            "https://token-plan.maas.qianwenaiapi.com/apps/anthropic/",
+            false,
+            None,
+        )
+        .unwrap();
+        assert_eq!(
+            c.last().map(String::as_str),
+            Some("https://token-plan.maas.qianwenaiapi.com/compatible-mode/v1/models")
+        );
+    }
+
+    #[test]
+    fn test_candidates_plain_anthropic_suffix_skips_compatible_mode() {
+        let c =
+            build_models_url_candidates("https://api.example.com/anthropic", false, None).unwrap();
+        assert!(!c.iter().any(|u| u.contains("compatible-mode")));
     }
 
     #[test]
@@ -804,5 +831,84 @@ mod tests {
         let json = r#"{"object":"list","data":[]}"#;
         let resp: ModelsResponse = serde_json::from_str(json).unwrap();
         assert!(resp.data.unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_parse_response_with_non_zhipu_models_field() {
+        // 回归 #7593：部分供应商的 /models 响应在标准 `data` 之外还附带顶层
+        // `models` 字段（条目为 OpenAI 风格的 {id, ...}，无 slug）。整个响应
+        // 的反序列化不应因此失败。
+        let json = r#"{
+            "data": [
+                {"id": "model-a", "name": "model-a", "max_tokens": 32000, "context_window": 400000},
+                {"id": "model-b", "name": "model-b", "max_tokens": 32000, "context_window": 1000000}
+            ],
+            "models": [
+                {"id": "model-a", "name": "model-a", "max_tokens": 32000, "context_window": 400000},
+                {"id": "model-b", "name": "model-b", "max_tokens": 32000, "context_window": 1000000}
+            ],
+            "success": true
+        }"#;
+        let resp: ModelsResponse = serde_json::from_str(json).unwrap();
+        let data = resp.data.unwrap();
+        assert_eq!(data.len(), 2);
+        assert_eq!(data[0].id, "model-a");
+        assert_eq!(data[1].id, "model-b");
+    }
+
+    #[test]
+    fn agy_google_model_catalog_keeps_other_protocol_ids() {
+        let models = catalog_and_gemini_model_ids(Some(serde_json::json!([
+            {"name":"models/gemini-test"}, {"id":"models/custom-id"},
+            {"slug":"slug","name":"models/ignored"}, {"name":"Display name"}
+        ])));
+        assert_eq!(
+            models,
+            ["gemini-test", "models/custom-id", "ignored", "Display name"]
+        );
+    }
+
+    #[test]
+    fn test_catalog_model_ids_name_then_slug_then_id() {
+        // `models` 条目解析：Gemini name（去掉 models/ 前缀）优先，再 slug，再 id。
+        let json = r#"{"models": [
+            {"slug": "glm-4.7"},
+            {"id": "openai-shaped"},
+            {"name": "neither-slug-nor-id"},
+            {}
+        ]}"#;
+        let resp: ModelsResponse = serde_json::from_str(json).unwrap();
+        let ids = catalog_and_gemini_model_ids(resp.models);
+        assert_eq!(
+            ids,
+            vec![
+                "glm-4.7".to_string(),
+                "openai-shaped".to_string(),
+                "neither-slug-nor-id".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn test_parse_response_tolerates_any_models_shape() {
+        // #7593：data 合法时，任意形状的 models 都不能让整体解析失败
+        for models in [
+            r#"["a","b"]"#,
+            r#"{"count":1}"#,
+            "2",
+            r#"[{"slug":"glm","id":123}]"#,
+            r#"[{"slug":1}]"#,
+        ] {
+            let json = format!(r#"{{"data":[{{"id":"model-a"}}],"models":{models}}}"#);
+            let resp: ModelsResponse = serde_json::from_str(&json).unwrap();
+            assert_eq!(resp.data.unwrap()[0].id, "model-a");
+        }
+        // 无 data 时：非字符串 id 跳过，slug 照常可用
+        let resp: ModelsResponse =
+            serde_json::from_str(r#"{"models":[{"slug":"glm","id":123}]}"#).unwrap();
+        assert_eq!(
+            catalog_and_gemini_model_ids(resp.models),
+            vec!["glm".to_string()]
+        );
     }
 }

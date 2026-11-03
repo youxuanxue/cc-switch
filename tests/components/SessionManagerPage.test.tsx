@@ -8,6 +8,7 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { DEFAULT_VISIBLE_APPS } from "@/config/appConfig";
 import {
   getSessionProjectGroupKey,
   UNKNOWN_PROJECT_DIR_KEY,
@@ -194,6 +195,37 @@ describe("SessionManagerPage", () => {
     setSessionFixtures(sessions, messages);
   });
 
+  it("shows Oh My Pi sessions from its app and in the all-apps filter", async () => {
+    setSessionFixtures(
+      [
+        {
+          providerId: "omp",
+          sessionId: "omp-native-session",
+          title: "Native OMP conversation",
+          sourcePath: "/mock/omp/sessions/project/native.jsonl",
+          lastActiveAt: Date.now(),
+        },
+      ],
+      {},
+    );
+    setSettings({ visibleApps: { ...DEFAULT_VISIBLE_APPS, omp: true } });
+    renderPage("omp");
+    expect(
+      await screen.findByText("Native OMP conversation"),
+    ).toBeInTheDocument();
+    await openAppMenu();
+    const menu = await screen.findByRole("menu");
+    expect(
+      within(menu).getByRole("menuitemradio", { name: /Oh My Pi/ }),
+    ).toBeInTheDocument();
+    await userEvent.click(
+      within(menu).getByRole("menuitemradio", { name: /全部应用/ }),
+    );
+    expect(
+      await screen.findByText("Native OMP conversation"),
+    ).toBeInTheDocument();
+  });
+
   it("surfaces a relative Pi sessionDir instead of presenting an empty scan as authoritative", async () => {
     const discovery = vi.spyOn(piApi, "getSessionDiscovery").mockResolvedValue({
       status: "requires_project_context",
@@ -274,8 +306,8 @@ describe("SessionManagerPage", () => {
     await openAppMenu();
     const menu = await screen.findByRole("menu");
     const items = within(menu).getAllByRole("menuitemradio");
-    // 全部应用 + 9 个来源 + Cursor（fork 会话面），按会话数从多到少
-    expect(items).toHaveLength(11);
+    // 全部应用 + 13 个来源 + Cursor
+    expect(items).toHaveLength(15);
     expect(items[0]).toHaveTextContent("全部应用5");
     expect(items[1]).toHaveTextContent("Codex3");
     expect(items[items.length - 1]).toHaveTextContent("无会话");
@@ -306,6 +338,10 @@ describe("SessionManagerPage", () => {
         hermes: false,
         pi: false,
         mcode: false,
+        kimi: false,
+        dsh: false,
+        agy: false,
+        omp: false,
       },
     });
     renderPage("codex");
@@ -638,6 +674,10 @@ describe("SessionManagerPage", () => {
         hermes: false,
         pi: false,
         mcode: false,
+        kimi: false,
+        dsh: false,
+        agy: false,
+        omp: false,
       },
     });
     setSessionFixtures(

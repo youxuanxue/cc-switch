@@ -28,7 +28,7 @@
 - 供应商级 `name`、`baseUrl`、`apiKey`、`api`、`headers`
 - 模型级 `id`、`name`、`reasoning`、`input`、`contextWindow`、`maxTokens`
 
-已有配置中的其他字段原样保留。供应商是否可管理只取决于节点是否显式存在于 `models.json.providers`：`anthropic`、`openai`、`deepseek` 等 Pi 内置 ID，以及带有未知字段的节点，都按普通显式配置同步。CC Switch 不把 Pi 运行时合并出的内置模型复制回配置，也不解析或执行 `apiKey`、Header 中的环境变量和命令表达式。请求仍由 Pi 自己发出。
+已有配置中的其他字段原样保留。供应商是否可管理只取决于节点是否显式存在于 `models.json.providers`：`anthropic`、`openai`、`deepseek` 等 Pi 内置 ID，以及带有未知字段的节点，都按普通显式配置同步。CC Switch 不把 Pi 运行时合并出的内置模型复制回配置，也不执行 `apiKey`、Header 中的命令表达式。请求仍由 Pi 自己发出；只有 CC Switch 自己发的用量查询会按 Pi 的规则展开 `apiKey` 里的环境变量引用（`$NAME` / `${NAME}`），展开结果不写回配置，`!command` 和未设置的变量都按没有 Key 处理。
 
 供应商列表显示全局默认供应商与模型，并提供显式“设为默认”操作。启用仍只向 `models.json` 加入供应商；设置默认会校验已启用的供应商和显式模型，再原子写入全局 `settings.json` 的 `defaultProvider/defaultModel`，保留其他设置。没有显式模型的节点仍可管理，但不提供默认设置。移除或删除全局默认供应商时，在原有确认框内给出非阻塞提醒，不改写默认项。编辑供应商同样不修改默认项；失效引用和回退由 Pi 原生处理。
 
