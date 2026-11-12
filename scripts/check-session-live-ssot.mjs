@@ -110,6 +110,18 @@ const sessionManagerPage = readRequired(
   root,
   "src/components/sessions/SessionManagerPage.tsx",
 );
+const sessionManagerMod = readRequired(
+  root,
+  "src-tauri/src/session_manager/mod.rs",
+);
+const sessionManagerPrune = readRequired(
+  root,
+  "src-tauri/src/session_manager/prune.rs",
+);
+const sessionManagerWts = readRequired(
+  root,
+  "src-tauri/src/session_manager/wts.rs",
+);
 
 for (const file of [
   resumeRs,
@@ -433,6 +445,58 @@ if (!sessionManagerPage.missing) {
     /useSessionLiveTerminal/,
     FINDING_CODES.launchConsumer,
     "SessionManagerPage must compose live terminal through useSessionLiveTerminal",
+  );
+}
+
+for (const file of [sessionManagerMod, sessionManagerPrune, sessionManagerWts]) {
+  if (file.missing) {
+    addFinding(
+      findings,
+      FINDING_CODES.pruneSafety,
+      file.relativePath,
+      "required session prune SSOT file is missing",
+    );
+  }
+}
+
+if (!sessionManagerMod.missing) {
+  requireContains(
+    findings,
+    sessionManagerMod.relativePath,
+    sessionManagerMod.source,
+    /codeg_sidebar\.is_session_protected/,
+    FINDING_CODES.pruneSafety,
+    "session_manager::mod must protect open Codeg sidebar sessions during live classification and delete guards",
+  );
+}
+
+if (!sessionManagerPrune.missing) {
+  requireContains(
+    findings,
+    sessionManagerPrune.relativePath,
+    sessionManagerPrune.source,
+    /codeg::prune_non_sidebar_codeg_state/,
+    FINDING_CODES.pruneSafety,
+    "session_manager::prune must prune non-sidebar Codeg state during storage cleanup",
+  );
+}
+
+if (!sessionManagerWts.missing) {
+  requireContains(
+    findings,
+    sessionManagerWts.relativePath,
+    sessionManagerWts.source,
+    /WORKTREE_MARKERS.*-wt-.*-main-.*-task-/,
+    FINDING_CODES.pruneSafety,
+    "session_manager::wts must recognize -wt-, -main-, and -task- worktree markers",
+  );
+  requireContains(
+    findings,
+    sessionManagerWts.relativePath,
+    sessionManagerWts.source,
+    /sidebar\.is_open_folder/,
+    FINDING_CODES.pruneSafety,
+    "session_manager::wts must protect worktrees currently open in the Codeg sidebar",
   );
 }
 
