@@ -595,11 +595,16 @@ fn assess_registered_wts_worktree(
         skip_reason: None,
     };
 
+    let no_unmerged_commits = merged || git_branch_at_or_behind_base(main_repo, worktree)?;
+
     if sidebar.is_open_folder(&canonical) {
         assessment.skip_reason = Some("in_sidebar".to_string());
     } else if !clean {
         assessment.skip_reason = Some("dirty".to_string());
-    } else if session_count > 0 && !merged && !sidebar.is_closed_folder(&canonical) {
+    } else if session_count > 0
+        && !merged
+        && !(sidebar.is_closed_folder(&canonical) && no_unmerged_commits)
+    {
         assessment.skip_reason = Some("has_sessions".to_string());
     } else {
         assessment.removable = true;
@@ -682,6 +687,21 @@ fn git_rev_parse(repo: &Path, reference: &str) -> Result<String, String> {
         ));
     }
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+fn git_branch_at_or_behind_base(main_repo: &Path, worktree: &Path) -> Result<bool, String> {
+    let base_refs = git_integration_refs(main_repo);
+    for base in &base_refs {
+        if let Ok(anc) = run_git(
+            worktree,
+            &["merge-base", "--is-ancestor", "HEAD", base.as_str()],
+        ) {
+            if anc.status.success() {
+                return Ok(true);
+            }
+        }
+    }
+    Ok(false)
 }
 
 fn git_branch_fully_merged(main_repo: &Path, worktree: &Path) -> Result<bool, String> {
@@ -1019,44 +1039,71 @@ mod tests {
             .status()
             .expect("git worktree add open");
 
-        let closed_wt = root.path().join("sub2api-main-closed1");
+        let closed_at_base_wt = root.path().join("sub2api-main-closed1");
         std::process::Command::new("git")
             .arg("-C")
             .arg(&repo)
             .args([
                 "worktree",
                 "add",
-                closed_wt.to_str().expect("path"),
+                closed_at_base_wt.to_str().expect("path"),
                 "-b",
                 "cv-main-closed1",
             ])
             .status()
-            .expect("git worktree add closed");
-        fs::write(closed_wt.join("change.txt"), "delta").expect("change");
+            .expect("git worktree add closed at base");
+
+        let closed_unmerged_wt = root.path().join("sub2api-main-unmerged1");
         std::process::Command::new("git")
             .arg("-C")
-            .arg(&closed_wt)
+            .arg(&repo)
+            .args([
+                "worktree",
+                "add",
+                closed_unmerged_wt.to_str().expect("path"),
+                "-b",
+                "cv-main-unmerged1",
+            ])
+            .status()
+            .expect("git worktree add closed unmerged");
+        fs::write(closed_unmerged_wt.join("change.txt"), "delta").expect("change");
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(&closed_unmerged_wt)
             .args(["add", "change.txt"])
             .status()
             .expect("git add");
         std::process::Command::new("git")
             .arg("-C")
-            .arg(&closed_wt)
-            .args(["commit", "-m", "closed worktree change"])
+            .arg(&closed_unmerged_wt)
+            .args(["commit", "-m", "unmerged worktree change"])
             .status()
             .expect("git commit");
 
-        let sessions = vec![SessionMeta {
-            provider_id: "codex".to_string(),
-            session_id: "sess-closed".to_string(),
-            title: None,
-            summary: None,
-            project_dir: Some(closed_wt.to_string_lossy().replace('\\', "/")),
-            created_at: None,
-            last_active_at: None,
-            source_path: None,
-            resume_command: None,
-        }];
+        let sessions = vec![
+            SessionMeta {
+                provider_id: "codex".to_string(),
+                session_id: "sess-closed".to_string(),
+                title: None,
+                summary: None,
+                project_dir: Some(closed_at_base_wt.to_string_lossy().replace('\\', "/")),
+                created_at: None,
+                last_active_at: None,
+                source_path: None,
+                resume_command: None,
+            },
+            SessionMeta {
+                provider_id: "codex".to_string(),
+                session_id: "sess-unmerged".to_string(),
+                title: None,
+                summary: None,
+                project_dir: Some(closed_unmerged_wt.to_string_lossy().replace('\\', "/")),
+                created_at: None,
+                last_active_at: None,
+                source_path: None,
+                resume_command: None,
+            },
+        ];
 
         let mut sidebar = CodegSidebarSnapshot::default();
         sidebar
@@ -1064,7 +1111,12 @@ mod tests {
             .insert(open_wt.canonicalize().expect("canon open"));
         sidebar
             .closed_folder_paths
-            .insert(closed_wt.canonicalize().expect("canon closed"));
+            .insert(closed_at_base_wt.canonicalize().expect("canon closed"));
+        sidebar.closed_folder_paths.insert(
+            closed_unmerged_wt
+                .canonicalize()
+                .expect("canon closed unmerged"),
+        );
 
         let result = super::classify_stale_registered_wts_worktrees_with_sidebar(
             root.path(),
@@ -1075,9 +1127,14 @@ mod tests {
 
         assert_eq!(result.removable.len(), 1);
         assert_eq!(result.removable[0].slug, "closed1");
-        assert_eq!(result.skipped.len(), 1);
+        assert_eq!(result.skipped.len(), 2);
         assert_eq!(result.skipped[0].slug, "open1");
         assert_eq!(result.skipped[0].skip_reason.as_deref(), Some("in_sidebar"));
+        assert_eq!(result.skipped[1].slug, "unmerged1");
+        assert_eq!(
+            result.skipped[1].skip_reason.as_deref(),
+            Some("has_sessions")
+        );
     }
 
     #[test]
