@@ -1,4 +1,5 @@
 pub mod cache;
+pub mod codeg;
 pub mod content;
 #[cfg(windows)]
 pub(crate) mod hermes_wsl;
@@ -74,19 +75,30 @@ pub fn classify_session_live_states(
     probes: &[SessionLiveProbe],
     view: &dyn ProcessView,
 ) -> Vec<SessionLiveState> {
+    let codeg_sidebar = codeg::load_default_codeg_sidebar_snapshot();
+    classify_session_live_states_with_codeg(probes, view, &codeg_sidebar)
+}
+
+pub fn classify_session_live_states_with_codeg(
+    probes: &[SessionLiveProbe],
+    view: &dyn ProcessView,
+    codeg_sidebar: &codeg::CodegSidebarSnapshot,
+) -> Vec<SessionLiveState> {
     probes
         .iter()
         .map(|probe| {
             let lock_dir = (probe.provider_id == "codex").then(get_codex_config_dir);
-            SessionLiveState {
-                provider_id: probe.provider_id.clone(),
-                session_id: probe.session_id.clone(),
-                is_live: is_session_live(
+            let is_live = codeg_sidebar.is_session_protected(&probe.session_id)
+                || is_session_live(
                     &probe.session_id,
                     probe.source_path.as_deref().map(Path::new),
                     lock_dir.as_deref(),
                     view,
-                ),
+                );
+            SessionLiveState {
+                provider_id: probe.provider_id.clone(),
+                session_id: probe.session_id.clone(),
+                is_live,
             }
         })
         .collect()

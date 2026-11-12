@@ -470,6 +470,22 @@ describe("session utils", () => {
       key: "/Users/feng/Codes/cc-switch-wt-foo",
       worktreeSlug: "bar",
     });
+    expect(
+      resolveWtsProjectIdentity("/Users/feng/Codes/sub2api-main-hpchwj"),
+    ).toEqual({
+      key: "/Users/feng/Codes/sub2api",
+      canonicalDir: "/Users/feng/Codes/sub2api",
+      label: "sub2api",
+      worktreeSlug: "hpchwj",
+    });
+    expect(
+      resolveWtsProjectIdentity("/Users/feng/Codes/sub2api-task-2"),
+    ).toEqual({
+      key: "/Users/feng/Codes/sub2api",
+      canonicalDir: "/Users/feng/Codes/sub2api",
+      label: "sub2api",
+      worktreeSlug: "2",
+    });
     expect(resolveWtsProjectIdentity("/Users/feng/Codes/cc-switch")).toEqual({
       key: "/Users/feng/Codes/cc-switch",
       canonicalDir: "/Users/feng/Codes/cc-switch",
