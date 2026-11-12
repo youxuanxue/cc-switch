@@ -5,6 +5,7 @@ use serde::Serialize;
 
 use crate::config::get_home_dir;
 
+use super::codeg::{self, CodegPruneResult};
 use super::providers::utils::remove_dir_if_present;
 use super::providers::{claude, codex, cursor, gemini, grokbuild};
 use super::wts::{self, WtsWorktreePruneResult};
@@ -20,6 +21,7 @@ pub struct SessionStoragePruneResult {
     pub cursor_desktop_workspaces_removed: u32,
     pub cursor_desktop_workspaces_retained: u32,
     pub wts_worktrees: WtsWorktreePruneResult,
+    pub codeg: CodegPruneResult,
 }
 
 impl SessionStoragePruneResult {
@@ -31,6 +33,7 @@ impl SessionStoragePruneResult {
             + self.grok_partitions_removed
             + self.cursor_desktop_workspaces_removed
             + self.wts_worktrees.total_removed()
+            + self.codeg.total_removed()
     }
 }
 
@@ -43,6 +46,7 @@ pub struct CursorDesktopWorkspacePruneResult {
 pub fn prune_session_storage() -> Result<SessionStoragePruneResult, String> {
     let desktop = prune_orphan_cursor_desktop_workspaces()?;
     let wts = wts::prune_stale_wts_worktrees_in(&wts::default_codes_dir())?;
+    let codeg = codeg::prune_non_sidebar_codeg_state().unwrap_or_default();
     Ok(SessionStoragePruneResult {
         cursor: cursor::prune_empty_agent_cli_buckets()?,
         claude_partitions_removed: claude::prune_empty_partitions()?,
@@ -52,6 +56,7 @@ pub fn prune_session_storage() -> Result<SessionStoragePruneResult, String> {
         cursor_desktop_workspaces_removed: desktop.removed,
         cursor_desktop_workspaces_retained: desktop.retained,
         wts_worktrees: wts,
+        codeg,
     })
 }
 

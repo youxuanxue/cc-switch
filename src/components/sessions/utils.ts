@@ -160,7 +160,7 @@ export const getSessionDirectoryGroupKey = (
   return `${providerId}:${trimmed || UNKNOWN_PROJECT_DIR_KEY}`;
 };
 
-const WTS_WORKTREE_MARKER = "-wt-";
+const WTS_WORKTREE_MARKERS = ["-wt-", "-main-", "-task-"] as const;
 
 export interface WtsProjectIdentity {
   key: string;
@@ -203,10 +203,18 @@ export const resolveWtsProjectIdentity = (
   const parent = sepIndex >= 0 ? normalized.slice(0, sepIndex) : "";
   const base = sepIndex >= 0 ? normalized.slice(sepIndex + 1) : normalized;
   const sep = sepIndex >= 0 ? normalized[sepIndex] : "/";
-  const markerIndex = base.lastIndexOf(WTS_WORKTREE_MARKER);
+  let markerIndex = -1;
+  let matchedMarker = "";
+  for (const marker of WTS_WORKTREE_MARKERS) {
+    const idx = base.lastIndexOf(marker);
+    if (idx > markerIndex) {
+      markerIndex = idx;
+      matchedMarker = marker;
+    }
+  }
   const repo = markerIndex > 0 ? base.slice(0, markerIndex) : "";
   const slug =
-    markerIndex > 0 ? base.slice(markerIndex + WTS_WORKTREE_MARKER.length) : "";
+    markerIndex > 0 ? base.slice(markerIndex + matchedMarker.length) : "";
 
   const identity =
     repo && slug

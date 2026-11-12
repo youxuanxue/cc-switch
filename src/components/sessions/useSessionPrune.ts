@@ -60,7 +60,9 @@ export function useSessionPrune() {
         result.grokPartitionsRemoved +
         result.cursorDesktopWorkspacesRemoved +
         result.wtsWorktrees.removed +
-        result.wtsWorktrees.gitRemoved;
+        result.wtsWorktrees.gitRemoved +
+        (result.codeg?.conversationsRemoved ?? 0) +
+        (result.codeg?.foldersRemoved ?? 0);
       if (total === 0) {
         if (
           result.cursor.bucketsRetained > 0 ||

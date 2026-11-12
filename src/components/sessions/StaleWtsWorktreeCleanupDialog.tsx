@@ -34,7 +34,10 @@ function summarizeSkipped(items: WtsRegisteredWorktreeAssessment[]) {
   for (const item of items) {
     if (item.skipReason === "dirty") {
       dirty += 1;
-    } else if (item.skipReason === "has_sessions") {
+    } else if (
+      item.skipReason === "has_sessions" ||
+      item.skipReason === "in_sidebar"
+    ) {
       hasSessions += 1;
     }
   }

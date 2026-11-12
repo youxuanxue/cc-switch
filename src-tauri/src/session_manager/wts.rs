@@ -4,8 +4,11 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use crate::session_manager::codeg::{self, CodegSidebarSnapshot};
 use crate::session_manager::providers::utils::remove_dir_if_present;
 use crate::session_manager::SessionMeta;
+
+const WORKTREE_MARKERS: [&str; 3] = ["-wt-", "-main-", "-task-"];
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -50,7 +53,6 @@ pub fn list_wts_workspaces(project_dir: &Path) -> Result<WtsProjectContext, Stri
     let parent = project_dir
         .parent()
         .ok_or_else(|| "无法读取项目的父目录".to_string())?;
-    let prefix = format!("{name}-wt-");
 
     let mut workspaces = Vec::new();
     for entry in fs::read_dir(parent).map_err(|error| format!("无法列出工作区：{error}"))? {
@@ -65,14 +67,11 @@ pub fn list_wts_workspaces(project_dir: &Path) -> Result<WtsProjectContext, Stri
         let Some(file_name) = file_name.to_str() else {
             continue;
         };
-        let Some(slug) = file_name.strip_prefix(&prefix) else {
+        let Some(slug) = extract_sibling_worktree_slug(name, file_name) else {
             continue;
         };
-        if !is_valid_wts_slug(slug) {
-            continue;
-        }
         workspaces.push(WtsWorkspace {
-            slug: slug.to_string(),
+            slug,
             path: entry.path().to_string_lossy().into_owned(),
         });
     }
@@ -82,6 +81,18 @@ pub fn list_wts_workspaces(project_dir: &Path) -> Result<WtsProjectContext, Stri
         is_git_repo: is_git_checkout(&project_dir),
         workspaces,
     })
+}
+
+fn extract_sibling_worktree_slug(repo_name: &str, dir_name: &str) -> Option<String> {
+    for marker in WORKTREE_MARKERS {
+        let prefix = format!("{repo_name}{marker}");
+        if let Some(slug) = dir_name.strip_prefix(&prefix) {
+            if is_valid_wts_slug(slug) {
+                return Some(slug.to_string());
+            }
+        }
+    }
+    None
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -114,17 +125,10 @@ pub fn is_main_git_repo(path: &Path) -> bool {
     path.join(".git").is_dir()
 }
 
-/// Remove sibling `{repo}-wt-*` directories that git no longer registers, plus
-/// ephemeral temp worktrees git still tracks.
-pub fn prune_stale_wts_worktrees_in(codes_dir: &Path) -> Result<WtsWorktreePruneResult, String> {
-    let mut result = WtsWorktreePruneResult {
-        removed: 0,
-        git_removed: 0,
-        retained: 0,
-        skipped_dirty: 0,
-    };
+fn discover_main_git_repos_in(codes_dir: &Path) -> Result<Vec<PathBuf>, String> {
+    let mut repos = Vec::new();
     if !codes_dir.is_dir() {
-        return Ok(result);
+        return Ok(repos);
     }
 
     for entry in fs::read_dir(codes_dir)
@@ -139,10 +143,39 @@ pub fn prune_stale_wts_worktrees_in(codes_dir: &Path) -> Result<WtsWorktreePrune
         if !entry.file_type().is_ok_and(|kind| kind.is_dir()) {
             continue;
         }
-        let repo_path = entry.path();
-        if !is_main_git_repo(&repo_path) {
+        let path = entry.path();
+        if is_main_git_repo(&path) {
+            repos.push(path);
             continue;
         }
+        let Ok(children) = fs::read_dir(&path) else {
+            continue;
+        };
+        for child in children.flatten() {
+            if !child.file_type().is_ok_and(|kind| kind.is_dir()) {
+                continue;
+            }
+            let child_path = child.path();
+            if is_main_git_repo(&child_path) {
+                repos.push(child_path);
+            }
+        }
+    }
+
+    Ok(repos)
+}
+
+/// Remove sibling `{repo}-wt-*` / `{repo}-main-*` / `{repo}-task-*` directories
+/// that git no longer registers, plus ephemeral temp worktrees git still tracks.
+pub fn prune_stale_wts_worktrees_in(codes_dir: &Path) -> Result<WtsWorktreePruneResult, String> {
+    let mut result = WtsWorktreePruneResult {
+        removed: 0,
+        git_removed: 0,
+        retained: 0,
+        skipped_dirty: 0,
+    };
+
+    for repo_path in discover_main_git_repos_in(codes_dir)? {
         result.merge(prune_stale_wts_worktrees_for_repo(&repo_path)?);
     }
 
@@ -163,6 +196,7 @@ pub fn prune_stale_wts_worktrees_for_repo(
     }
 
     let _ = run_git(&project_dir, &["worktree", "prune"]);
+    prune_submodule_worktrees(&project_dir);
     let registered = git_worktree_paths(&project_dir)?;
 
     let mut result = WtsWorktreePruneResult {
@@ -220,15 +254,14 @@ fn is_ephemeral_worktree_path(worktree: &Path, main_repo: &Path) -> bool {
     let Some(repo_name) = main_repo.file_name().and_then(|name| name.to_str()) else {
         return false;
     };
-    if canonical.parent() == main_repo.parent() {
-        let prefix = format!("{repo_name}-wt-");
-        if canonical
+    if canonical.parent() == main_repo.parent()
+        && canonical
             .file_name()
             .and_then(|name| name.to_str())
-            .is_some_and(|name| name.starts_with(&prefix))
-        {
-            return false;
-        }
+            .and_then(|name| extract_sibling_worktree_slug(repo_name, name))
+            .is_some()
+    {
+        return false;
     }
     let value = canonical.to_string_lossy();
     value.contains("/T/") || value.contains("/tmp/") || value.contains("/temp/")
@@ -267,6 +300,36 @@ fn git_working_tree_clean(path: &Path) -> Result<bool, String> {
     Ok(output.stdout.is_empty())
 }
 
+fn prune_submodule_worktrees(main_repo: &Path) {
+    let modules_root = main_repo.join(".git").join("modules");
+    if !modules_root.is_dir() {
+        return;
+    }
+    prune_submodule_git_dirs(&modules_root);
+}
+
+fn prune_submodule_git_dirs(dir: &Path) {
+    if dir.join("HEAD").is_file() && dir.join("config").is_file() {
+        let _ = run_git(dir, &["worktree", "prune"]);
+    }
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        if !entry.file_type().is_ok_and(|kind| kind.is_dir()) {
+            continue;
+        }
+        let name = entry.file_name();
+        if matches!(
+            name.to_str(),
+            Some("objects" | "refs" | "hooks" | "info" | "logs" | "worktrees")
+        ) {
+            continue;
+        }
+        prune_submodule_git_dirs(&entry.path());
+    }
+}
+
 fn git_worktree_remove(repo: &Path, worktree: &Path) -> Result<(), String> {
     if !git_working_tree_clean(worktree)? {
         return Err(format!(
@@ -289,6 +352,7 @@ fn git_worktree_remove(repo: &Path, worktree: &Path) -> Result<(), String> {
             String::from_utf8_lossy(&prune.stderr).trim()
         ));
     }
+    prune_submodule_worktrees(repo);
     if worktree.exists() {
         return Err(format!(
             "Worktree still exists after removal: {}",
@@ -359,45 +423,41 @@ pub fn session_counts_by_project_dir(sessions: &[SessionMeta]) -> HashMap<PathBu
 pub fn classify_stale_registered_wts_worktrees(
     sessions: &[SessionMeta],
 ) -> Result<ClassifyStaleRegisteredWtsResult, String> {
-    classify_stale_registered_wts_worktrees_in(&default_codes_dir(), sessions)
+    let sidebar = codeg::load_default_codeg_sidebar_snapshot();
+    classify_stale_registered_wts_worktrees_with_sidebar(&default_codes_dir(), sessions, &sidebar)
 }
 
+#[cfg(test)]
 fn classify_stale_registered_wts_worktrees_in(
     codes_dir: &Path,
     sessions: &[SessionMeta],
+) -> Result<ClassifyStaleRegisteredWtsResult, String> {
+    classify_stale_registered_wts_worktrees_with_sidebar(
+        codes_dir,
+        sessions,
+        &CodegSidebarSnapshot::default(),
+    )
+}
+
+pub fn classify_stale_registered_wts_worktrees_with_sidebar(
+    codes_dir: &Path,
+    sessions: &[SessionMeta],
+    sidebar: &CodegSidebarSnapshot,
 ) -> Result<ClassifyStaleRegisteredWtsResult, String> {
     let session_counts = session_counts_by_project_dir(sessions);
     let mut result = ClassifyStaleRegisteredWtsResult {
         removable: Vec::new(),
         skipped: Vec::new(),
     };
-    if !codes_dir.is_dir() {
-        return Ok(result);
-    }
 
-    for entry in fs::read_dir(codes_dir)
-        .map_err(|error| {
-            format!(
-                "Failed to read codes directory {}: {error}",
-                codes_dir.display()
-            )
-        })?
-        .flatten()
-    {
-        if !entry.file_type().is_ok_and(|kind| kind.is_dir()) {
-            continue;
-        }
-        let repo_path = entry.path();
-        if !is_main_git_repo(&repo_path) {
-            continue;
-        }
+    for repo_path in discover_main_git_repos_in(codes_dir)? {
         let registered = git_worktree_paths(&repo_path)?;
         for worktree in registered {
             if canonical_path(&worktree) == canonical_path(&repo_path) {
                 continue;
             }
             let Some(assessment) =
-                assess_registered_wts_worktree(&repo_path, &worktree, &session_counts)?
+                assess_registered_wts_worktree(&repo_path, &worktree, &session_counts, sidebar)?
             else {
                 continue;
             };
@@ -422,13 +482,34 @@ pub fn remove_stale_registered_wts_worktrees(
     paths: &[String],
 ) -> Result<RemoveStaleRegisteredWtsResult, String> {
     let sessions = crate::session_manager::scan_sessions();
-    remove_stale_registered_wts_worktrees_in(&default_codes_dir(), paths, &sessions)
+    let sidebar = codeg::load_default_codeg_sidebar_snapshot();
+    remove_stale_registered_wts_worktrees_with_sidebar(
+        &default_codes_dir(),
+        paths,
+        &sessions,
+        &sidebar,
+    )
 }
 
+#[cfg(test)]
 fn remove_stale_registered_wts_worktrees_in(
     codes_dir: &Path,
     paths: &[String],
     sessions: &[SessionMeta],
+) -> Result<RemoveStaleRegisteredWtsResult, String> {
+    remove_stale_registered_wts_worktrees_with_sidebar(
+        codes_dir,
+        paths,
+        sessions,
+        &CodegSidebarSnapshot::default(),
+    )
+}
+
+pub fn remove_stale_registered_wts_worktrees_with_sidebar(
+    codes_dir: &Path,
+    paths: &[String],
+    sessions: &[SessionMeta],
+    sidebar: &CodegSidebarSnapshot,
 ) -> Result<RemoveStaleRegisteredWtsResult, String> {
     let mut result = RemoveStaleRegisteredWtsResult {
         removed: 0,
@@ -450,7 +531,7 @@ fn remove_stale_registered_wts_worktrees_in(
             continue;
         };
 
-        match assess_registered_wts_worktree(&main_repo, &worktree, &session_counts)? {
+        match assess_registered_wts_worktree(&main_repo, &worktree, &session_counts, sidebar)? {
             Some(assessment) if assessment.removable => {}
             Some(assessment) => {
                 result.failed.push(WtsWorktreeRemovalFailure {
@@ -489,6 +570,7 @@ fn assess_registered_wts_worktree(
     main_repo: &Path,
     worktree: &Path,
     session_counts: &HashMap<PathBuf, u32>,
+    sidebar: &CodegSidebarSnapshot,
 ) -> Result<Option<WtsRegisteredWorktreeAssessment>, String> {
     let Some(slug) = sibling_wts_slug(main_repo, worktree) else {
         return Ok(None);
@@ -513,9 +595,16 @@ fn assess_registered_wts_worktree(
         skip_reason: None,
     };
 
-    if !clean {
+    let no_unmerged_commits = merged || git_branch_at_or_behind_base(main_repo, worktree)?;
+
+    if sidebar.is_open_folder(&canonical) {
+        assessment.skip_reason = Some("in_sidebar".to_string());
+    } else if !clean {
         assessment.skip_reason = Some("dirty".to_string());
-    } else if session_count > 0 && !merged {
+    } else if session_count > 0
+        && !merged
+        && !(sidebar.is_closed_folder(&canonical) && no_unmerged_commits)
+    {
         assessment.skip_reason = Some("has_sessions".to_string());
     } else {
         assessment.removable = true;
@@ -531,26 +620,35 @@ fn sibling_wts_slug(main_repo: &Path, worktree: &Path) -> Option<String> {
     if worktree.parent()? != main_repo.parent()? {
         return None;
     }
-    let prefix = format!("{repo_name}-wt-");
-    worktree
-        .file_name()?
-        .to_str()?
-        .strip_prefix(&prefix)
-        .filter(|slug| is_valid_wts_slug(slug))
-        .map(str::to_owned)
+    let dir_name = worktree.file_name()?.to_str()?;
+    extract_sibling_worktree_slug(repo_name, dir_name)
 }
 
 fn resolve_main_repo_for_worktree(worktree: &Path, codes_dir: &Path) -> Option<PathBuf> {
     let worktree = canonical_path(worktree);
-    let parent = worktree.parent()?;
-    if canonical_path(parent) != canonical_path(codes_dir) {
+    let parent = canonical_path(worktree.parent()?);
+    let codes_canonical = canonical_path(codes_dir);
+    let in_codes = parent == codes_canonical || parent.parent() == Some(codes_canonical.as_path());
+    if !in_codes {
         return None;
     }
     let name = worktree.file_name()?.to_str()?;
-    let marker = name.find("-wt-")?;
-    let repo_name = &name[..marker];
-    let main_repo = parent.join(repo_name);
-    is_main_git_repo(&main_repo).then(|| canonical_path(&main_repo))
+    for marker in WORKTREE_MARKERS {
+        let mut search_from = 0;
+        while let Some(offset) = name[search_from..].find(marker) {
+            let idx = search_from + offset;
+            let repo_name = &name[..idx];
+            let slug = &name[idx + marker.len()..];
+            if !repo_name.is_empty() && is_valid_wts_slug(slug) {
+                let main_repo = parent.join(repo_name);
+                if is_main_git_repo(&main_repo) {
+                    return Some(canonical_path(&main_repo));
+                }
+            }
+            search_from = idx + marker.len();
+        }
+    }
+    None
 }
 
 fn git_current_branch(path: &Path) -> Option<String> {
@@ -566,14 +664,17 @@ fn git_current_branch(path: &Path) -> Option<String> {
     }
 }
 
-fn git_default_integration_branch(main_repo: &Path) -> Option<String> {
-    for candidate in ["main", "master"] {
-        let output = run_git(main_repo, &["rev-parse", "--verify", candidate]).ok()?;
+fn git_integration_refs(main_repo: &Path) -> Vec<String> {
+    let mut refs = Vec::new();
+    for candidate in ["origin/main", "origin/master", "main", "master"] {
+        let Ok(output) = run_git(main_repo, &["rev-parse", "--verify", candidate]) else {
+            continue;
+        };
         if output.status.success() {
-            return Some(candidate.to_string());
+            refs.push(candidate.to_string());
         }
     }
-    None
+    refs
 }
 
 fn git_rev_parse(repo: &Path, reference: &str) -> Result<String, String> {
@@ -588,6 +689,21 @@ fn git_rev_parse(repo: &Path, reference: &str) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
+fn git_branch_at_or_behind_base(main_repo: &Path, worktree: &Path) -> Result<bool, String> {
+    let base_refs = git_integration_refs(main_repo);
+    for base in &base_refs {
+        if let Ok(anc) = run_git(
+            worktree,
+            &["merge-base", "--is-ancestor", "HEAD", base.as_str()],
+        ) {
+            if anc.status.success() {
+                return Ok(true);
+            }
+        }
+    }
+    Ok(false)
+}
+
 fn git_branch_fully_merged(main_repo: &Path, worktree: &Path) -> Result<bool, String> {
     let Some(branch) = git_current_branch(worktree) else {
         return Ok(false);
@@ -595,26 +711,52 @@ fn git_branch_fully_merged(main_repo: &Path, worktree: &Path) -> Result<bool, St
     if branch == "main" || branch == "master" {
         return Ok(false);
     }
-    let main_head = git_rev_parse(main_repo, "HEAD")?;
     let worktree_head = git_rev_parse(worktree, "HEAD")?;
-    if main_head == worktree_head {
+    let base_refs = git_integration_refs(main_repo);
+    if base_refs.is_empty() {
         return Ok(false);
     }
-    let Some(base) = git_default_integration_branch(main_repo) else {
-        return Ok(false);
-    };
-    let output = run_git(main_repo, &["branch", "--merged", base.as_str()])?;
-    if !output.status.success() {
-        return Ok(false);
+
+    for base in &base_refs {
+        let Ok(base_head) = git_rev_parse(main_repo, base) else {
+            continue;
+        };
+        if base_head == worktree_head {
+            continue;
+        }
+        // 1. Direct ancestor check (`git merge-base --is-ancestor HEAD <base>`)
+        if let Ok(anc) = run_git(
+            worktree,
+            &["merge-base", "--is-ancestor", "HEAD", base.as_str()],
+        ) {
+            if anc.status.success() {
+                return Ok(true);
+            }
+        }
+        // 2. Patch-id equivalence check (`git cherry <base> HEAD`):
+        // if every commit ahead of `base` starts with `- `, it was squash/cherry-pick merged.
+        if let Ok(cherry) = run_git(worktree, &["cherry", base.as_str(), "HEAD"]) {
+            if cherry.status.success() {
+                let lines: Vec<String> = String::from_utf8_lossy(&cherry.stdout)
+                    .lines()
+                    .map(str::trim)
+                    .filter(|line| !line.is_empty())
+                    .map(str::to_owned)
+                    .collect();
+                if !lines.is_empty() && lines.iter().all(|line| line.starts_with("- ")) {
+                    return Ok(true);
+                }
+            }
+        }
     }
-    Ok(String::from_utf8_lossy(&output.stdout)
-        .lines()
-        .any(|line| line.trim().trim_start_matches('*').trim() == branch))
+
+    Ok(false)
 }
 
 #[cfg(test)]
 mod tests {
     use super::{is_valid_wts_slug, list_wts_workspaces};
+    use crate::session_manager::codeg::CodegSidebarSnapshot;
     use crate::session_manager::SessionMeta;
     use std::fs;
     use std::path::Path;
@@ -631,11 +773,13 @@ mod tests {
     }
 
     #[test]
-    fn lists_sibling_wts_directories_and_ignores_noise() {
+    fn lists_sibling_wts_and_codeg_worktree_directories_and_ignores_noise() {
         let root = tempdir().expect("tempdir");
         let repo = root.path().join("cc-switch");
         fs::create_dir(&repo).expect("repo");
         fs::create_dir(root.path().join("cc-switch-wt-prob")).expect("prob");
+        fs::create_dir(root.path().join("cc-switch-main-4k85l7")).expect("codeg main");
+        fs::create_dir(root.path().join("cc-switch-task-2")).expect("codeg task");
         fs::create_dir(root.path().join("cc-switch-wt-cursor-official")).expect("cursor");
         fs::create_dir(root.path().join("other-wt-nope")).expect("other");
         fs::write(root.path().join("cc-switch-wt-file"), "nope").expect("file");
@@ -647,11 +791,7 @@ mod tests {
             .map(|item| item.slug.as_str())
             .collect();
         assert!(!context.is_git_repo);
-        assert_eq!(slugs, ["cursor-official", "prob"]);
-        assert!(context
-            .workspaces
-            .iter()
-            .all(|item| item.path.ends_with(&format!("cc-switch-wt-{}", item.slug))));
+        assert_eq!(slugs, ["2", "4k85l7", "cursor-official", "prob"]);
     }
 
     #[test]
@@ -871,6 +1011,128 @@ mod tests {
         assert_eq!(result.skipped.len(), 1);
         assert_eq!(
             result.skipped[0].skip_reason.as_deref(),
+            Some("has_sessions")
+        );
+    }
+
+    #[test]
+    fn classify_protects_open_codeg_sidebar_worktree_and_allows_closed_codeg_worktree() {
+        if !git_available() {
+            return;
+        }
+
+        let root = tempdir().expect("tempdir");
+        let repo = root.path().join("sub2api");
+        seed_main_repo(&repo);
+
+        let open_wt = root.path().join("sub2api-main-open1");
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(&repo)
+            .args([
+                "worktree",
+                "add",
+                open_wt.to_str().expect("path"),
+                "-b",
+                "cv-main-open1",
+            ])
+            .status()
+            .expect("git worktree add open");
+
+        let closed_at_base_wt = root.path().join("sub2api-main-closed1");
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(&repo)
+            .args([
+                "worktree",
+                "add",
+                closed_at_base_wt.to_str().expect("path"),
+                "-b",
+                "cv-main-closed1",
+            ])
+            .status()
+            .expect("git worktree add closed at base");
+
+        let closed_unmerged_wt = root.path().join("sub2api-main-unmerged1");
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(&repo)
+            .args([
+                "worktree",
+                "add",
+                closed_unmerged_wt.to_str().expect("path"),
+                "-b",
+                "cv-main-unmerged1",
+            ])
+            .status()
+            .expect("git worktree add closed unmerged");
+        fs::write(closed_unmerged_wt.join("change.txt"), "delta").expect("change");
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(&closed_unmerged_wt)
+            .args(["add", "change.txt"])
+            .status()
+            .expect("git add");
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(&closed_unmerged_wt)
+            .args(["commit", "-m", "unmerged worktree change"])
+            .status()
+            .expect("git commit");
+
+        let sessions = vec![
+            SessionMeta {
+                provider_id: "codex".to_string(),
+                session_id: "sess-closed".to_string(),
+                title: None,
+                summary: None,
+                project_dir: Some(closed_at_base_wt.to_string_lossy().replace('\\', "/")),
+                created_at: None,
+                last_active_at: None,
+                source_path: None,
+                resume_command: None,
+            },
+            SessionMeta {
+                provider_id: "codex".to_string(),
+                session_id: "sess-unmerged".to_string(),
+                title: None,
+                summary: None,
+                project_dir: Some(closed_unmerged_wt.to_string_lossy().replace('\\', "/")),
+                created_at: None,
+                last_active_at: None,
+                source_path: None,
+                resume_command: None,
+            },
+        ];
+
+        let mut sidebar = CodegSidebarSnapshot::default();
+        sidebar
+            .open_folder_paths
+            .insert(open_wt.canonicalize().expect("canon open"));
+        sidebar
+            .closed_folder_paths
+            .insert(closed_at_base_wt.canonicalize().expect("canon closed"));
+        sidebar.closed_folder_paths.insert(
+            closed_unmerged_wt
+                .canonicalize()
+                .expect("canon closed unmerged"),
+        );
+
+        let result = super::classify_stale_registered_wts_worktrees_with_sidebar(
+            root.path(),
+            &sessions,
+            &sidebar,
+        )
+        .expect("classify with sidebar");
+
+        assert_eq!(result.removable.len(), 1);
+        assert_eq!(result.removable[0].slug, "closed1");
+        assert_eq!(result.skipped.len(), 2);
+        assert_eq!(result.skipped[0].slug, "open1");
+        assert_eq!(result.skipped[0].skip_reason.as_deref(), Some("in_sidebar"));
+        assert_eq!(result.skipped[1].slug, "unmerged1");
+        assert_eq!(
+            result.skipped[1].skip_reason.as_deref(),
             Some("has_sessions")
         );
     }

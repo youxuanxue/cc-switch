@@ -71,6 +71,11 @@ export interface WtsWorktreePruneResult {
   skippedDirty: number;
 }
 
+export interface CodegPruneResult {
+  conversationsRemoved: number;
+  foldersRemoved: number;
+}
+
 export interface SessionStoragePruneResult {
   cursor: CursorPruneResult;
   claudePartitionsRemoved: number;
@@ -80,6 +85,7 @@ export interface SessionStoragePruneResult {
   cursorDesktopWorkspacesRemoved: number;
   cursorDesktopWorkspacesRetained: number;
   wtsWorktrees: WtsWorktreePruneResult;
+  codeg?: CodegPruneResult;
 }
 
 export interface WtsRegisteredWorktreeAssessment {

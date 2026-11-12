@@ -112,6 +112,22 @@ export function SessionManagerPage() {
   return null;
 }
 `,
+    "src-tauri/src/session_manager/mod.rs": `
+fn classify() {
+  if codeg_sidebar.is_session_protected("test") {}
+}
+`,
+    "src-tauri/src/session_manager/prune.rs": `
+fn prune() {
+  let _ = codeg::prune_non_sidebar_codeg_state();
+}
+`,
+    "src-tauri/src/session_manager/wts.rs": `
+const WORKTREE_MARKERS: [&str; 3] = ["-wt-", "-main-", "-task-"];
+fn assess() {
+  if sidebar.is_open_folder(&path) {}
+}
+`,
   };
 }
 
@@ -304,5 +320,45 @@ mod tests {
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain("SESSION_LIVE_PRUNE_SAFETY");
     expect(result.stderr).toContain("never remove a project bucket");
+  });
+
+  it("rejects session_manager::mod that skips Codeg sidebar protection", () => {
+    const result = runChecker(
+      createFixture({
+        "src-tauri/src/session_manager/mod.rs": `
+fn classify() {}
+`,
+      }),
+    );
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("SESSION_LIVE_PRUNE_SAFETY");
+    expect(result.stderr).toContain("must protect open Codeg sidebar sessions");
+  });
+
+  it("rejects session_manager::prune that skips non-sidebar Codeg state prune", () => {
+    const result = runChecker(
+      createFixture({
+        "src-tauri/src/session_manager/prune.rs": `
+fn prune() {}
+`,
+      }),
+    );
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("SESSION_LIVE_PRUNE_SAFETY");
+    expect(result.stderr).toContain("must prune non-sidebar Codeg state");
+  });
+
+  it("rejects session_manager::wts that misses Codeg sidebar worktree protection", () => {
+    const result = runChecker(
+      createFixture({
+        "src-tauri/src/session_manager/wts.rs": `
+const WORKTREE_MARKERS: [&str; 3] = ["-wt-", "-main-", "-task-"];
+fn assess() {}
+`,
+      }),
+    );
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("SESSION_LIVE_PRUNE_SAFETY");
+    expect(result.stderr).toContain("must protect worktrees currently open in the Codeg sidebar");
   });
 });
